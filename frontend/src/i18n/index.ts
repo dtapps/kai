@@ -3,6 +3,7 @@ export {
   locale,
   setLocale,
   resolveLang,
+  getSystemLocale,
   langName,
   engineName,
   type LangCode,

@@ -1,6 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import { t, locale, langName, engineName } from '../../i18n';
+  import { t, langName, engineName } from '../../i18n';
   import {
     GetAllEngines,
     GetKnownEngines,
@@ -21,19 +21,6 @@
     EngineConfig,
   } from '@bindings/cnb.cool/dtapp/kai/internal/engine/models.ts';
   import { SystemLanguages } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
-  import { Lang } from '../../constants/lang';
-
-  // 界面语言 auto 时按系统语言推导为 zh-CN/en（界面语言码，非翻译语言）
-  const langCode = $derived(
-    $locale === Lang.Auto
-      ? typeof navigator !== 'undefined' && navigator.language.toLowerCase().startsWith(Lang.ZHCN)
-        ? 'zh-CN'
-        : 'en'
-      : $locale === Lang.ZHCN
-        ? 'zh-CN'
-        : 'en',
-  );
-
   let engines = $state<AllEngineItem[]>([]);
 
   // 按 Kind 分组展示：翻译引擎 / OCR 引擎（TTS 的 system 引擎归入翻译类）

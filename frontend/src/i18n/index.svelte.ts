@@ -43,12 +43,16 @@ export function t(path: Path, params?: Record<string, string | number>): string 
   return str;
 }
 
+export function getSystemLocale() {
+  const lang = navigator.language || ''
+  return lang.startsWith('zh') ? Lang.ZHCN : Lang.ENUS
+}
+
 // 把界面语言（Lang：auto/zh-CN/en-US）解析为实际生效语言（zh-CN/en-US）。
-// auto 时跟随系统语言，与界面语言体系一致，与翻译语言无关。
+// auto 时跟随系统语言（getSystemLocale），不依赖后端系统语言 API。
 export function resolveLang(lang: LangCode): typeof Lang.ZHCN | typeof Lang.ENUS {
   if (lang === Lang.ZHCN || lang === Lang.ENUS) return lang;
-  const nav = (typeof navigator !== 'undefined' && navigator.language) || '';
-  return nav.toLowerCase().startsWith(Lang.ZHCN) ? Lang.ZHCN : Lang.ENUS;
+  return getSystemLocale();
 }
 
 export function setLocale(lang: LangCode): void {

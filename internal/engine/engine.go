@@ -108,6 +108,11 @@ func DefaultEngineConfigs() []*EngineConfig {
 		if !defaultEngineNames[m.Name] {
 			continue
 		}
+		// 当前平台不可用的引擎（如 Windows/Linux 上的 system 系统翻译）不预置，
+		// 避免默认启用一个根本不能用的引擎。用户可在对应平台支持的引擎上手动添加。
+		if !EngineSupported(m.Name) {
+			continue
+		}
 		cfg := &EngineConfig{
 			Engine:  m.Name,
 			Enabled: true, // 默认内置的免 Key 引擎均启用

@@ -8,11 +8,23 @@ import type { Events } from "@wailsio/runtime";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import type * as events$0 from "../../../../../cnb.cool/dtapp/kai/internal/events/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import type * as model$0 from "../../../../../cnb.cool/dtapp/kai/internal/model/models.js";
 
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "kai:hotkeys:changed": string[] | null;
+            "kai:input:fill": string;
+            "kai:locale:changed": events$0.LocaleChangedPayload;
             "kai:notification": events$0.NotificationPayload;
+            "kai:screenshot:ocr": model$0.ScreenshotResult;
+            "kai:screenshot:recapture": {};
+            "kai:theme:changed": events$0.ThemeChangedPayload;
+            "kai:translate:result": model$0.TranslateResult;
+            "kai:window:screenshot": {};
+            "kai:window:show": string;
         }
     }
 }

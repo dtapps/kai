@@ -1,5 +1,6 @@
 <script lang="ts">
   import { t, locale, resolveLang } from '../../i18n';
+  import { userLang } from '../../stores/ui';
   import { themeMode, setTheme } from '../../stores/theme';
   import {
     GetConfig,
@@ -18,6 +19,7 @@
 
   async function changeLang(l: LangCode) {
     curLang = l; // 下拉高亮保留原始 mode（auto/zh-CN/en-US）
+    userLang.set(l); // 同步用户 mode，刷新后下拉框仍选中该项
     locale.set(resolveLang(l)); // i18n 实际生效语言立即解析，避免 auto 时显示 key
     try {
       const cfg = (await GetConfig()) ?? ({ language: l } as any);

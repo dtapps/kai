@@ -123,7 +123,7 @@ func (s *Service) TranslateMulti(req model.TranslateRequest) (*model.TranslateMu
 			}
 			s.saveHistory(res)
 			if s.app != nil {
-				s.app.Event.Emit(events.EventTranslateResult, res)
+				s.app.Event.Emit(events.EventTranslateResult, *res)
 			}
 		}(reg, meta.Name)
 	}
@@ -171,7 +171,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	// 让用户第一时间看到截图，不必等 OCR 与翻译。
 	imageURL := "data:image/png;base64," + encodeImage(img)
 	if s.app != nil {
-		s.app.Event.Emit(events.EventScreenshotOCR, &model.ScreenshotResult{
+		s.app.Event.Emit(events.EventScreenshotOCR, model.ScreenshotResult{
 			Image:        imageURL,
 			Text:         "",
 			Translations: nil,
@@ -201,7 +201,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	imageURL = "data:image/png;base64," + encodeImage(img)
 
 	// 阶段一：先推送截图 + 原文，让前端立刻显示（识别到内容即展示，不必等翻译）。
-	first := &model.ScreenshotResult{Image: imageURL, Text: text, Translations: nil, To: to}
+	first := model.ScreenshotResult{Image: imageURL, Text: text, Translations: nil, To: to}
 	if s.app != nil {
 		s.app.Event.Emit(events.EventScreenshotOCR, first)
 	}
@@ -209,14 +209,14 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	req := model.TranslateRequest{Text: text, From: from, To: to}
 	translations := s.translateAllStream(req, imageURL, to)
 
-	result := &model.ScreenshotResult{
+	result := model.ScreenshotResult{
 		Image:        imageURL,
 		Text:         text,
 		Translations: translations,
 		To:           to,
 	}
 	slog.Info("[Kai-截图翻译] 结果组装完成", "image_len", len(result.Image), "text_len", len(result.Text), "translations", len(result.Translations))
-	return result, nil
+	return &result, nil
 }
 
 // translateAllStream 串行调用所有已开启的翻译引擎；每完成一条（成功或失败占位）即 Emit
@@ -249,7 +249,7 @@ func (s *Service) translateAllStream(req model.TranslateRequest, imageURL string
 		}
 		// 每完成一条就增量推送，前端按 engine 去重追加。
 		if s.app != nil {
-			s.app.Event.Emit(events.EventScreenshotOCR, &model.ScreenshotResult{
+			s.app.Event.Emit(events.EventScreenshotOCR, model.ScreenshotResult{
 				Image:        imageURL,
 				Text:         req.Text,
 				Translations: append([]model.TranslateResult{}, out...),
@@ -271,7 +271,7 @@ func (s *Service) TriggerOcr(engineName string, img []byte) (*model.OcrResult, e
 		return nil, err
 	}
 	if s.app != nil {
-		s.app.Event.Emit(events.EventTranslateResult, res)
+		s.app.Event.Emit(events.EventTranslateResult, *res)
 	}
 	return res, nil
 }

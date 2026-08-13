@@ -364,10 +364,12 @@ body {
 
   .u-winbtn {
     display: flex;
-    height: 1.75rem;
-    width: 2.25rem;
+    height: 1.5rem;
+    width: 2rem;
     align-items: center;
     justify-content: center;
+    font-size: 0.75rem;
+    line-height: 1;
     color: var(--app-muted);
     cursor: pointer;
     transition:

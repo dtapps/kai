@@ -2,7 +2,8 @@
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
   import TitleBar from './TitleBar.svelte';
-  import { t, locale } from '../i18n';
+  import { t } from '../i18n';
+  import { userLang } from '../stores/ui';
   import { rootStyle } from '../stores/theme';
   import { rootStyleToStyle } from '../utils/style';
   import { Lang, type LangCode } from '../constants/lang';
@@ -39,8 +40,8 @@
   ]);
 
   onMount(() => {
-    curLang = get(locale);
-    return locale.subscribe((l) => (curLang = l));
+    curLang = get(userLang);
+    return userLang.subscribe((l) => (curLang = l));
   });
 </script>
 

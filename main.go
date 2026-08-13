@@ -46,7 +46,17 @@ var updaterWindowHTML string
 
 func init() {
 	// 注册自定义事件类型，供后端 emit / 前端监听（对齐 certflow 的 RegisterEvent 模式）。
+	// 必须 emit 的数据类型与注册类型严格一致，否则 Wails3 validateCustomEvent 会 panic。
 	application.RegisterEvent[kevents.NotificationPayload](kevents.EventNotification)
+	application.RegisterEvent[kevents.LocaleChangedPayload](kevents.EventLocaleChanged)
+	application.RegisterEvent[kevents.ThemeChangedPayload](kevents.EventThemeChanged)
+	application.RegisterEvent[string](kevents.EventWindowShow)
+	application.RegisterEvent[[]string](kevents.EventHotkeysChanged)
+	application.RegisterEvent[string](kevents.EventInputFill)
+	application.RegisterEvent[model.TranslateResult](kevents.EventTranslateResult)
+	application.RegisterEvent[model.ScreenshotResult](kevents.EventScreenshotOCR)
+	application.RegisterEvent[struct{}](kevents.EventWindowScreenshot)
+	application.RegisterEvent[struct{}](kevents.EventScreenshotRecapture)
 }
 
 func main() {
@@ -326,11 +336,11 @@ func main() {
 	// 避免依赖配置落盘时序导致菜单仍显示旧语言。
 	app.Event.On(kevents.EventLocaleChanged, func(e *application.CustomEvent) {
 		if e != nil && e.Data != nil {
-			if p, ok := e.Data.(map[string]any); ok {
-				if mode, ok := p["mode"].(string); ok && mode != "" {
-					i18n.SetLocale(mode)
-				} else if lang, ok := p["language"].(string); ok && lang != "" {
-					i18n.SetLocale(lang)
+			if p, ok := e.Data.(kevents.LocaleChangedPayload); ok {
+				if p.Mode != "" {
+					i18n.SetLocale(p.Mode)
+				} else if p.Language != "" {
+					i18n.SetLocale(p.Language)
 				}
 			}
 		}

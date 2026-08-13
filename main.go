@@ -59,6 +59,19 @@ func init() {
 	application.RegisterEvent[struct{}](kevents.EventScreenshotRecapture)
 }
 
+// formatBuildTime 将构建注入的 UTC RFC3339 时间（如 2006-01-02T15:04:05Z）
+// 解析为本地时区可读格式（2006-01-02 15:04:05）；解析失败则原样返回，空字符串返回"-"。
+func formatBuildTime(raw string) string {
+	if raw == "" {
+		return "-"
+	}
+	t, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return raw
+	}
+	return t.Local().Format("2006-01-02 15:04:05")
+}
+
 func main() {
 	// 确定数据目录。
 	// 开发构建（buildinfo.IsDev() 为 true，即 `wails3 dev` / 未注入 VERSION）使用独立的
@@ -88,6 +101,19 @@ func main() {
 	// 主日志：按天滚动写 dataDir/logs/kai.log（可随时 tail -f 查看），
 	// 等级/保留天数/压缩全部取自 settings.json 的 log 段，不写死。
 	logRotator := initLogging(homeDir, logCfg)
+
+	// 全局兜底：捕获主流程及任何 goroutine 中未 recover 的 panic，
+	// 先写 ERROR 日志（确保在 Close 落盘前写入）再关闭日志文件退出，
+	// 避免进程静默消失、无任何痕迹。必须在 initLogging 之后注册。
+	defer func() {
+		if r := recover(); r != nil {
+			slog.Error(i18n.T("log.global_panic"), "panic", r)
+			log.Printf("FATAL panic (recovered, see log): %v", r)
+			_ = logRotator.Close()
+		}
+	}()
+	slog.Info(i18n.T("log.app_starting", "Version", buildinfo.Version, "BuildTime", formatBuildTime(buildinfo.BuildTime), "GitCommit", buildinfo.GitCommit))
+	slog.Info(i18n.T("log.data_dir", "Dir", dataDir))
 
 	// 前端日志独立落盘到 dataDir/logs/frontend.log（前端 console / JS 错误经此转发）。
 	// 初始等级/保留天数/压缩同样取自 settings.json 的 log 段；后续由 applyLogConfig 实时同步。
@@ -347,52 +373,71 @@ func main() {
 		rebuildTrayMenu(app, settingsService)
 	})
 
-	// 自动升级：CNB / GitHub 双源（中文用户走 CNB 镜像，英文用户走 GitHub），
-	// 需 CI 注入对应 token。升级窗口复用内置窗口模板（updater_window.html），
-	// 由托盘菜单「检查更新」触发，就绪后通过 EventUpdateReady 重启。
-	// AssetMatcher 仅匹配 updater- 前缀的升级专用压缩包，规避普通 release 附件。
-	matcher := func(req updater.CheckRequest, assets []github.ReleaseAsset) int {
-		idx := -1
-		for i, a := range assets {
-			// 平台 / 架构过滤（对齐 github.DefaultAssetMatcher 的核心逻辑）。
-			if !strings.Contains(strings.ToLower(a.Name), strings.ToLower(req.Platform)) {
-				continue
-			}
-			// macOS 专用：仅接受 zip / tar.gz（跳过 dmg / pkg 等非自解压格式）。
-			ext := strings.ToLower(filepath.Ext(a.Name))
-			if ext != ".zip" && ext != ".tar.gz" {
-				continue
-			}
-			// 仅匹配 updater- 前缀的升级专用资源，规避普通 release 附件。
-			if !strings.HasPrefix(a.Name, "updater-") {
-				continue
-			}
-			// 命中首个满足条件的资源即返回（kai 每平台仅产出一个 updater- 包）。
-			idx = i
-			break
-		}
-		return idx
-	}
+	// 配置自更新功能
+	// https://v3.wails.io/guides/updater/
+	// 更新器复用全局 HTTP 客户端（含 UA 注入、代理、自定义 DNS），
+	// 而非自建裸 client，避免丢失全局注入与可观测性。
 	provider, err := kupdater.NewMirrorProvider(github.Config{
 		Repository:    "dtapp/kai",
 		Token:         buildinfo.GithubToken,
 		Prerelease:    settingsService.Get().Updater.Prerelease,
 		ChecksumAsset: "SHA256SUMS",
-		AssetMatcher:  matcher,
-	}, network.BuildHTTPClient(*settingsService.Get()), buildinfo.BuildTime, buildinfo.CnbToken)
+		// 自定义资源匹配：仅匹配「升级专用文件」（文件名以 updater- 开头）。
+		// 打包/安装文件（Windows -install.exe、macOS .app.zip、Linux
+		// AppImage/deb/rpm/pkg.tar.zst）只用于首次安装，不用于自更新；
+		// 升级文件统一压缩（Windows/macOS 为 .zip，Linux 为 .tar.gz），内
+		// 含单一二进制，由 updater 下载、校验（SHA256SUMS）后替换自身。
+		AssetMatcher: func(req updater.CheckRequest, assets []github.ReleaseAsset) int {
+			plat := strings.ToLower(req.Platform)
+			arch := strings.ToLower(req.Arch)
+			slog.Debug(i18n.T("log.updater_matcher_start", "Plat", plat, "Arch", arch, "Count", len(assets)))
+			for i, a := range assets {
+				name := strings.ToLower(a.Name)
+				slog.Debug(i18n.T("log.updater_matcher_check", "Index", i, "Name", a.Name))
+				// 仅升级专用文件（updater- 前缀）参与自更新
+				if !strings.HasPrefix(name, "updater-") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_not_updater"))
+					continue
+				}
+				if strings.HasSuffix(name, ".sig") || strings.HasSuffix(name, ".asc") || strings.HasSuffix(name, ".zsync") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_sig"))
+					continue
+				}
+				// 升级文件必须是压缩归档（.zip / .tar.gz / .tgz）
+				if !strings.HasSuffix(name, ".zip") &&
+					!strings.HasSuffix(name, ".tar.gz") &&
+					!strings.HasSuffix(name, ".tgz") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_format"))
+					continue
+				}
+				if plat != "" && !strings.Contains(name, plat) {
+					slog.Debug(i18n.T("log.updater_matcher_skip_plat", "Plat", plat))
+					continue
+				}
+				if arch != "" && !strings.Contains(name, arch) {
+					slog.Debug(i18n.T("log.updater_matcher_skip_arch", "Arch", arch))
+					continue
+				}
+				slog.Debug(i18n.T("log.updater_matcher_hit", "Index", i, "Name", a.Name))
+				return i
+			}
+			slog.Debug(i18n.T("log.updater_matcher_none"))
+			return -1
+		},
+	}, network.BuildHTTPClient(*settingsService.Get()), buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken)
 	if err != nil {
-		slog.Error("创建更新源失败", "error", err)
+		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else {
 		if err := app.Updater.Init(updater.Config{
 			CurrentVersion: buildinfo.Version,
 			Providers:      []updater.Provider{provider},
 			Window:         &updater.BuiltinWindow{HTML: updaterWindowHTML},
 		}); err != nil {
-			slog.Error("初始化更新器失败", "error", err)
+			slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 		} else {
 			// 更新就绪：打印日志，由用户在托盘菜单选择重启安装。
 			app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
-				slog.Info("更新已就绪，重启后生效")
+				slog.Info(i18n.T("log.updater_ready"))
 			})
 			// 启动时静默检查（dev 构建跳过，避免噪音）。
 			if !buildinfo.IsDev() {
@@ -555,10 +600,10 @@ func checkUpdateOnStart(app *application.App) {
 // 探测当前外观，跨平台可靠。预留暗色图标分支：补 build/darwin/trayicon_dark.png
 // 并在下方 embed 后即可自动跟随系统暗色。
 func selectTrayIcon(app *application.App) []byte {
-	if app != nil && app.Env.IsDarkMode() {
-		// 若有暗色图标资源，优先返回；否则沿用默认图标。
-		// if len(trayIconDark) > 0 { return trayIconDark }
-	}
+	// 预留暗色图标分支：补 build/darwin/trayicon_dark.png 并在上方 embed 后即可跟随系统暗色。
+	// if app != nil && app.Env.IsDarkMode() && len(trayIconDark) > 0 {
+	// 	return trayIconDark
+	// }
 	return trayIcon
 }
 

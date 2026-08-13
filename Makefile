@@ -59,8 +59,7 @@ format-go: ## 格式化 Go 代码
 	go fix ./...
 
 format-frontend: ## 修复前端代码
-# 	pnpm --dir ./frontend run check
-	pnpm --dir ./frontend run build:dev
+	pnpm --dir ./frontend run format
 
 format-i18n-go: ## 格式化 Go 后端 i18n JSON 文件
 	pnpm --dir ./frontend exec prettier --write "$(CURDIR)/internal/i18n/locales/**/*.json"
@@ -78,7 +77,8 @@ lint-go: ## Go 代码检查（有 issue 即停止）
 
 lint-frontend: ## 前端 TypeScript 类型检查（类型错误即停止）
 	pnpm --dir ./frontend run tsc
-	pnpm --dir ./frontend run format
+# 	pnpm --dir ./frontend run check
+	pnpm --dir ./frontend run build:dev
 
 test-go: ## Go 后端测试（测试失败即停止）
 	go test -vet=off -v ./internal/... -count=1

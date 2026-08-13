@@ -37,7 +37,6 @@ import (
 // ---------------------------------------------------------------------------
 
 var (
-	enabled     bool
 	conn        *sql.DB
 	connDSN     string
 	mu          sync.RWMutex
@@ -152,7 +151,6 @@ func Init(dataDir string, httpLogEnabled bool) error {
 		}
 		mu.Lock()
 		conn = c
-		enabled = true
 		mu.Unlock()
 		// 全局接管 http.DefaultTransport（使第三方库的裸 http.Get 等也记录日志）
 		http.DefaultTransport = WrapTransport(http.DefaultTransport)
@@ -171,7 +169,6 @@ func Close() error {
 	}
 	c := conn
 	conn = nil
-	enabled = false
 	mu.Unlock()
 	if c != nil {
 		return c.Close()

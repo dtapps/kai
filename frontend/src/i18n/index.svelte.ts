@@ -44,8 +44,8 @@ export function t(path: Path, params?: Record<string, string | number>): string 
 }
 
 export function getSystemLocale() {
-  const lang = navigator.language || ''
-  return lang.startsWith('zh') ? Lang.ZHCN : Lang.ENUS
+  const lang = navigator.language || '';
+  return lang.startsWith('zh') ? Lang.ZHCN : Lang.ENUS;
 }
 
 // 把界面语言（Lang：auto/zh-CN/en-US）解析为实际生效语言（zh-CN/en-US）。

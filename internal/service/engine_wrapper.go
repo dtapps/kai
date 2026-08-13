@@ -341,8 +341,7 @@ func (w *EngineWrapper) loadEngines() error {
 		if err := w.configStore.InitDefaultEngines(ctx, def); err != nil {
 			return err
 		}
-		engs, err = w.configStore.LoadEngines(ctx)
-		if err != nil {
+		if _, err := w.configStore.LoadEngines(ctx); err != nil {
 			return err
 		}
 	}

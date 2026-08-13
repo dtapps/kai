@@ -63,7 +63,7 @@ func Open(path string) (*Store, error) {
 func (s *Store) MigrateSecrets(ctx context.Context) error {
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
-	rows, err := s.Queries.LoadEngines(ctx)
+	rows, err := s.LoadEngines(ctx)
 	if err != nil {
 		return err
 	}
@@ -86,7 +86,7 @@ func (s *Store) MigrateSecrets(ctx context.Context) error {
 		if !needUpdate {
 			continue
 		}
-		if err := s.Queries.UpdateEngineByID(ctx, UpdateEngineByIDParams{
+		if err := s.UpdateEngineByID(ctx, UpdateEngineByIDParams{
 			Engine:   r.Engine,
 			Enabled:  r.Enabled,
 			ApiKey:   apiKey,
@@ -121,7 +121,7 @@ func (s *Store) InsertEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 	if err != nil {
 		return 0, fmt.Errorf("configstore: 加密 secret: %w", err)
 	}
-	id, err := s.Queries.InsertEngine(ctx, InsertEngineParams{
+	id, err := s.InsertEngine(ctx, InsertEngineParams{
 		Engine:   e.Engine,
 		Enabled:  boolToInt64(e.Enabled),
 		ApiKey:   apiKey,
@@ -149,7 +149,7 @@ func (s *Store) UpdateEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 	if err != nil {
 		return fmt.Errorf("configstore: 加密 secret: %w", err)
 	}
-	return s.Queries.UpdateEngineByID(ctx, UpdateEngineByIDParams{
+	return s.UpdateEngineByID(ctx, UpdateEngineByIDParams{
 		Engine:   e.Engine,
 		Enabled:  boolToInt64(e.Enabled),
 		ApiKey:   apiKey,
@@ -164,7 +164,7 @@ func (s *Store) UpdateEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 func (s *Store) SetEngineEnabled(ctx context.Context, id int64, enabled bool) error {
 	ctx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
-	return s.Queries.UpdateEngineEnabled(ctx, UpdateEngineEnabledParams{
+	return s.UpdateEngineEnabled(ctx, UpdateEngineEnabledParams{
 		ID:      id,
 		Enabled: boolToInt64(enabled),
 	})

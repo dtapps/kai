@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	_ "embed"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -73,14 +74,14 @@ func (s *Store) Close() error {
 // FindByKey 查找内容完全相同的记录（去重用），未找到返回 0。
 // 对生成查询的 ErrNoRows 做规范化处理。
 func (s *Store) FindByKey(ctx context.Context, text, fromLang, toLang string, engineID, fromOCR int64) (int64, error) {
-	id, err := s.Queries.FindDuplicate(ctx, FindDuplicateParams{
+	id, err := s.FindDuplicate(ctx, FindDuplicateParams{
 		Text:     text,
 		EngineID: engineID,
 		FromLang: fromLang,
 		ToLang:   toLang,
 		FromOcr:  fromOCR,
 	})
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	return id, err
@@ -88,7 +89,7 @@ func (s *Store) FindByKey(ctx context.Context, text, fromLang, toLang string, en
 
 // QueryByKeyword 按关键词检索历史，空关键词返回全部，时间倒序。
 func (s *Store) QueryByKeyword(ctx context.Context, keyword string, limit, offset int64) ([]History, error) {
-	return s.Queries.QueryHistory(ctx, QueryHistoryParams{
+	return s.QueryHistory(ctx, QueryHistoryParams{
 		Column1: keyword,
 		Limit:   limit,
 		Offset:  offset,
@@ -97,5 +98,5 @@ func (s *Store) QueryByKeyword(ctx context.Context, keyword string, limit, offse
 
 // CountByKeyword 返回符合关键词的历史条数。
 func (s *Store) CountByKeyword(ctx context.Context, keyword string) (int64, error) {
-	return s.Queries.CountHistory(ctx, keyword)
+	return s.CountHistory(ctx, keyword)
 }

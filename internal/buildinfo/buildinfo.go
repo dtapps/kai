@@ -23,6 +23,8 @@ var (
 	// 升级相关 token（GitHub 源 / CNB 镜像源）。本地 dev 未注入则为空，不影响运行。
 	GithubToken = ""
 	CnbToken    = ""
+	// GitCommit 构建时注入的提交哈希（CI 通过 -ldflags 注入，本地为空）。
+	GitCommit = ""
 )
 
 // IsDev 是否为开发模式

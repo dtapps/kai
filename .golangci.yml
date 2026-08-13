@@ -55,6 +55,17 @@ linters:
       - linters: [gosec]
         path: "_test\\.go$"
         text: "G404"
+      # gosec 弱加密：翻译引擎 API 签名强制要求（百度 md5 签名 + 有道随机 salt），不可改用强加密
+      - linters: [gosec]
+        path: "internal/engine/baidu\\.go$"
+        text: "G501|G401"
+      - linters: [gosec]
+        path: "internal/engine/youdao\\.go$"
+        text: "G404"
+      # gosec G404 弱随机：启动更新检查的随机延迟抖动，无安全影响
+      - linters: [gosec]
+        path: "main\\.go$"
+        text: "G404"
       # errcheck: defer Close / 文件操作 / 日志写入忽略错误是常见写法
       - linters: [errcheck]
         text: "Error return value of"

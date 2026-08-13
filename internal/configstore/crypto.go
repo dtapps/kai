@@ -44,7 +44,7 @@ func deriveKey() ([]byte, error) {
 	block := make([]byte, 32)
 	var counter byte = 1
 	for len(t) < 32 {
-		h := hmacSHA256(prk, append(append([]byte{}, byte(counter)), info...))
+		h := hmacSHA256(prk, append(append([]byte{}, counter), info...))
 		copy(block, h)
 		t = append(t, block[:]...)
 		counter++

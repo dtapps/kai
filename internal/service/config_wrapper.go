@@ -56,18 +56,6 @@ func (w *ConfigWrapper) GetSystemTheme() string {
 	return string(model.ThemeLight)
 }
 
-// resolveTheme 把可能含 auto 的主题配置解析为最终 dark/light。
-func (w *ConfigWrapper) resolveTheme(theme string) string {
-	switch theme {
-	case string(model.ThemeDark):
-		return string(model.ThemeDark)
-	case string(model.ThemeLight):
-		return string(model.ThemeLight)
-	default:
-		return w.GetSystemTheme()
-	}
-}
-
 // SetTheme 持久化主题配置。
 func (w *ConfigWrapper) SetTheme(theme string) error {
 	cfg := w.settingsSvc.Get()
@@ -137,11 +125,6 @@ type NamedItem struct {
 
 // GetLanguages 返回支持的语言 (value=code, name=展示名)。
 func (w *ConfigWrapper) GetLanguages(lang string) []NamedItem {
-	if lang == "" {
-		if cfg := w.settingsSvc.Get(); cfg != nil {
-			lang = cfg.DefaultTo
-		}
-	}
 	codes := model.AllLanguages()
 	items := make([]NamedItem, 0, len(codes))
 	for _, c := range codes {

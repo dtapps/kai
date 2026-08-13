@@ -536,6 +536,9 @@ jobs:
           # 写入构建时间（与注入二进制的 BUILD_TIME 完全一致，UTC, RFC3339），
           # 供客户端对比「远端 SHA256SUMS 的 build_time」与「本机已装二进制 build_time」。
           echo "# build_time=${{ needs.prepare.outputs.build_time }}" >> SHA256SUMS
+          # 写入 Git 提交（短 sha，与注入二进制的 GIT_COMMIT 一致），
+          # 供客户端 nightly 路径优先比对「远端 commit == 本机 commit」：相等则同一份代码直接跳过更新。
+          echo "# git_commit=${{ needs.prepare.outputs.git_commit }}" >> SHA256SUMS
           echo "SHA256SUMS："
           cat SHA256SUMS
 

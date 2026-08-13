@@ -61,6 +61,18 @@ func NewRotator(dir string, level slog.Level, retention int, compress bool) (*Ro
 // Handler 返回 slog.Handler，调用方据此构建 slog.Logger 并 SetDefault。
 func (r *Rotator) Handler() slog.Handler { return r.handler }
 
+// Close 关闭底层日志文件句柄（panic 兜底最后落盘用），幂等。
+func (r *Rotator) Close() error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.file != nil {
+		err := r.file.Close()
+		r.file = nil
+		return err
+	}
+	return nil
+}
+
 // SetLevel 动态调整日志级别（热更新）。
 func (r *Rotator) SetLevel(level slog.Level) {
 	r.mu.Lock()

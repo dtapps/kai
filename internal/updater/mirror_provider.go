@@ -59,6 +59,11 @@ type mirrorProvider struct {
 	// 远端 build_time 不晚于本机 installedBuildTime 即视为已是最新（跳过）。
 	// 为空时（本地 dev 构建 / 未注入 ldflags）无法比对，nightly 检测直接跳过，避免循环更新。
 	installedBuildTime string
+	// installedGitCommit 为本机已安装二进制的 Git 提交（ldflags 注入，短 sha）。
+	// nightly 优先用它对比「远端 SHA256SUMS 的 git_commit」：两者相等即同一份代码，
+	// 直接跳过更新（每日重打同一 commit 不再频繁提示）；不等再退回到 build_time 对比。
+	// 为空时（本地 dev 构建 / 未注入 ldflags）跳过 commit 比对，退化回时间对比。
+	installedGitCommit string
 }
 
 // NewMirrorProvider 基于 github.Config 创建按语言选源的 Provider。
@@ -67,7 +72,9 @@ type mirrorProvider struct {
 // installedBuildTime 为本机已安装二进制的构建时间（ldflags 注入），nightly 时间对比用它对比
 // 远端 SHA256SUMS 的 build_time，为空时 nightly 检测直接跳过（无法比对，避免循环更新）。
 // cnbToken 为 CNB 只读 Token（ldflags 注入），预留给检测层走 CNB 鉴权 API（CNB 匿名 API 返回 401）。
-func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTime string, cnbToken string) (*mirrorProvider, error) {
+// installedGitCommit 为本机已安装二进制的 Git 提交（ldflags 注入），nightly 优先用它对比
+// 远端 SHA256SUMS 的 git_commit，相等即同一份代码直接跳过（避免每日重打同 commit 频繁提示）。
+func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTime string, installedGitCommit string, cnbToken string) (*mirrorProvider, error) {
 	cfg.HTTPClient = client
 	gh, err := github.New(cfg)
 	if err != nil {
@@ -100,6 +107,7 @@ func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTim
 		assetMatcher:       matcher,
 		nightlyTag:         "nightly",
 		installedBuildTime: installedBuildTime,
+		installedGitCommit: installedGitCommit,
 	}, nil
 }
 
@@ -132,7 +140,7 @@ func (m *mirrorProvider) Check(ctx context.Context, req updater.CheckRequest) (*
 		return nil, err
 	}
 	// 中文：从 CNB 拉 SHA256SUMS。
-	if digest, _, ok := m.fetchChecksumViaMirror(ctx, rel, "SHA256SUMS"); ok {
+	if digest, _, _, ok := m.fetchChecksumViaMirror(ctx, rel, "SHA256SUMS"); ok {
 		rel.Verification = &updater.Verification{
 			DigestAlgo: "sha256",
 			Digest:     digest,
@@ -310,16 +318,21 @@ func (m *mirrorProvider) buildNightlyRelease(ctx context.Context, req updater.Ch
 			out.Verification = &updater.Verification{DigestAlgo: "sha256", Digest: digest}
 		}
 	}
-	// 从 SHA256SUMS 注释行读取 build_time：发布时写入的、带校验保障的时间基准，
-	// 作为 nightly 时间对比的权威时间（与 releases API 的 published_at 无关）。
-	// 旧版 SHA256SUMS 无 build_time 行 → bt 为零值 → 该 nightly 直接跳过。
-	_, bt, ok := m.fetchChecksumViaMirror(ctx, out, "SHA256SUMS")
+	// 从 SHA256SUMS 注释行读取 build_time 与 git_commit：发布时写入的、带校验保障的基准，
+	// 作为 nightly 对比的权威依据（与 releases API 的 published_at 无关）。
+	// 旧版 SHA256SUMS 无这些行 → 对应零值 → commit 跳过比对、build_time 兜底。
+	_, bt, remoteCommit, ok := m.fetchChecksumViaMirror(ctx, out, "SHA256SUMS")
 	if !ok && out.Verification == nil {
 		slog.Warn(i18n.T("log.updater_checksum_fetch_failed"))
 	}
-	if bt.IsZero() {
-		// 旧格式 / 解析失败：无法获得可靠 build_time，nightly 不提示更新，避免误判或循环。
-		slog.Debug(i18n.T("log.updater_nightly_no_build_time"))
+
+	// 优先比对 Git 提交：仅当远端 commit 与本机已装 commit 都存在且相等时，
+	// 判定为同一份代码直接跳过（每日重打同一 commit 不再频繁提示）。
+	// 其余情况（commit 不等 / commit 缺失）一律退化到 build_time 对比，
+	// 不在此处因 commit 缺失而短路跳过——避免 dev 构建或旧格式 SHA256SUMS 误判。
+	localCommit := strings.TrimSpace(m.installedGitCommit)
+	if remoteCommit != "" && localCommit != "" && remoteCommit == localCommit {
+		slog.Debug(i18n.T("log.updater_nightly_same_commit", "Commit", localCommit))
 		return nil, nil
 	}
 
@@ -331,6 +344,11 @@ func (m *mirrorProvider) buildNightlyRelease(ctx context.Context, req updater.Ch
 		return nil, nil
 	}
 	// 远端 nightly 的 build_time 不晚于本机已装 build_time → 已是最新，跳过。
+	if bt.IsZero() {
+		// 旧格式 / 解析失败：无法获得可靠 build_time，nightly 不提示更新，避免误判或循环。
+		slog.Debug(i18n.T("log.updater_nightly_no_build_time"))
+		return nil, nil
+	}
 	if !bt.After(localBuildTime) {
 		slog.Debug(i18n.T("log.updater_nightly_skipped", "PublishedAt", bt.Format(time.RFC3339), "BuildTime", localBuildTime.Format(time.RFC3339)))
 		return nil, nil
@@ -544,16 +562,17 @@ func resetDst(dst io.Writer) {
 //   - 非中文：仅官方 GitHub（资产 URL 目录替换 / 标准仓库地址）。
 //
 // 解析出目标资产（rel.Artifact.Filename）的 sha256 摘要，并同时读取 SHA256SUMS 注释行中
-// 发布的 build_time（发布时由 CI 写入，作为 nightly 时间对比的权威基准）。
-// 返回 (摘要, build_time, 是否成功)；build_time 解析失败时为 time.Time{}（调用方忽略）。
-func (m *mirrorProvider) fetchChecksumViaMirror(ctx context.Context, rel *updater.Release, sidecar string) ([]byte, time.Time, bool) {
+// 发布的 build_time 与 git_commit（均由 CI 写入，作为 nightly 对比的权威基准）。
+// 返回 (摘要, build_time, git_commit, 是否成功)；build_time / git_commit 解析失败时为
+// 零值（time.Time{} / 空串），调用方忽略。
+func (m *mirrorProvider) fetchChecksumViaMirror(ctx context.Context, rel *updater.Release, sidecar string) ([]byte, time.Time, string, bool) {
 	// 兜底：rel 缺失不应 panic（否则会拖垮主进程）。
 	// 注意：不能因 rel.Metadata == nil 直接失败——github Provider 返回的 Release 不一定填 Metadata
 	// （nightly 路径的 out 是手工构造的，所以正常；稳定版 checkProvider.Check 的 rel.Metadata 可能为 nil）。
 	// 这里统一用 Metadata["github.release.tag"]，取不到时再回退 rel.Version（稳定版 tag 即发布版本号）。
 	if rel == nil {
 		slog.Warn(i18n.T("log.updater_checksum_fetch_failed"))
-		return nil, time.Time{}, false
+		return nil, time.Time{}, "", false
 	}
 	tag, _ := rel.Metadata["github.release.tag"].(string)
 	if tag == "" {
@@ -583,7 +602,7 @@ func (m *mirrorProvider) fetchChecksumViaMirror(ctx context.Context, rel *update
 	if len(urls) == 0 {
 		// 既无 tag 也无资产 URL，无法拼出任何 CNB 地址，明确记录原因而非静默失败。
 		slog.Warn(i18n.T("log.updater_checksum_no_url", "Tag", tag))
-		return nil, time.Time{}, false
+		return nil, time.Time{}, "", false
 	}
 
 	for _, u := range urls {
@@ -598,12 +617,13 @@ func (m *mirrorProvider) fetchChecksumViaMirror(ctx context.Context, rel *update
 			slog.Warn(i18n.T("log.updater_checksum_parse_failed", "URL", u, "Target", target))
 			continue
 		}
-		// 同时从 SHA256SUMS 的注释行读取发布时写入的 build_time，
-		// 作为 nightly 时间对比的权威基准（带校验、可靠，不依赖 releases API）。
+		// 同时从 SHA256SUMS 的注释行读取发布时写入的 build_time 与 git_commit，
+		// 作为 nightly 对比的权威基准（带校验、可靠，不依赖 releases API）。
 		bt := parseChecksumBuildTime(string(body))
-		return digest, bt, true
+		commit := parseChecksumGitCommit(string(body))
+		return digest, bt, commit, true
 	}
-	return nil, time.Time{}, false
+	return nil, time.Time{}, "", false
 }
 
 // fetchText 从指定 URL 拉取文本内容（用于校验侧车文件）。
@@ -674,4 +694,46 @@ func parseChecksumBuildTime(body string) time.Time {
 		}
 	}
 	return time.Time{}
+}
+
+// parseChecksumGitCommit 从 sha256sum 风格的清单注释行中读取发布时写入的 git_commit（短 sha）。
+// CI 生成 SHA256SUMS 时需追加一行：# git_commit=abc1234。
+// 该提交作为 nightly 版本对比的优先判据（与 build_time 相比，能精确区分「代码是否变化」，
+// 避免每日重打同一 commit 时因时间单调递增而被反复提示更新）。
+// 未找到或解析失败返回空串（调用方退化回 build_time 对比）。
+func parseChecksumGitCommit(body string) string {
+	for line := range strings.SplitSeq(body, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "#") {
+			continue
+		}
+		kv := strings.TrimSpace(strings.TrimPrefix(line, "#"))
+		// 容忍 "# git_commit=xxx" 或 "#git_commit=xxx"（= 前后可有空格）。
+		if !strings.HasPrefix(kv, "git_commit") {
+			continue
+		}
+		rest := strings.TrimPrefix(kv, "git_commit")
+		rest = strings.TrimPrefix(rest, "=")
+		rest = strings.TrimSpace(rest)
+		// 只保留合法的十六进制提交串（短 sha，≤40 位），其它写法视为无效。
+		rest = strings.Trim(rest, `"`)
+		if rest != "" && len(rest) <= 40 && isHex(rest) {
+			return rest
+		}
+	}
+	return ""
+}
+
+// isHex 判断字符串是否全为十六进制字符。
+func isHex(s string) bool {
+	for _, c := range s {
+		switch {
+		case c >= '0' && c <= '9':
+		case c >= 'a' && c <= 'f':
+		case c >= 'A' && c <= 'F':
+		default:
+			return false
+		}
+	}
+	return true
 }

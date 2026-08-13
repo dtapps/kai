@@ -6,11 +6,10 @@ package execkey
 import (
 	"log/slog"
 
-	"github.com/wailsapp/wails/v3/pkg/application"
-
 	"cnb.cool/dtapp/kai/internal/events"
 	"cnb.cool/dtapp/kai/internal/selection"
 	"cnb.cool/dtapp/kai/internal/settings"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // ExecKeyController 执行键控制器：承载所有"程序主动模拟按下"的执行键逻辑（与 RegisteredHotkeyConfig
@@ -56,7 +55,7 @@ func (e *ExecKeyController) SetApp(app *application.App) {
 // 把当前选中内容写入剪贴板，再读取并回填主窗口翻译。
 // 该函数只会被其他"注册键"的回调按需调用，绝不被 mgr.Register 直接挂接。
 func (e *ExecKeyController) ExecuteCopyKey() {
-	e.log.Info("执行快捷键 开始", slog.String("功能", "复制键"), slog.String("按键", e.settingsSvc.Get().ExecKeys.Copy.Key))
+	e.log.Debug("执行快捷键 开始", slog.String("功能", "复制键"), slog.String("按键", e.settingsSvc.Get().ExecKeys.Copy.Key))
 	e.CopyAndTranslate()
 }
 
@@ -69,10 +68,10 @@ func (e *ExecKeyController) CopyAndTranslate() {
 		return
 	}
 	before := e.selection.ReadClipboardText()
-	e.log.Info("执行快捷键 模拟前剪贴板", slog.Int("长度", len(before)), slog.String("内容", before))
+	e.log.Debug("执行快捷键 模拟前剪贴板", slog.Int("长度", len(before)), slog.String("内容", before))
 
 	text := e.copySelection()
-	e.log.Info("执行快捷键 完成", slog.String("按键", cfg.ExecKeys.Copy.Key), slog.Int("长度", len(text)))
+	e.log.Debug("执行快捷键 完成", slog.String("按键", cfg.ExecKeys.Copy.Key), slog.Int("长度", len(text)))
 
 	if text == "" {
 		e.log.Warn("执行快捷键 剪贴板为空", slog.String("按键", cfg.ExecKeys.Copy.Key),

@@ -128,6 +128,7 @@ export const zh = {
     hkInput: '唤起主窗口',
     hkScreenshot: '截图翻译',
     hkCopy: '复制键',
+    hkCopyFallback: '复制失败时回退使用系统默认复制键',
     hkFormatHint:
       '格式示例：Alt+A、Cmd+Shift+S（多个修饰键用 + 连接）。也可点击「录制」后直接按下组合键。',
     hkRecord: '录制',

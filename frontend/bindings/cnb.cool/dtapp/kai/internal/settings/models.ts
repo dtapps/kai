@@ -40,6 +40,13 @@ export interface ExecKeyEntry {
      * Enabled 是否启用该执行键。
      */
     "enabled": boolean;
+
+    /**
+     * Fallback 模拟复制失败（剪贴板为空 / 注入失败）时，是否回退使用系统默认复制键重试。
+     * 开启后：若自定义复制键未生效，自动再用系统原生复制键（macOS Cmd+C / 其他 Ctrl+C）
+     * 执行一次，而不是放弃复制。
+     */
+    "fallback": boolean;
 }
 
 /**
@@ -202,6 +209,11 @@ export interface Settings {
     "proxy": ProxyConfig;
 
     /**
+     * Updater 自动更新配置（仅用户可决策项，token/provider 由代码固定）。
+     */
+    "updater": UpdaterConfig;
+
+    /**
      * DNSConfigs 自定义 DNS 解析配置列表。
      */
     "dns_configs": DNSConfig[] | null;
@@ -220,4 +232,16 @@ export interface TTSConfig {
      * Speed 语速倍率，1.0 为正常语速。
      */
     "speed": number;
+}
+
+/**
+ * UpdaterConfig 自动更新相关配置（仅 Prerelease 这类用户可决策项；
+ * token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
+ */
+export interface UpdaterConfig {
+    /**
+     * Prerelease 是否允许检测预发布版（pre-release）更新。
+     * 开启后：检查更新时会把 GitHub 仓库的 pre-release 版本也纳入候选。
+     */
+    "prerelease": boolean;
 }

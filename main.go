@@ -319,7 +319,7 @@ func main() {
 		screenshotWindow.Hide()
 	})
 
-	registerTray(app, configSvc, mainWindow, settingsWindow)
+	registerTray(app, configSvc, settingsService, mainWindow, settingsWindow)
 
 	// 语言变更后，用最新语言重建托盘菜单文案（托盘为原生，只能后端重建）。
 	// 优先用事件 payload 携带的语言（mode 可能含 auto，由 i18n 解析为具体语言），
@@ -334,7 +334,7 @@ func main() {
 				}
 			}
 		}
-		rebuildTrayMenu(app)
+		rebuildTrayMenu(app, settingsService)
 	})
 
 	// 自动升级：CNB / GitHub 双源（中文用户走 CNB 镜像，英文用户走 GitHub），
@@ -366,7 +366,7 @@ func main() {
 	provider, err := kupdater.NewMirrorProvider(github.Config{
 		Repository:    "dtapp/kai",
 		Token:         buildinfo.GithubToken,
-		Prerelease:    false,
+		Prerelease:    settingsService.Get().Updater.Prerelease,
 		ChecksumAsset: "SHA256SUMS",
 		AssetMatcher:  matcher,
 	}, network.BuildHTTPClient(*settingsService.Get()), buildinfo.BuildTime, buildinfo.CnbToken)
@@ -440,7 +440,7 @@ func showScreenshotWindow() {
 	}
 }
 
-func registerTray(app *application.App, configSvc *service.ConfigWrapper, mainWindow application.Window, settingsWindow application.Window) {
+func registerTray(app *application.App, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
 	tray = app.SystemTray.New()
 	tray.SetIcon(selectTrayIcon(app))
 	// 不要用 AttachWindow：macOS 上点击托盘激活 app 时会连带恢复(settings)等所有窗口。
@@ -452,11 +452,11 @@ func registerTray(app *application.App, configSvc *service.ConfigWrapper, mainWi
 			mainWindow.Show().Focus()
 		}
 	})
-	buildTrayMenu(app, mainWindow, settingsWindow)
+	buildTrayMenu(app, ss, mainWindow, settingsWindow)
 }
 
 // buildTrayMenu 用当前语言构建托盘菜单（语言变更时重建）
-func buildTrayMenu(app *application.App, mainWindow application.Window, settingsWindow application.Window) {
+func buildTrayMenu(app *application.App, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
 	// lang 取空串，由 i18n.T 回退到 SetLocale 设置的全局语言（含 auto 解析），
 	// 确保语言广播后即时重建菜单用最新语言，不依赖配置落盘时序。
 	trayMenu := app.Menu.New()
@@ -474,10 +474,20 @@ func buildTrayMenu(app *application.App, mainWindow application.Window, settings
 	trayMenu.Add(i18n.T("menu.settings")).OnClick(func(ctx *application.Context) {
 		settingsWindow.Show().Focus()
 	})
+	// 分隔符隔开
+	trayMenu.AddSeparator()
 	// 检查更新：弹出内置升级窗口（updater_window.html 模板），用户确认后下载安装，就绪重启生效
 	trayMenu.Add(i18n.T("menu.check_update")).OnClick(func(ctx *application.Context) {
 		if app.Updater.State() != updater.StateUnconfigured {
 			_ = app.Updater.CheckAndInstall(context.Background())
+		}
+	})
+	// 预发布版更新通道开关：紧贴「检查更新」，切换后写回设置并持久化。
+	// 初始勾选状态读当前配置；点击由 Wails 自动翻转 checked，回调里读新值落盘。
+	trayMenu.AddCheckbox(i18n.T("menu.prerelease"), ss.Get().Updater.Prerelease).OnClick(func(ctx *application.Context) {
+		ss.Get().Updater.Prerelease = ctx.IsChecked()
+		if err := ss.Save(); err != nil {
+			slog.Error("保存预发布开关失败", slog.String("error", err.Error()))
 		}
 	})
 	// 分隔符隔开
@@ -490,11 +500,11 @@ func buildTrayMenu(app *application.App, mainWindow application.Window, settings
 }
 
 // rebuildTrayMenu 语言变更时重建托盘菜单文案
-func rebuildTrayMenu(app *application.App) {
+func rebuildTrayMenu(app *application.App, ss *settings.Service) {
 	if mainWindow == nil || settingsWindow == nil {
 		return
 	}
-	buildTrayMenu(app, mainWindow, settingsWindow)
+	buildTrayMenu(app, ss, mainWindow, settingsWindow)
 }
 
 // checkUpdateOnStart 启动后异步检查更新，有更新时发通知（对齐 certflow）。

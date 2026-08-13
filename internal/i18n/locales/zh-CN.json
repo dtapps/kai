@@ -62,6 +62,7 @@
   "log.updater_using_default_mirror": "使用内置默认镜像列表",
   "menu.check_update": "检查更新",
   "menu.input_translate": "输入翻译",
+  "menu.prerelease": "预发布版更新",
   "menu.quit": "退出",
   "menu.settings": "设置",
   "menu.tooltip": "Kai - 翻译 & OCR",

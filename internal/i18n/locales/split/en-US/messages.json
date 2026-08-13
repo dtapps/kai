@@ -22,6 +22,7 @@
   "menu.settings": "Settings",
   "menu.quit": "Quit",
   "menu.check_update": "Check for Updates",
+  "menu.prerelease": "Pre-release Updates",
   "menu.tooltip": "Kai - Translate & OCR",
 
   "app.name_version": "Kai {{.Version}}",

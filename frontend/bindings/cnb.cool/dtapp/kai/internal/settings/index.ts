@@ -11,5 +11,6 @@ export type {
     ProxyConfig,
     RegisteredHotkeyConfig,
     Settings,
-    TTSConfig
+    TTSConfig,
+    UpdaterConfig
 } from "./models.js";

@@ -13,6 +13,7 @@ require (
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.8
 	go.dtapp.net/library/contrib/http_log v1.0.13
+	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
 	modernc.org/sqlite v1.56.0
 )
@@ -59,7 +60,6 @@ require (
 	golang.org/x/image v0.45.0 // indirect
 	golang.org/x/mod v0.39.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
 	modernc.org/libc v1.75.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.0 // indirect

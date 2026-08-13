@@ -132,6 +132,7 @@ export const en: Dict = {
     hkInput: 'Show main window',
     hkScreenshot: 'Screenshot translate',
     hkCopy: 'Copy key',
+    hkCopyFallback: 'Fall back to system default copy key on failure',
     hkFormatHint:
       'Example: Alt+A, Cmd+Shift+S (join modifiers with +). Or click "Record" then press the combo.',
     hkRecord: 'Record',

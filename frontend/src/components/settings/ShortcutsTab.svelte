@@ -15,7 +15,7 @@
   // 单个注册类快捷键的表单形态（按键 + 启用状态），与后端 HotkeyEntry 对齐。
   type HotkeyEntry = { key: string; enabled: boolean };
   // 单个执行类快捷键的表单形态，与后端 ExecKeyEntry 对齐（执行键是独立分类，不混用 HotkeyEntry）。
-  type ExecKeyEntry = { key: string; enabled: boolean };
+  type ExecKeyEntry = { key: string; enabled: boolean; fallback: boolean };
   // 注册类快捷键表单：可编辑副本（2 项）
   type HotkeyForm = {
     input: HotkeyEntry;
@@ -32,7 +32,7 @@
   };
   // 执行类快捷键默认值（与后端 DefaultSettings.ExecKeys 保持一致）。
   const defaultExecKeys: ExecKeyForm = {
-    copy: { key: 'Cmd+C', enabled: true },
+    copy: { key: 'Cmd+C', enabled: true, fallback: true },
   };
 
   // 快捷键表单：可编辑副本（注册类 2 项 + 复制键）
@@ -179,7 +179,11 @@
         };
         const ek = cfg.execkeys ?? {};
         execKeyForm = {
-          copy: { key: ek.copy?.key ?? '', enabled: ek.copy?.enabled ?? false },
+          copy: {
+            key: ek.copy?.key ?? '',
+            enabled: ek.copy?.enabled ?? false,
+            fallback: ek.copy?.fallback ?? true,
+          },
         };
       }
     } catch (e) {
@@ -352,6 +356,10 @@
       >
       <label class="u-switch" aria-label={t('settings.enabled')}>
         <input type="checkbox" bind:checked={execKeyForm.copy.enabled} />
+        <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
+      </label>
+      <label class="u-switch" aria-label={t('settings.hkCopyFallback')}>
+        <input type="checkbox" bind:checked={execKeyForm.copy.fallback} />
         <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
       </label>
     </div>

@@ -62,6 +62,7 @@
   "log.updater_using_default_mirror": "Using default built-in mirror list",
   "menu.check_update": "Check for Updates",
   "menu.input_translate": "Input Translation",
+  "menu.prerelease": "Pre-release Updates",
   "menu.quit": "Quit",
   "menu.settings": "Settings",
   "menu.tooltip": "Kai - Translate & OCR",

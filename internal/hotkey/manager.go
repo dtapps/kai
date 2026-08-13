@@ -122,7 +122,7 @@ func (h *Manager) Register() {
 				// 复制键分支：顺序严格为「先模拟 Cmd+C 复制 → 再 Show/Focus」。
 				// 若先 Focus，焦点切到 Kai，模拟的 Cmd+C 落在 Kai 窗口（无选中内容），
 				// 剪贴板仍是旧值，导致取到错误内容。
-				sel := h.execKeyCtrl.CopySelectionOrRestore()
+				sel := h.execKeyCtrl.CopySelection()
 				h.log.Info("[快捷键] 复制键读取剪贴板内容", slog.String("来源", "唤起主窗口模拟复制"), slog.String("按键", hk.Input.Key), slog.Int("长度", len(sel)), slog.String("内容", sel))
 				w.Show()
 				w.Focus()

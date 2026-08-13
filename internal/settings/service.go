@@ -38,6 +38,8 @@ type Settings struct {
 	Log LogConfig `json:"log" mapstructure:"log"`
 	// Proxy 网络代理配置（暂不同步到前端 UI）。
 	Proxy ProxyConfig `json:"proxy" mapstructure:"proxy"`
+	// Updater 自动更新配置（仅用户可决策项，token/provider 由代码固定）。
+	Updater UpdaterConfig `json:"updater" mapstructure:"updater"`
 	// DNSConfigs 自定义 DNS 解析配置列表。
 	DNSConfigs []DNSConfig `json:"dns_configs" mapstructure:"dns_configs"`
 	// Path 配置文件路径（不持久化到文件，json:"-"）。
@@ -69,6 +71,10 @@ type ExecKeyEntry struct {
 	Key string `json:"key" mapstructure:"key"`
 	// Enabled 是否启用该执行键。
 	Enabled bool `json:"enabled" mapstructure:"enabled"`
+	// Fallback 模拟复制失败（剪贴板为空 / 注入失败）时，是否回退使用系统默认复制键重试。
+	// 开启后：若自定义复制键未生效，自动再用系统原生复制键（macOS Cmd+C / 其他 Ctrl+C）
+	// 执行一次，而不是放弃复制。
+	Fallback bool `json:"fallback" mapstructure:"fallback"`
 }
 
 // ExecKeyConfig 执行类快捷键：程序主动用 robotgo 模拟按下这些键来完成动作，
@@ -129,6 +135,14 @@ type ProxyConfig struct {
 	Password string `json:"password" mapstructure:"password"`
 }
 
+// UpdaterConfig 自动更新相关配置（仅 Prerelease 这类用户可决策项；
+// token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
+type UpdaterConfig struct {
+	// Prerelease 是否允许检测预发布版（pre-release）更新。
+	// 开启后：检查更新时会把 GitHub 仓库的 pre-release 版本也纳入候选。
+	Prerelease bool `json:"prerelease" mapstructure:"prerelease"`
+}
+
 // DefaultSettings 返回默认设置指针
 func DefaultSettings() *Settings {
 	return &Settings{
@@ -143,12 +157,13 @@ func DefaultSettings() *Settings {
 			Screenshot: HotkeyEntry{Key: "Alt+S", Enabled: false},
 		},
 		ExecKeys: ExecKeyConfig{
-			Copy: ExecKeyEntry{Key: defaultCopyHotkey(), Enabled: true},
+			Copy: ExecKeyEntry{Key: defaultCopyHotkey(), Enabled: true, Fallback: false},
 		},
 		TTS:     TTSConfig{Engine: "system", Speed: 1.0},
 		HttpLog: HttpLogConfig{Enabled: true, RetentionDays: 30},
 		Log:     LogConfig{Level: "info", RetentionDays: 30, Compress: true},
 		Proxy:   ProxyConfig{Enabled: false, Protocol: "http", Port: 8080},
+		Updater: UpdaterConfig{Prerelease: true},
 	}
 }
 
@@ -232,6 +247,7 @@ func (s *Service) setDefaults() {
 	s.v.SetDefault("http_log", def.HttpLog)
 	s.v.SetDefault("log", def.Log)
 	s.v.SetDefault("proxy", def.Proxy)
+	s.v.SetDefault("updater", def.Updater)
 }
 
 // startWatching 监听配置文件变更（防抖 500ms）
@@ -301,6 +317,7 @@ func (s *Service) writeConfig() error {
 	w.Set("http_log", s.cfg.HttpLog)
 	w.Set("log", s.cfg.Log)
 	w.Set("proxy", s.cfg.Proxy)
+	w.Set("updater", s.cfg.Updater)
 
 	return w.WriteConfigAs(s.filePath)
 }

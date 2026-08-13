@@ -1,0 +1,15 @@
+{
+	"fixed": {
+		"file_version": "0.0.1"
+	},
+	"info": {
+		"0000": {
+			"ProductVersion": "0.0.1",
+			"CompanyName": "DTApp",
+			"FileDescription": "跨平台翻译 & OCR 工具",
+			"LegalCopyright": "(c) 2026, DTApp",
+			"ProductName": "Kai",
+			"Comments": "Kai - 翻译 & OCR"
+		}
+	}
+}

@@ -1,0 +1,35 @@
+{
+  "name": "kai-frontend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "packageManager": "pnpm@11.21.0",
+  "scripts": {
+    "dev": "vite",
+    "build:dev": "vite build --minify false --mode development",
+    "build": "vite build --mode production",
+    "preview": "vite preview",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "tsc": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,svelte,vue,html,json,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\""
+  },
+  "dependencies": {
+    "@wailsio/runtime": "3.0.0-beta.5"
+  },
+  "devDependencies": {
+    "@sveltejs/vite-plugin-svelte": "^7.3.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tsconfig/svelte": "^5.0.8",
+    "@types/node": "^26.2.0",
+    "@typescript/native": "npm:typescript@^7.0.2",
+    "prettier": "^3.9.6",
+    "prettier-plugin-svelte": "^4.1.1",
+    "svelte": "^5.56.8",
+    "svelte-check": "^4.7.5",
+    "tailwindcss": "^4.3.3",
+    "tslib": "^2.8.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.1"
+  }
+}

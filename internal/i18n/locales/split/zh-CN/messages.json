@@ -1,0 +1,36 @@
+{
+  "engine.system": "系统翻译",
+  "engine.deepl": "DeepL",
+  "engine.google": "Google",
+  "engine.openai": "OpenAI",
+  "engine.baidu": "百度",
+  "engine.tencent": "腾讯",
+  "engine.youdao": "有道",
+  "engine.tesseract": "Tesseract",
+
+  "lang.auto": "自动",
+  "lang.zh": "中文",
+  "lang.en": "英语",
+  "lang.ja": "日语",
+  "lang.ko": "韩语",
+  "lang.fr": "法语",
+  "lang.de": "德语",
+  "lang.es": "西班牙语",
+  "lang.ru": "俄语",
+
+  "menu.input_translate": "输入翻译",
+  "menu.settings": "设置",
+  "menu.quit": "退出",
+  "menu.check_update": "检查更新",
+  "menu.tooltip": "Kai - 翻译 & OCR",
+
+  "app.name_version": "Kai {{.Version}}",
+  "app.description": "跨平台翻译 & OCR 工具",
+
+  "window.translate_title": "Kai 翻译",
+  "window.settings_title": "Kai 设置",
+  "window.selection_title": "Kai 划词",
+
+  "notification.update_available_title": "Kai 有更新可用",
+  "notification.update_available_subtitle": "发现新版本 {{.version}}，点击菜单「检查更新」安装"
+}

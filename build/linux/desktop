@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=Kai
+Comment=跨平台翻译 & OCR 工具
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/Kai %u
+Terminal=false
+Type=Application
+Icon=Kai
+Categories=Utility;
+StartupWMClass=Kai
+
+ 

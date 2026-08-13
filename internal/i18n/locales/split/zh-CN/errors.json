@@ -1,0 +1,8 @@
+{
+  "err.no_engine": "未配置或未找到可用翻译引擎",
+  "err.no_ocr": "未配置或未找到可用 OCR 引擎",
+  "err.no_apikey": "引擎缺少 API Key 配置",
+  "err.not_ready": "服务未就绪",
+  "err.translate": "翻译失败",
+  "err.notification_failed": "发送桌面通知失败"
+}

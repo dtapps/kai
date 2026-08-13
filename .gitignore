@@ -1,0 +1,20 @@
+.task
+bin
+frontend/dist
+frontend/node_modules
+build/linux/appimage/build
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+# 移动端生成文件（每台机器不同；overlay 含绝对路径）
+build/ios/xcode/overlay.json
+build/ios/xcode/gen/
+build/android/overlay.json
+build/android/gen/
+
+# Swift 桥接静态库（cgo 系统翻译的编译产物）
+internal/swiftbridge/libkai_bridge.a
+internal/swiftbridge/kai_bridge.o
+
+.codebuddy/
+.mimocode/
+.vscode/
+docs/*-*-*.md

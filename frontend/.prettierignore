@@ -1,0 +1,9 @@
+# 依赖与构建产物
+node_modules/
+dist/
+.wails/
+bindings/
+
+# 其他
+pnpm-lock.yaml
+*.min.js

@@ -1,0 +1,592 @@
+@import 'tailwindcss';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --app-bg: #ffffff;
+  --app-fg: #1f2329;
+  --app-muted: #8a8f99;
+  --app-border: #e5e6eb;
+  --app-card: #f7f8fa;
+  --app-accent: #3b82f6;
+  --app-accent-fg: #ffffff;
+  --app-input-bg: #ffffff;
+  --app-danger: #ff5f57;
+  --app-danger-fg: #ffffff;
+  --app-warn: #febc2e;
+  --app-ok: #28c840;
+  --app-switch-thumb: #ffffff;
+  --app-card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.04);
+  --app-sel-bg: rgba(247, 248, 250, 0.85);
+}
+
+html.dark {
+  --app-bg: #18181c;
+  --app-fg: #e6e6e6;
+  --app-muted: #8a8f99;
+  --app-border: #2c2c32;
+  --app-card: #232328;
+  --app-accent: #3b82f6;
+  --app-accent-fg: #ffffff;
+  --app-input-bg: #232328;
+  --app-card-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.2);
+  --app-sel-bg: rgba(24, 24, 28, 0.85);
+  --app-switch-thumb: #ffffff;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--app-bg);
+  color: var(--app-fg);
+  font-family:
+    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+}
+
+#app {
+  height: 100%;
+}
+
+@layer components {
+  /* ---------- 文本 ---------- */
+  .u-muted {
+    color: var(--app-muted);
+  }
+
+  .u-label {
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--app-muted);
+  }
+
+  .u-text-danger {
+    color: var(--app-danger);
+  }
+
+  .u-text-ok {
+    color: var(--app-ok);
+  }
+
+  .u-text-warn {
+    color: var(--app-warn);
+  }
+
+  .u-text-accent {
+    color: var(--app-accent);
+  }
+
+  /* ---------- 表面（窗口根容器） ---------- */
+  .u-surface {
+    background: var(--app-bg);
+    color: var(--app-fg);
+    height: 100%;
+  }
+
+  .u-sidebar {
+    background: var(--app-card);
+  }
+
+  /* ---------- 卡片：一个基底 + 变体 ---------- */
+  .u-card {
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: 0.5rem;
+    color: var(--app-fg);
+  }
+
+  .u-card--panel {
+    background: var(--app-bg);
+    border-radius: 0.75rem;
+    box-shadow: var(--app-card-shadow);
+  }
+
+  .u-card--float {
+    background: var(--app-sel-bg);
+    backdrop-filter: blur(12px);
+  }
+
+  /* 划词浮窗：选区旁的应用图标按钮（点击唤起主翻译窗口） */
+  .u-icon-btn {
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    border: 1px solid var(--app-border);
+    background: var(--app-sel-bg);
+    backdrop-filter: blur(12px);
+    color: var(--app-fg);
+    cursor: pointer;
+    box-shadow: 0 4px 16px var(--app-shadow, rgba(0, 0, 0, 0.18));
+    transition:
+      transform 0.12s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .u-icon-btn:hover {
+    background: var(--app-accent);
+    color: var(--app-accent-fg);
+    transform: scale(1.06);
+  }
+
+  .u-card--row {
+    border: 0;
+    border-bottom: 1px solid var(--app-border);
+    border-radius: 0;
+  }
+
+  /* ---------- 表单控件 ---------- */
+  .u-field {
+    background: var(--app-input-bg);
+    border: 1px solid var(--app-border);
+    border-radius: 0.5rem;
+    color: var(--app-fg);
+    transition:
+      border-color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  .u-field:focus {
+    outline: none;
+    border-color: var(--app-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent) 25%, transparent);
+  }
+
+  /* 选择框：去除原生箭头，统一下拉指示器 */
+  .u-select {
+    appearance: none;
+    -webkit-appearance: none;
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%238a8a8e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.75rem center;
+  }
+
+  /* ---------- 按钮 ---------- */
+  .u-btn {
+    border-radius: 0.5rem;
+    font-weight: 500;
+    transition:
+      opacity 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .u-btn:hover {
+    opacity: 0.85;
+  }
+
+  .u-btn--primary {
+    background: var(--app-accent);
+    color: var(--app-accent-fg);
+  }
+
+  .u-btn--danger {
+    background: var(--app-danger);
+    color: var(--app-danger-fg);
+  }
+
+  .u-btn--ghost {
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    color: var(--app-fg);
+  }
+
+  .u-btn--link-danger {
+    color: var(--app-danger);
+    background: transparent;
+  }
+
+  /* ---------- 分隔 / 边框 ---------- */
+  .u-divide {
+    border-color: var(--app-border);
+  }
+
+  .u-border-r {
+    border-right: 1px solid var(--app-border);
+  }
+
+  .u-border-l {
+    border-left: 1px solid var(--app-border);
+  }
+
+  .u-border-b {
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .u-border-t {
+    border-top: 1px solid var(--app-border);
+  }
+
+  /* ---------- 导航项（侧边栏） ---------- */
+  .u-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .u-nav-item:hover {
+    background: var(--app-card);
+  }
+
+  .u-nav-item.is-active {
+    background: var(--app-accent);
+    color: var(--app-accent-fg);
+  }
+
+  .u-nav-item.is-active:hover {
+    background: var(--app-accent);
+  }
+
+  /* ---------- 列表项（可选中） ---------- */
+  .u-list-item {
+    display: flex;
+    width: 100%;
+    align-items: center;
+    justify-content: space-between;
+    border-radius: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    text-align: left;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    transition: background-color 0.15s ease;
+  }
+
+  .u-list-item:hover {
+    background: var(--app-card);
+  }
+
+  .u-list-item.is-active {
+    background: var(--app-card);
+    outline: 1px solid var(--app-border);
+  }
+
+  /* ---------- 分段控件（Segmented control） ---------- */
+  .u-segment {
+    display: inline-flex;
+    border-radius: 0.75rem;
+    padding: 0.25rem;
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+  }
+
+  .u-segment__item {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.375rem;
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    font-weight: 500;
+    color: var(--app-muted);
+    white-space: nowrap;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .u-segment__item:hover {
+    color: var(--app-fg);
+    background: var(--app-bg);
+  }
+
+  .u-segment__item.is-active {
+    background: var(--app-accent);
+    color: var(--app-accent-fg);
+    box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  }
+
+  .u-segment__item.is-active:hover {
+    background: var(--app-accent);
+    color: var(--app-accent-fg);
+  }
+
+  /* ---------- 图标容器 ---------- */
+  .u-icon-box {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+  }
+
+  /* ---------- 标题栏 ---------- */
+  .u-titlebar {
+    background: var(--app-bg);
+    border-bottom: 1px solid var(--app-border);
+  }
+
+  .u-traffic {
+    height: 0.75rem;
+    width: 0.75rem;
+    border-radius: 9999px;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      opacity 0.15s ease;
+    opacity: 0.55;
+  }
+
+  /* macOS 红绿灯：默认半透明，悬停三个按钮或全部时显示完整彩色 + 指针 */
+  .u-no-drag:hover .u-traffic {
+    opacity: 1;
+  }
+
+  .u-traffic--close {
+    background: var(--app-danger);
+  }
+
+  .u-traffic--min {
+    background: var(--app-warn);
+  }
+
+  .u-traffic--max {
+    background: var(--app-ok);
+  }
+
+  .u-winbtn {
+    display: flex;
+    height: 1.75rem;
+    width: 2.25rem;
+    align-items: center;
+    justify-content: center;
+    color: var(--app-muted);
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .u-winbtn:hover {
+    background: var(--app-card);
+  }
+
+  .u-winbtn--close:hover {
+    background: var(--app-danger);
+    color: #fff;
+  }
+
+  /* ---------- 拖拽区 ---------- */
+  .u-drag {
+    -webkit-app-region: drag;
+  }
+
+  .u-no-drag {
+    -webkit-app-region: no-drag;
+  }
+
+  /* ---------- 开关（macOS 风格 toggle） ---------- */
+  .u-switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    cursor: pointer;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
+  .u-switch input {
+    position: absolute;
+    opacity: 0;
+    width: 0;
+    height: 0;
+  }
+
+  .u-switch__track {
+    width: 2.5rem;
+    height: 1.25rem;
+    border-radius: 9999px;
+    background: var(--app-border);
+    transition: background-color 0.15s ease;
+    position: relative;
+  }
+
+  .u-switch__thumb {
+    position: absolute;
+    top: 0.125rem;
+    left: 0.125rem;
+    width: 1rem;
+    height: 1rem;
+    border-radius: 9999px;
+    background: var(--app-switch-thumb);
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.15);
+    transition: transform 0.15s ease;
+  }
+
+  .u-switch input:checked + .u-switch__track {
+    background: var(--app-accent);
+  }
+
+  .u-switch input:checked + .u-switch__track .u-switch__thumb {
+    transform: translateX(1.25rem);
+  }
+
+  .u-switch input:focus-visible + .u-switch__track {
+    outline: 2px solid var(--app-accent);
+    outline-offset: 2px;
+  }
+
+  /* ---------- 翻译页专用控件 ---------- */
+  .u-lang-select,
+  .u-engine-select {
+    min-width: 7rem;
+  }
+
+  .u-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: var(--app-muted);
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+
+  .u-icon-btn:hover:not(:disabled) {
+    color: var(--app-fg);
+    border-color: var(--app-accent);
+  }
+
+  .u-icon-btn--active {
+    color: var(--app-accent-fg);
+    background: var(--app-accent);
+    border-color: var(--app-accent);
+  }
+
+  .u-icon-btn:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+  }
+
+  .u-icon-btn--sm {
+    width: 1.5rem;
+    height: 1.5rem;
+    border-radius: 0.375rem;
+  }
+
+  .u-toast {
+    position: fixed;
+    left: 50%;
+    bottom: 1.25rem;
+    transform: translateX(-50%);
+    padding: 0.4rem 0.9rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    color: var(--app-accent-fg);
+    background: var(--app-accent);
+    border-radius: 9999px;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+    pointer-events: none;
+    z-index: 50;
+    animation: u-toast-in 0.15s ease-out;
+  }
+
+  @keyframes u-toast-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  }
+
+  .u-result-card {
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: 0.75rem;
+    border-top: 3px solid var(--app-accent);
+    padding: 1rem;
+    color: var(--app-fg);
+  }
+
+  /* 翻译中走马灯：底层轨道 + 上层高亮光带横滑 */
+  .kai-loading-bar {
+    position: relative;
+    height: 3px;
+    width: 100%;
+    border-radius: 9999px;
+    background: var(--app-border);
+    overflow: hidden;
+  }
+  .kai-loading-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: 40%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, transparent, var(--app-accent), transparent);
+    animation: kai-marquee 1.2s ease-in-out infinite;
+  }
+  /* 动态省略号容器：固定最小宽度避免点数量变化时文字抖动 */
+  .kai-dots {
+    display: inline-block;
+    min-width: 1.5em;
+    text-align: left;
+  }
+  @keyframes kai-marquee {
+    0% {
+      transform: translateX(-120%);
+    }
+    100% {
+      transform: translateX(320%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .kai-loading-bar::after {
+      animation: none;
+    }
+  }
+
+  /* 多选 chips（如 Tesseract 识别语言选择） */
+  .u-chip {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.8rem;
+    font-weight: 500;
+    line-height: 1.2;
+    color: var(--app-fg);
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease,
+      border-color 0.15s ease;
+  }
+  .u-chip:hover {
+    border-color: var(--app-accent);
+  }
+  .u-chip.is-on {
+    color: var(--app-accent-fg);
+    background: var(--app-accent);
+    border-color: var(--app-accent);
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "err.no_engine": "No available translation engine configured or found",
+  "err.no_ocr": "No available OCR engine configured or found",
+  "err.no_apikey": "Engine is missing API Key",
+  "err.not_ready": "Service not ready",
+  "err.translate": "Translation failed",
+  "err.notification_failed": "Failed to send desktop notification"
+}

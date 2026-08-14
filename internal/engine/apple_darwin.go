@@ -27,17 +27,17 @@ import (
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
-// systemTranslator 调用 macOS 系统自带翻译（Translation.framework）。
+// appleTranslator 调用 macOS 系统自带翻译（Translation.framework）。
 // 通过 cgo 链接 Swift 桥接静态库（internal/swiftbridge），免 API Key、无需辅助功能授权，
 // 是开箱即用的本地离线翻译后端。静态库需用 bridge/build.sh 预先生成（见 Taskfile darwin 构建）。
-type systemTranslator struct{}
+type appleTranslator struct{}
 
-// NewSystem 创建系统翻译引擎。
-func NewSystem() Translator {
-	return &systemTranslator{}
+// NewApple 创建系统翻译引擎。
+func NewApple() Translator {
+	return &appleTranslator{}
 }
 
-func (s *systemTranslator) Name() string { return "system" }
+func (s *appleTranslator) Name() string { return "apple" }
 
 // SetLogConfig 将日志配置（目录 + LogConfig 的等级/保留天数/压缩）同步给 Swift 桥接层，
 // 使其 kai-bridge.log 与主应用日志（kai.log）使用同一套策略（等级过滤、按天滚动、保留天数、压缩）。
@@ -64,7 +64,7 @@ func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 
 // SupportsAutoSource 系统翻译（Translation.framework）支持自动检测源语言：
 // from=auto 时 Go 传空串给 Swift，Swift 侧用 NaturalLanguage 自动识别并约束到已安装列表。
-func (s *systemTranslator) SupportsAutoSource() bool { return true }
+func (s *appleTranslator) SupportsAutoSource() bool { return true }
 
 // translateResult 对应 Swift 端返回的 JSON 结构。
 type translateResult struct {
@@ -76,7 +76,7 @@ type translateResult struct {
 // Translate 通过 Translation.framework 完成翻译。
 // src 为 "auto"（或空）时，由 Swift 侧用 NaturalLanguage 自动检测源语言并约束到本机已安装列表；
 // 目标语言必须显式指定。
-func (s *systemTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
+func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
 		return nil, fmt.Errorf("empty text")
@@ -121,7 +121,7 @@ func (s *systemTranslator) Translate(ctx context.Context, req model.TranslateReq
 	}
 	slog.Debug("[Kai-Bridge-Cgo] 系统翻译完成", "from", sl, "to", tl, "detected_from", tr.From, "result_len", len(tr.Result))
 	return &model.TranslateResult{
-		Engine: "system",
+		Engine: "apple",
 		From:   model.Language(coalesceLang(tr.From, sl)),
 		To:     model.Language(tl),
 		Text:   text,

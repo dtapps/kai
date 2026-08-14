@@ -91,6 +91,7 @@ export const en: Dict = {
     engineMissing: 'Missing required field: ',
     engineRemove: 'Remove',
     engineUnsupported: 'Not supported on this OS',
+    engineBuiltinHint: 'Built-in engine requires no config and cannot be removed',
     engineSave: 'Save config',
     engineSaved: 'Saved',
     engineSystemLangs: 'Languages supported by system translation',
@@ -102,7 +103,6 @@ export const en: Dict = {
     engine_field: {
       endpoint: 'Endpoint',
       api_key: 'API Key',
-      base_url: 'Base URL',
       model: 'Model',
       app_id: 'App ID',
       app_secret: 'App Secret',
@@ -112,9 +112,13 @@ export const en: Dict = {
       langs: 'Recognition language',
     },
     engine_ph: {
+      google_endpoint: 'Leave empty for the default endpoint',
       deepl_endpoint: 'Leave empty for the free endpoint',
+      baidu_endpoint: 'Leave empty for the default endpoint',
+      tencent_endpoint: 'Leave empty for the default endpoint',
+      youdao_endpoint: 'Leave empty for the default endpoint',
+      openai_endpoint: 'Leave empty for the default endpoint (/v1/chat/completions)',
       deepl_api_key: 'Enter your DeepL API Key',
-      openai_base_url: 'Leave empty for the default Base URL',
       openai_api_key: 'Enter your OpenAI API Key',
       openai_model: 'e.g. gpt-4o',
       baidu_app_id: 'Enter your Baidu App ID',
@@ -233,7 +237,7 @@ export const en: Dict = {
     ita: 'Italian',
   },
   engine: {
-    system: 'System',
+    apple: 'System',
     google: 'Google',
     deepl: 'DeepL',
     openai: 'OpenAI',
@@ -241,5 +245,6 @@ export const en: Dict = {
     tencent: 'Tencent',
     youdao: 'Youdao',
     tesseract: 'Tesseract',
+    vision: 'System OCR',
   },
 };

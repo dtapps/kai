@@ -6,7 +6,7 @@
  */
 export interface AllEngineItem {
     /**
-     * 引擎自增主键 ID
+     * 引擎自增主键 ID（内置引擎为 0）
      */
     "id": number;
 
@@ -34,6 +34,11 @@ export interface AllEngineItem {
      * 当前平台是否支持
      */
     "supported": boolean;
+
+    /**
+     * 系统内置免配置引擎（如 vision 系统 OCR），不可删除、但开关可切换
+     */
+    "builtin": boolean;
 }
 
 /**
@@ -57,7 +62,7 @@ export interface EngineListItem {
     "kind": string;
 
     /**
-     * 当前平台是否支持（如 system 仅 darwin）
+     * 当前平台是否支持（如 apple 仅 darwin）
      */
     "supported": boolean;
 }

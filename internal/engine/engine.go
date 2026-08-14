@@ -87,13 +87,21 @@ var (
 )
 
 // defaultEngineNames 默认内置、开箱即用的引擎（其余需用户在设置页「添加」启用）。
-// 仅 system / google 两项（均免 Key，开箱即用）；deepl 因需要 API Key，不预置默认注入，
-// 避免生成「声明启用但缺凭证」的无效引擎，用户在设置页填写 Key 后开启开关即可（落盘后持久化）。
+// system（系统翻译）/ google 均免 Key，开箱即用；macOS 上额外预置 vision（系统 OCR，
+// 零安装离线），保证 mac 开箱即有可用的 OCR 引擎。
+// deepl 因需要 API Key，不预置默认注入，避免生成「声明启用但缺凭证」的无效引擎；
 // openai / baidu / tencent / youdao / tesseract 同样不预置，供用户在设置页添加。
-var defaultEngineNames = map[string]bool{
-	"system": true,
-	"google": true,
-}
+var defaultEngineNames = func() map[string]bool {
+	m := map[string]bool{
+		"apple":  true,
+		"google": true,
+	}
+	// 系统 OCR(vision) 仅 macOS 可用，仅在该平台作为默认引擎开箱即用。
+	if runtime.GOOS == "darwin" {
+		m["vision"] = true
+	}
+	return m
+}()
 
 // DefaultEngineConfigs 返回默认引擎配置（唯一来源）。
 // 引擎清单来自 KnownEngines，不再手写；仅取 defaultEngineNames 中的内置引擎，
@@ -108,7 +116,7 @@ func DefaultEngineConfigs() []*EngineConfig {
 		if !defaultEngineNames[m.Name] {
 			continue
 		}
-		// 当前平台不可用的引擎（如 Windows/Linux 上的 system 系统翻译）不预置，
+		// 当前平台不可用的引擎（如 Windows/Linux 上的 apple 系统翻译）不预置，
 		// 避免默认启用一个根本不能用的引擎。用户可在对应平台支持的引擎上手动添加。
 		if !EngineSupported(m.Name) {
 			continue
@@ -117,7 +125,7 @@ func DefaultEngineConfigs() []*EngineConfig {
 			Engine:  m.Name,
 			Enabled: true, // 默认内置的免 Key 引擎均启用
 		}
-		// 预填带 Default 的真实值字段（endpoint / base_url / 语言码等）
+		// 预填带 Default 的真实值字段（endpoint / 语言码等）
 		for _, f := range GetEngineSchema(m.Name).Fields {
 			if f.Default != "" {
 				switch f.Field {
@@ -144,6 +152,16 @@ const (
 	DeepLFreeEndpoint = "https://api-free.deepl.com/v2/translate"
 	// OpenAIDefaultBaseURL OpenAI 兼容接口默认 base URL
 	OpenAIDefaultBaseURL = "https://api.openai.com/v1"
+	// OpenAIDefaultChatEndpoint OpenAI 默认完整 chat/completions 端点（base + 路径）
+	OpenAIDefaultChatEndpoint = OpenAIDefaultBaseURL + "/chat/completions"
+	// DefaultEndpoint Google 默认公开端点
+	DefaultEndpoint = "https://translate.googleapis.com/translate_a/single"
+	// BaiduDefaultEndpoint 百度翻译开放平台默认端点
+	BaiduDefaultEndpoint = "https://fanyi-api.baidu.com/api/trans/vip/translate"
+	// TencentDefaultEndpoint 腾讯机器翻译默认端点
+	TencentDefaultEndpoint = "https://tmt.tencentcloudapi.com"
+	// YoudaoDefaultEndpoint 有道智云默认端点
+	YoudaoDefaultEndpoint = "https://openapi.youdao.com/api"
 )
 
 // OcrEngine OCR 引擎统一接口
@@ -220,13 +238,14 @@ const (
 type EngineMeta struct {
 	Name      string     `json:"name"`      // 引擎展示名
 	Kind      EngineKind `json:"kind"`      // 引擎类型（translate | ocr）
-	Supported bool       `json:"supported"` // 当前平台是否支持（如 system 仅 darwin）
+	Supported bool       `json:"supported"` // 当前平台是否支持（如 apple 仅 darwin）
 }
 
 // EngineSupported 按当前运行平台判断引擎是否可用（导出供 service 层复用）。
-// system（macOS 系统翻译）仅 darwin 支持；其余引擎跨平台可用。
+// apple（macOS 系统翻译）与 vision（macOS 系统 OCR）仅 darwin 支持；其余引擎跨平台可用。
 func EngineSupported(name string) bool {
-	if name == "system" {
+	switch name {
+	case "apple", "vision":
 		return runtime.GOOS == "darwin"
 	}
 	return true
@@ -240,7 +259,7 @@ func engineSupported(name string) bool { return EngineSupported(name) }
 // 顺序即设置页展示顺序。
 func KnownEngines() []EngineMeta {
 	names := []string{
-		"system",
+		"apple",
 		"google",
 		"deepl",
 		"openai",
@@ -248,21 +267,24 @@ func KnownEngines() []EngineMeta {
 		"tencent",
 		"youdao",
 		"tesseract",
+		"vision",
 	}
 	out := make([]EngineMeta, 0, len(names))
 	for _, n := range names {
 		out = append(out, EngineMeta{
 			Name:      n,
-			Kind:      kindOfEngine(n),
+			Kind:      KindOfEngine(n),
 			Supported: engineSupported(n),
 		})
 	}
 	return out
 }
 
-// kindOfEngine 返回引擎种类（仅 tesseract 为 OCR，其余为翻译）。
-func kindOfEngine(name string) EngineKind {
-	if name == "tesseract" {
+// KindOfEngine 返回引擎种类（tesseract / vision 为 OCR，其余为翻译）。导出供 service 层复用。
+// apple（macOS 系统翻译）归类为翻译。
+func KindOfEngine(name string) EngineKind {
+	switch name {
+	case "tesseract", "vision":
 		return KindOCR
 	}
 	return KindTranslator
@@ -336,14 +358,18 @@ type EngineSchema struct {
 // 例如 tesseract 也显示 API Key、openai 的 secret/extra 语义不清）。
 //
 // 依据各引擎 NewXxx 构造函数的实际取值：
-//   - system/google：无需配置（系统/公开端点免 Key）
+//   - apple/google：公开端点免 Key（google 可在设置中自定义 endpoint，留空用默认）
 //   - deepl：endpoint 默认免费版端点（可改为 Pro 版）；api_key 必填（免费版也需注册获取）
-//   - openai：api_key + secret(作为 base_url) + extra(作为 model)
+//   - openai：api_key + endpoint(作为完整接口地址，默认 chat/completions) + extra(作为 model)
 //   - baidu/tencent/youdao：appkey/appid = api_key，密钥 = secret
 //   - tesseract：仅 extra（逗号分隔语言码）
 var engineSchemas = map[string]EngineSchema{
-	"system": {Fields: nil},
-	"google": {Fields: nil},
+	"apple": {Fields: nil},
+	"google": {
+		Fields: []EngineFieldSchema{
+			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.google_endpoint", Type: FieldString, Required: false, Default: DefaultEndpoint},
+		},
+	},
 	"deepl": {
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.deepl_endpoint", Type: FieldString, Required: false, Default: DeepLFreeEndpoint},
@@ -352,25 +378,28 @@ var engineSchemas = map[string]EngineSchema{
 	},
 	"openai": {
 		Fields: []EngineFieldSchema{
-			{Field: "secret", LabelKey: "settings.engine_field.base_url", PlaceholderKey: "settings.engine_ph.openai_base_url", Type: FieldString, Required: false, Default: OpenAIDefaultBaseURL},
+			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.openai_endpoint", Type: FieldString, Required: false, Default: OpenAIDefaultChatEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.api_key", PlaceholderKey: "settings.engine_ph.openai_api_key", Type: FieldSecret, Required: true},
 			{Field: "extra", LabelKey: "settings.engine_field.model", PlaceholderKey: "settings.engine_ph.openai_model", Type: FieldString, Required: false},
 		},
 	},
 	"baidu": {
 		Fields: []EngineFieldSchema{
+			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.baidu_endpoint", Type: FieldString, Required: false, Default: BaiduDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.app_id", PlaceholderKey: "settings.engine_ph.baidu_app_id", Type: FieldString, Required: true},
 			{Field: "secret", LabelKey: "settings.engine_field.app_secret", PlaceholderKey: "settings.engine_ph.baidu_app_secret", Type: FieldSecret, Required: true},
 		},
 	},
 	"tencent": {
 		Fields: []EngineFieldSchema{
+			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.tencent_endpoint", Type: FieldString, Required: false, Default: TencentDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.secret_id", PlaceholderKey: "settings.engine_ph.tencent_secret_id", Type: FieldString, Required: true},
 			{Field: "secret", LabelKey: "settings.engine_field.secret_key", PlaceholderKey: "settings.engine_ph.tencent_secret_key", Type: FieldSecret, Required: true},
 		},
 	},
 	"youdao": {
 		Fields: []EngineFieldSchema{
+			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.youdao_endpoint", Type: FieldString, Required: false, Default: YoudaoDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.app_key", PlaceholderKey: "settings.engine_ph.youdao_app_key", Type: FieldString, Required: true},
 			{Field: "secret", LabelKey: "settings.engine_field.app_secret", PlaceholderKey: "settings.engine_ph.youdao_app_secret", Type: FieldSecret, Required: true},
 		},

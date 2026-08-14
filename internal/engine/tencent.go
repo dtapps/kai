@@ -29,7 +29,7 @@ type tencentTranslator struct {
 func NewTencent(cfg *EngineConfig, client *http.Client) Translator {
 	ep := cfg.Endpoint
 	if ep == "" {
-		ep = "https://tmt.tencentcloudapi.com"
+		ep = TencentDefaultEndpoint
 	}
 	return &tencentTranslator{
 		secretID:  cfg.APIKey,

@@ -74,6 +74,9 @@ export function GetKnownEngines(): $CancellablePromise<$models.EngineListItem[] 
 
 /**
  * RemoveEngine 按 ID 删除单个引擎配置。
+ * 系统内置引擎（apple / vision）禁止删除：它们免配置、由代码保证存在，
+ * 删除会导致 OCR 单选 / 系统翻译不可用。前端已对 builtin 项隐藏删除按钮，
+ * 此处再加后端兜底拦截，避免其它调用途径误删。
  */
 export function RemoveEngine(id: number): $CancellablePromise<void> {
     return $Call.ByID(1575958516, id);

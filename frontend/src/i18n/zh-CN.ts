@@ -88,6 +88,7 @@ export const zh = {
     engineMissing: '缺少必填项：',
     engineRemove: '移除',
     engineUnsupported: '当前系统不支持',
+    engineBuiltinHint: '系统内置引擎无需配置，不可移除',
     engineSave: '保存配置',
     engineSaved: '已保存',
     engineSystemLangs: '系统翻译支持的语言',
@@ -99,7 +100,6 @@ export const zh = {
     engine_field: {
       endpoint: '服务地址',
       api_key: 'API Key',
-      base_url: 'Base URL',
       model: '模型',
       app_id: 'App ID',
       app_secret: 'App Secret',
@@ -109,9 +109,13 @@ export const zh = {
       langs: '识别语言',
     },
     engine_ph: {
+      google_endpoint: '留空使用默认端点',
       deepl_endpoint: '留空使用免费版端点',
+      baidu_endpoint: '留空使用默认端点',
+      tencent_endpoint: '留空使用默认端点',
+      youdao_endpoint: '留空使用默认端点',
+      openai_endpoint: '留空使用默认地址（/v1/chat/completions）',
       deepl_api_key: '输入 DeepL API Key',
-      openai_base_url: '留空使用默认 Base URL',
       openai_api_key: '输入 OpenAI API Key',
       openai_model: '例如 gpt-4o',
       baidu_app_id: '输入百度 App ID',
@@ -226,7 +230,7 @@ export const zh = {
     ita: '意大利语',
   },
   engine: {
-    system: '系统翻译',
+    apple: '系统翻译',
     google: 'Google',
     deepl: 'DeepL',
     openai: 'OpenAI',
@@ -234,6 +238,7 @@ export const zh = {
     tencent: '腾讯',
     youdao: '有道',
     tesseract: 'Tesseract',
+    vision: '系统 OCR',
   },
 };
 

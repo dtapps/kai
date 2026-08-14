@@ -54,7 +54,28 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("configstore: migrate secrets: %w", err)
 	}
+	// 一次性迁移：引擎标识 system → apple（命名统一，与 vision 对称）。
+	// 旧库 engines 表中 engine='system' 的行需更新为 'apple'，幂等可重复调用。
+	if err := s.MigrateEngineNames(ctx); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("configstore: migrate engine names: %w", err)
+	}
 	return s, nil
+}
+
+// MigrateEngineNames 将存量 engines 表中 engine='system' 的行改名为 'apple'。
+// 历史版本用 "system" 作为 macOS 系统翻译引擎标识，现统一为 "apple"（与 "vision" 对称）。
+// 幂等：对已是 'apple' 的库无任何影响。
+func (s *Store) MigrateEngineNames(ctx context.Context) error {
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	if err := s.RenameEngineByName(ctx, RenameEngineByNameParams{
+		Engine:   "apple",  // 新标识（SET engine = ?）
+		Engine_2: "system", // 旧标识（WHERE engine = ?）
+	}); err != nil {
+		return fmt.Errorf("configstore: rename engine system→apple: %w", err)
+	}
+	return nil
 }
 
 // MigrateSecrets 将 engines 表中仍是明文的 api_key/secret 加密写回，

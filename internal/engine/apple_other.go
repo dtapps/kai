@@ -10,18 +10,18 @@ import (
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
-// systemTranslator 非 macOS 平台的占位实现（系统翻译仅在 macOS 可用）。
-type systemTranslator struct{}
+// appleTranslator 非 macOS 平台的占位实现（系统翻译仅在 macOS 可用）。
+type appleTranslator struct{}
 
-// NewSystem 在非 macOS 平台返回不支持的系统翻译引擎。
-func NewSystem() Translator {
-	return &systemTranslator{}
+// NewApple 在非 macOS 平台返回不支持的系统翻译引擎。
+func NewApple() Translator {
+	return &appleTranslator{}
 }
 
-func (s *systemTranslator) Name() string { return "system" }
+func (s *appleTranslator) Name() string { return "apple" }
 
 // Translate 非 macOS 平台不支持系统翻译。
-func (s *systemTranslator) Translate(_ context.Context, _ model.TranslateRequest) (*model.TranslateResult, error) {
+func (s *appleTranslator) Translate(_ context.Context, _ model.TranslateRequest) (*model.TranslateResult, error) {
 	return nil, fmt.Errorf("系统翻译仅支持 macOS")
 }
 

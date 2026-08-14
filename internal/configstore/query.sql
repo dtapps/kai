@@ -27,3 +27,6 @@ SELECT id, engine, enabled, api_key, secret, extra, endpoint FROM engines WHERE 
 
 -- name: GetEngineByID :one
 SELECT id, engine, enabled, api_key, secret, extra, endpoint FROM engines WHERE id = ? LIMIT 1;
+
+-- name: RenameEngineByName :exec
+UPDATE engines SET engine = ? WHERE engine = ?;

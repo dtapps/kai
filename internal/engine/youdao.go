@@ -30,7 +30,7 @@ type youdaoTranslator struct {
 func NewYoudao(cfg *EngineConfig, client *http.Client) Translator {
 	ep := cfg.Endpoint
 	if ep == "" {
-		ep = "https://openapi.youdao.com/api"
+		ep = YoudaoDefaultEndpoint
 	}
 	return &youdaoTranslator{
 		appKey:   cfg.APIKey,

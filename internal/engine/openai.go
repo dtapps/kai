@@ -11,11 +11,10 @@ import (
 )
 
 // OpenAI 兼容聊天接口翻译引擎（Chat Completions）。
-// 配置：APIKey=sk-...，Secret=base_url（如 https://api.openai.com/v1），
-// Extra=模型名（如 gpt-4o-mini），Endpoint 可覆盖完整 chat/completions 路径。
+// 配置：APIKey=sk-...，Endpoint=完整接口地址（默认 https://api.openai.com/v1/chat/completions），
+// Extra=模型名（如 gpt-4o-mini）。Endpoint 即为地址，无需再单独配置 base_url。
 type openaiTranslator struct {
 	apiKey   string
-	baseURL  string
 	model    string
 	endpoint string
 	client   *http.Client
@@ -23,22 +22,16 @@ type openaiTranslator struct {
 
 // NewOpenAI 创建 OpenAI 兼容翻译引擎。
 func NewOpenAI(cfg *EngineConfig, client *http.Client) Translator {
-	base := cfg.Secret
-	if base == "" {
-		base = OpenAIDefaultBaseURL
+	ep := cfg.Endpoint
+	if ep == "" {
+		ep = OpenAIDefaultChatEndpoint
 	}
-	base = strings.TrimRight(base, "/")
 	modelName := cfg.Extra
 	if modelName == "" {
 		modelName = "gpt-4o-mini"
 	}
-	ep := cfg.Endpoint
-	if ep == "" {
-		ep = base + "/chat/completions"
-	}
 	return &openaiTranslator{
 		apiKey:   cfg.APIKey,
-		baseURL:  base,
 		model:    modelName,
 		endpoint: ep,
 		client:   client,

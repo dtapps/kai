@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"runtime"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -22,6 +21,13 @@ var (
 	errEngineStoreNotReady = errors.New("引擎存储未就绪")
 	log                    = slog.Default()
 )
+
+// builtinEngine 标识「系统内置、免配置」的引擎（已落库，有真实 ID）。
+// 语义：不可删除、但开关可切换（参与 OCR 单选 / 翻译默认）。
+var builtinEngine = map[string]bool{
+	"apple":  true, // macOS 系统翻译
+	"vision": true, // macOS 系统 OCR（Vision.framework）
+}
 
 // EngineItem 返回给前端的引擎条目（带启用状态与展示名）。
 type EngineItem struct {
@@ -85,9 +91,9 @@ func (w *EngineWrapper) registerEngines() {
 		return c
 	}
 
-	// system：macOS 系统翻译（/usr/bin/translate），免 Key、无需网络客户端。
-	if e, ok := engines["system"]; ok && e.Enabled {
-		w.registry.RegisterTranslator(engine.NewSystem())
+	// apple：macOS 系统翻译（Translation.framework），免 Key、无需网络客户端。
+	if e, ok := engines["apple"]; ok && e.Enabled {
+		w.registry.RegisterTranslator(engine.NewApple())
 	}
 	if e, ok := engines["google"]; ok && e.Enabled {
 		w.registry.RegisterTranslator(engine.NewGoogle(e.Endpoint, newClient(15*time.Second)))
@@ -107,11 +113,12 @@ func (w *EngineWrapper) registerEngines() {
 	if e, ok := engines["youdao"]; ok && e.Enabled {
 		w.registry.RegisterTranslator(engine.NewYoudao(e, newClient(15*time.Second)))
 	}
+	// OCR 单选：同一时刻只允许一个 OCR 引擎注册进 Registry。
+	// 优先使用用户在设置页启用的 tesseract；否则若 vision（系统 OCR）在库内启用则注册它。
+	// vision / tesseract 均已落库（engine 表），由 engines map 的 Enabled 决定注册哪个。
 	if e, ok := engines["tesseract"]; ok && e.Enabled {
 		w.registry.RegisterOcr(engine.NewTesseractOCR(e.Extra))
-	}
-	// vision：macOS 系统 Vision.framework 离线 OCR，零安装、开箱即用，darwin 下始终注册并作为默认。
-	if runtime.GOOS == "darwin" {
+	} else if e, ok := engines["vision"]; ok && e.Enabled {
 		w.registry.RegisterOcr(engine.NewVisionOCR())
 	}
 }
@@ -193,6 +200,8 @@ func (w *EngineWrapper) GetAllEngines() []AllEngineItem {
 		if kind == "" {
 			kind = string(engine.KindTranslator)
 		}
+		// 系统内置引擎（vision 系统 OCR / apple 系统翻译）已落库，此处统一标记 builtin：
+		// 不可删除、但开关可切换（参与 OCR 单选 / 翻译默认）。
 		items = append(items, AllEngineItem{
 			ID:        e.ID,
 			Value:     e.Engine,
@@ -200,6 +209,7 @@ func (w *EngineWrapper) GetAllEngines() []AllEngineItem {
 			Kind:      kind,
 			Enabled:   e.Enabled != 0,
 			Supported: engine.EngineSupported(e.Engine),
+			Builtin:   builtinEngine[e.Engine],
 		})
 	}
 	return items
@@ -302,18 +312,56 @@ func (w *EngineWrapper) ToggleEngineEnabled(id int64, enabled bool) error {
 	if err := w.configStore.SetEngineEnabled(ctx, id, enabled); err != nil {
 		return err
 	}
+	// OCR 单选：启用某 OCR 时，自动禁用其它已启用的 OCR 引擎（库内 tesseract 等），
+	// 保证同时只有一个 OCR 处于启用状态。
+	if enabled {
+		if err := w.disableOtherOcrs(ctx, id); err != nil {
+			return err
+		}
+	}
 	w.registerEngines()
 	w.reregisterHotkeys()
 	return nil
 }
 
+// disableOtherOcrs 禁用除 exceptID 外的所有已启用 OCR 引擎（库内配置）。
+func (w *EngineWrapper) disableOtherOcrs(ctx context.Context, exceptID int64) error {
+	engs, err := w.configStore.LoadEngines(ctx)
+	if err != nil {
+		return err
+	}
+	for _, e := range engs {
+		if e.ID == exceptID || e.Enabled == 0 {
+			continue
+		}
+		if engine.KindOfEngine(e.Engine) != engine.KindOCR {
+			continue
+		}
+		if err := w.configStore.SetEngineEnabled(ctx, e.ID, false); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // RemoveEngine 按 ID 删除单个引擎配置。
+// 系统内置引擎（apple / vision）禁止删除：它们免配置、由代码保证存在，
+// 删除会导致 OCR 单选 / 系统翻译不可用。前端已对 builtin 项隐藏删除按钮，
+// 此处再加后端兜底拦截，避免其它调用途径误删。
 func (w *EngineWrapper) RemoveEngine(id int64) error {
 	if w.configStore == nil {
 		return errEngineStoreNotReady
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
+	// 后端兜底：禁止删除系统内置引擎。
+	if engs, err := w.configStore.LoadEngines(ctx); err == nil {
+		for _, e := range engs {
+			if e.ID == id && builtinEngine[e.Engine] {
+				return fmt.Errorf("系统内置引擎不可删除")
+			}
+		}
+	}
 	if err := w.configStore.DeleteEngineByID(ctx, id); err != nil {
 		return err
 	}
@@ -361,15 +409,16 @@ type EngineListItem struct {
 	Value     string `json:"value"`     // 引擎标识
 	Name      string `json:"name"`      // 展示名
 	Kind      string `json:"kind"`      // translate | ocr
-	Supported bool   `json:"supported"` // 当前平台是否支持（如 system 仅 darwin）
+	Supported bool   `json:"supported"` // 当前平台是否支持（如 apple 仅 darwin）
 }
 
 // AllEngineItem 设置页「全部可配置服务」条目（无论是否已启用）
 type AllEngineItem struct {
-	ID        int64  `json:"id"`        // 引擎自增主键 ID
+	ID        int64  `json:"id"`        // 引擎自增主键 ID（内置引擎为 0）
 	Value     string `json:"value"`     // 引擎标识
 	Name      string `json:"name"`      // 展示名
 	Kind      string `json:"kind"`      // translate | ocr
 	Enabled   bool   `json:"enabled"`   // 是否已启用
 	Supported bool   `json:"supported"` // 当前平台是否支持
+	Builtin   bool   `json:"builtin"`   // 系统内置免配置引擎（如 vision 系统 OCR），不可删除、但开关可切换
 }

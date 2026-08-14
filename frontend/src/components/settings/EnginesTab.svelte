@@ -23,7 +23,7 @@
   import { SystemLanguages } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
   let engines = $state<AllEngineItem[]>([]);
 
-  // 按 Kind 分组展示：翻译引擎 / OCR 引擎（TTS 的 system 引擎归入翻译类）
+  // 按 Kind 分组展示：翻译引擎 / OCR 引擎（TTS 的 apple 引擎归入翻译类）
   type EngineGroup = { kind: string; title: string; items: AllEngineItem[] };
   const engineGroups = $derived.by<EngineGroup[]>(() => {
     const order = ['translate', 'ocr'];
@@ -123,7 +123,7 @@
       schema = [];
     }
     // 选中系统翻译引擎时，拉取并显示其支持的语言列表（只读）
-    if (eng.value === 'system' && eng.supported) {
+    if (eng.value === 'apple' && eng.supported) {
       loadSystemLangs();
     } else {
       systemLangs = [];
@@ -180,7 +180,9 @@
   async function toggleEngine(id: number, enabled: boolean, el?: HTMLInputElement) {
     formError = '';
     const eng = engines.find((x) => x.id === id);
-    // 不支持当前平台的引擎（如 system 仅 macOS）禁止开关
+    // 系统内置引擎（如 vision 系统 OCR / apple 系统翻译）可切换启用，但不可删除；
+    // OCR 内置项切换时由后端保证 OCR 单选（自动禁用其它 OCR）。
+    // 不支持当前平台的引擎（如 apple 仅 macOS）禁止开关。
     if (eng && !eng.supported) {
       if (el) el.checked = eng.enabled;
       engines = engines.map((x) => (x.id === id ? { ...x, enabled: eng.enabled } : x));
@@ -248,7 +250,7 @@
     try {
       const s: EngineSchema = await GetEngineSchema(name);
       addSchema = s.fields ?? [];
-      for (const f of addSchema) addValues[f.field] = '';
+      for (const f of addSchema) addValues[f.field] = f.default ?? '';
     } catch (e) {
       console.error('[引擎] 加载新增引擎字段失败', e);
       addSchema = [];
@@ -341,7 +343,7 @@
     <div class="u-label mb-4">
       {t('settings.engineConfig')}
     </div>
-    {#if engines.find((e) => e.id === selectedId)?.value === 'system'}
+    {#if engines.find((e) => e.id === selectedId)?.value === 'apple'}
       <div
         class="mb-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-3"
       >
@@ -410,15 +412,20 @@
       </div>
     {/if}
     {#if selectedId !== null}
+      {@const sel = engines.find((x) => x.id === selectedId)}
       <div class="mt-auto pt-4">
-        <button
-          class="u-btn u-btn--link-danger text-sm"
-          onclick={() => {
-            if (selectedId !== null) removeEngine(selectedId);
-          }}
-        >
-          {t('settings.engineRemove')}
-        </button>
+        {#if sel?.builtin}
+          <span class="u-muted text-xs">{t('settings.engineBuiltinHint')}</span>
+        {:else}
+          <button
+            class="u-btn u-btn--link-danger text-sm"
+            onclick={() => {
+              if (selectedId !== null) removeEngine(selectedId);
+            }}
+          >
+            {t('settings.engineRemove')}
+          </button>
+        {/if}
       </div>
     {/if}
   </div>

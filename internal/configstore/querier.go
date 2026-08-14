@@ -14,6 +14,7 @@ type Querier interface {
 	GetEngineByName(ctx context.Context, engine string) (Engine, error)
 	InsertEngine(ctx context.Context, arg InsertEngineParams) (int64, error)
 	LoadEngines(ctx context.Context) ([]Engine, error)
+	RenameEngineByName(ctx context.Context, arg RenameEngineByNameParams) error
 	UpdateEngineByID(ctx context.Context, arg UpdateEngineByIDParams) error
 	UpdateEngineEnabled(ctx context.Context, arg UpdateEngineEnabledParams) error
 }

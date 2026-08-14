@@ -120,6 +120,20 @@ func (q *Queries) LoadEngines(ctx context.Context) ([]Engine, error) {
 	return items, nil
 }
 
+const renameEngineByName = `-- name: RenameEngineByName :exec
+UPDATE engines SET engine = ? WHERE engine = ?
+`
+
+type RenameEngineByNameParams struct {
+	Engine   string `json:"engine"`
+	Engine_2 string `json:"engine_2"`
+}
+
+func (q *Queries) RenameEngineByName(ctx context.Context, arg RenameEngineByNameParams) error {
+	_, err := q.db.ExecContext(ctx, renameEngineByName, arg.Engine, arg.Engine_2)
+	return err
+}
+
 const updateEngineByID = `-- name: UpdateEngineByID :exec
 UPDATE engines SET
     engine   = ?,

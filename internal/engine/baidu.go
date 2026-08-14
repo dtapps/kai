@@ -28,7 +28,7 @@ type baiduTranslator struct {
 func NewBaidu(cfg *EngineConfig, client *http.Client) Translator {
 	ep := cfg.Endpoint
 	if ep == "" {
-		ep = "https://fanyi-api.baidu.com/api/trans/vip/translate"
+		ep = BaiduDefaultEndpoint
 	}
 	return &baiduTranslator{
 		appID:    cfg.APIKey,

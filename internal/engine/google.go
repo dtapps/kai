@@ -15,9 +15,6 @@ import (
 // Google 免 API Key 的公开翻译端点（网页端 gtx 接口）。
 const googleEndpoint = "https://translate.googleapis.com/translate_a/single"
 
-// DefaultEndpoint 默认公开端点，供 service 层在配置未指定时使用。
-const DefaultEndpoint = googleEndpoint
-
 // googleLang 把内部语言码映射为 Google gtx 端点接受的码。
 // gtx 对 "zh" 也能工作，但 "zh-CN" 更稳，故统一转换。
 func googleLang(code string) string {

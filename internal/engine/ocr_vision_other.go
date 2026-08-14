@@ -14,9 +14,10 @@ type VisionOCR struct {
 	name string
 }
 
-// NewVisionOCR 构造系统 OCR 引擎。仅 darwin 平台有真实实现，
-// 此占位供 engine_wrapper.go 在 darwin 块内引用时提供编译符号（Windows/Linux 不会注册）。
-func NewVisionOCR() *VisionOCR {
+// NewVisionOCR 构造系统 OCR 引擎。仅 darwin 平台有真实实现（需传入 cfg 读取 OCR 参数），
+// 此占位供 engine_wrapper.go 在 Windows/Linux 下编译通过（签名与 darwin 版保持一致），
+// cfg 在本平台不使用（VisionOCR 在 Windows/Linux 不会被注册）。
+func NewVisionOCR(cfg *EngineConfig) *VisionOCR {
 	return nil
 }
 

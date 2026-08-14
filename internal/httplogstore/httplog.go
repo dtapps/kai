@@ -27,9 +27,9 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"cnb.cool/dtapp/kai/internal/sqlite"
 	"cnb.cool/dtapp/kai/internal/useragent"
 	"go.dtapp.net/library/contrib/http_log"
-	_ "modernc.org/sqlite"
 )
 
 // ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ func Init(dataDir string, httpLogEnabled bool) error {
 			initErr = fmt.Errorf("httplog: create db dir: %w", err)
 			return
 		}
-		c, err := sql.Open("sqlite", connDSN)
+		c, err := sql.Open("sqlite3", sqlite.BuildDSN(connDSN))
 		if err != nil {
 			initErr = fmt.Errorf("httplog: open db: %w", err)
 			return
@@ -309,7 +309,7 @@ func Cleanup(retentionDays int) (int, error) {
 	if dsn == "" {
 		return 0, nil
 	}
-	cleanupDB, err := sql.Open("sqlite", dsn)
+	cleanupDB, err := sql.Open("sqlite3", sqlite.BuildDSN(dsn))
 	if err != nil {
 		return 0, fmt.Errorf("httplog: cleanup open: %w", err)
 	}

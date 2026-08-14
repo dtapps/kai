@@ -12,9 +12,8 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
-
 	"cnb.cool/dtapp/kai/internal/engine"
+	"cnb.cool/dtapp/kai/internal/sqlite"
 )
 
 //go:embed schema.sql
@@ -28,7 +27,7 @@ type Store struct {
 
 // Open 打开（或创建）SQLite 配置数据库并执行迁移。
 func Open(path string) (*Store, error) {
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", sqlite.BuildDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("configstore: open db: %w", err)
 	}

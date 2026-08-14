@@ -235,7 +235,7 @@ export interface TTSConfig {
 }
 
 /**
- * UpdaterConfig 自动更新相关配置（仅 Prerelease 这类用户可决策项；
+ * UpdaterConfig 自动更新相关配置（仅 Prerelease / Source 这类用户可决策项；
  * token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
  */
 export interface UpdaterConfig {
@@ -244,4 +244,13 @@ export interface UpdaterConfig {
      * 开启后：检查更新时会把 GitHub 仓库的 pre-release 版本也纳入候选。
      */
     "prerelease": boolean;
+
+    /**
+     * Source 指定更新检测源：空 / "github" / "cnb"。
+     *   - 空（默认）：沿用当前逻辑，按界面语言自动选源（英文走 GitHub，中文走 CNB）。
+     *   - "github"：强制只走官方 GitHub（含 SHA256SUMS 校验）。
+     *   - "cnb"：强制只走 CNB 镜像（需 cnbToken，匿名 401 / 网络不可达即视为「无更新」）。
+     * 注意：仅影响「检测 / 下载源」选择，不影响 updater 自身的安装行为。
+     */
+    "source": string;
 }

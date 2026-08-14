@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	_ "modernc.org/sqlite"
+	"cnb.cool/dtapp/kai/internal/sqlite"
 )
 
 //go:embed schema.sql
@@ -33,7 +33,7 @@ func Open(path string) (*Store, error) {
 	if path == "" {
 		path = ":memory:"
 	}
-	db, err := sql.Open("sqlite", path)
+	db, err := sql.Open("sqlite3", sqlite.BuildDSN(path))
 	if err != nil {
 		return nil, fmt.Errorf("historystore: open db: %w", err)
 	}

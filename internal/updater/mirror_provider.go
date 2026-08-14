@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
+	"cnb.cool/dtapp/kai/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
@@ -52,6 +53,9 @@ type mirrorProvider struct {
 	cnbToken string
 	// assetMatcher 复用 github provider 的平台匹配逻辑。
 	assetMatcher github.AssetMatcher
+	// source 为更新源强制设置（"github" / "cnb" / 空）。
+	// 空时按界面语言自动选源（英文 GitHub，中文 CNB）；非空时强制使用指定源。
+	source string
 	// nightlyTag 为固定预发布标签（默认 nightly）。
 	nightlyTag string
 	// installedBuildTime 为本机已安装二进制的构建时间（ldflags 注入）。
@@ -74,7 +78,7 @@ type mirrorProvider struct {
 // cnbToken 为 CNB 只读 Token（ldflags 注入），预留给检测层走 CNB 鉴权 API（CNB 匿名 API 返回 401）。
 // installedGitCommit 为本机已安装二进制的 Git 提交（ldflags 注入），nightly 优先用它对比
 // 远端 SHA256SUMS 的 git_commit，相等即同一份代码直接跳过（避免每日重打同 commit 频繁提示）。
-func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTime string, installedGitCommit string, cnbToken string) (*mirrorProvider, error) {
+func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTime string, installedGitCommit string, cnbToken string, source string) (*mirrorProvider, error) {
 	cfg.HTTPClient = client
 	gh, err := github.New(cfg)
 	if err != nil {
@@ -105,6 +109,7 @@ func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTim
 		githubToken:        cfg.Token,
 		cnbToken:           cnbToken,
 		assetMatcher:       matcher,
+		source:             source,
 		nightlyTag:         "nightly",
 		installedBuildTime: installedBuildTime,
 		installedGitCommit: installedGitCommit,
@@ -113,6 +118,21 @@ func NewMirrorProvider(cfg github.Config, client *http.Client, installedBuildTim
 
 // Name 实现 updater.Provider。
 func (m *mirrorProvider) Name() string { return "github-mirror" }
+
+// useCNB 决定本次检测是否走 CNB 镜像源。
+//   - source 为空：按界面语言自动选源（非英文即 CNB，保持旧逻辑）。
+//   - source 显式指定：强制按其值（"cnb" → true，"github" → false）。
+func (m *mirrorProvider) useCNB() bool {
+	switch m.source {
+	case settings.UpdaterSourceCNB:
+		return true
+	case settings.UpdaterSourceGitHub:
+		return false
+	default:
+		// 空（默认）：按语言，英文走 GitHub，其余走 CNB。
+		return i18n.GetLocale() != string(i18n.EN_US)
+	}
+}
 
 // Check 版本检测按语言选择源，与下载/校验策略一致：
 //   - 英文用户：直接使用官方 GitHub（含 SHA256SUMS 校验，原始行为）。
@@ -130,8 +150,8 @@ func (m *mirrorProvider) Check(ctx context.Context, req updater.CheckRequest) (*
 		// 回退：继续走下方稳定版检测逻辑。
 	}
 
-	if i18n.GetLocale() == string(i18n.EN_US) {
-		// 英文：官方 GitHub 原始行为，含 SHA256SUMS 校验。
+	if !m.useCNB() {
+		// GitHub 源（英文用户默认，或 Source="github" 强制）：官方 GitHub 原始行为，含 SHA256SUMS 校验。
 		return m.Provider.Check(ctx, req)
 	}
 
@@ -162,10 +182,8 @@ func (m *mirrorProvider) Check(ctx context.Context, req updater.CheckRequest) (*
 //     调用方据此回退稳定版；
 //   - 返回 (nil, err)：响应解码等致命错误（非源不可用、非网络错误）。
 func (m *mirrorProvider) checkNightly(ctx context.Context, req updater.CheckRequest) (*updater.Release, error) {
-	enUS := i18n.GetLocale() == string(i18n.EN_US)
-
-	// 按语言选单一检测源，不做跨源回退。
-	if enUS {
+	// 按 Source 设置或界面语言选单一检测源，不做跨源回退。
+	if !m.useCNB() {
 		return m.checkNightlyGitHub(ctx, req)
 	}
 	return m.checkNightlyCNB(ctx, req)

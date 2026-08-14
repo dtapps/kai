@@ -424,7 +424,7 @@ func main() {
 			slog.Debug(i18n.T("log.updater_matcher_none"))
 			return -1
 		},
-	}, network.BuildHTTPClient(*settingsService.Get()), buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken)
+	}, network.BuildHTTPClient(*settingsService.Get()), buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken, settingsService.Get().Updater.Source)
 	if err != nil {
 		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else {

@@ -55,12 +55,21 @@
 
   const off = onEvent(EventScreenshotOCR, (data: ScreenshotResult) => {
     try {
+      // 收到后端推送的原始事件（后端→前端），第一手证据：判断"后端到底推了什么"。
+      console.debug('[截图翻译] 收到 OCR 事件', {
+        hasImage: !!data.image,
+        imagePrefix: (data.image ?? '').slice(0, 80),
+        textLen: (data.text ?? '').length,
+        error: data.error ?? '',
+        translations: (data.translations ?? []).length,
+      });
       const incoming = Array.isArray(data.translations) ? data.translations : [];
       // 原文 + 截图整体替换（每次推送都带），保证识别到内容即展示。
       const base = {
         image: data.image,
         text: data.text ?? '',
         to: data.to,
+        error: data.error ?? '',
       };
       // translations 按 engine 增量合并：已有同引擎则覆盖，否则追加。
       // 这样后端先推空（仅原文），再逐条推译文时前端逐条显示。
@@ -75,12 +84,16 @@
         ...base,
         translations: Array.from(merged.values()),
       } as ScreenshotResult;
-      console.log('[截图翻译] 收到 OCR 结果', {
-        imageLen: data.image?.length ?? 0,
-        imagePrefix: data.image?.slice(0, 80) ?? '',
-        textLen: result.text.length,
-        translations: result.translations.length,
-      });
+      if (result.error) {
+        console.warn('[截图翻译] 渲染失败(错误态)', result.error);
+      } else {
+        console.debug('[截图翻译] 渲染结果', {
+          imageLen: (result.image ?? '').length,
+          textLen: result.text.length,
+          translations: result.translations.length,
+          engines: result.translations.map((t) => t.engine),
+        });
+      }
     } catch (e) {
       console.error('[截图翻译] 渲染 OCR 结果失败', e);
     }
@@ -93,18 +106,29 @@
   $effect(() => {
     const url = result?.image;
     if (imgEl && url) {
-      imgEl.onerror = () => {
-        console.error('[截图翻译] 图片加载失败', {
-          imageLen: url.length,
-          imagePrefix: url.slice(0, 80),
-        });
-      };
-      imgEl.src = url;
+      // 挂载一次性的 onerror 诊断（只在首次挂载时设，避免每次 effect 重跑重复绑定）。
+      // 注意：error 态（OCR 超时/失败）下 result 被整体重设为带 error 的新对象，
+      // 本 effect 会重跑但 src 不变（下方守卫），不应触发真正的加载失败——
+      // 故 onerror 仅记录、降为 warn，且带 error 态不报，避免超时路径下的误报。
+      if (!imgEl.dataset.ocrErrBound) {
+        imgEl.onerror = () => {
+          if (result?.error) return; // 错误态下图片可能被卸载重挂，onerror 属副作用，非真加载失败
+          console.warn('[截图翻译] 图片加载失败', {
+            imageLen: url.length,
+            imagePrefix: url.slice(0, 80),
+          });
+        };
+        imgEl.dataset.ocrErrBound = '1';
+      }
+      // 关键：仅在 src 真正变化时重设，避免每次事件 new 对象导致的大 base64 图被反复重设 src 而偶发 onerror。
+      if (imgEl.getAttribute('src') !== url) {
+        imgEl.src = url;
+      }
     }
   });
 
   onMount(() => {
-    console.log('[截图翻译] 窗口已挂载');
+    console.debug('[截图翻译] 窗口已挂载');
     // 截图翻译窗口是临时浮窗，挂载后设为置顶（AlwaysOnTop），
     // 否则显示后会被其他窗口盖住、看不到。必须在挂载后设置（webview 就绪）。
     try {
@@ -138,7 +162,20 @@
 
       <!-- 右：原文 + 多引擎译文 -->
       <div class="flex min-w-0 flex-1 flex-col overflow-y-auto p-4">
-        {#if !result.text}
+        {#if result.error}
+          <!-- 识别/翻译失败：停止转圈并展示错误（含超时），不再无限"识别中" -->
+          <div
+            class="flex flex-1 flex-col items-center justify-center gap-3 text-[var(--app-muted)]"
+          >
+            <span class="text-lg font-medium text-[var(--app-fg-strong)]"
+              >{t('screenshot.ocrError')}</span
+            >
+            <span class="max-w-[90%] break-words text-center text-xs opacity-80"
+              >{result.error}</span
+            >
+            <span class="text-xs">{t('screenshot.retryHint')}</span>
+          </div>
+        {:else if !result.text}
           <!-- 识别中：OCR 尚未返回原文 -->
           <div
             class="flex flex-1 flex-col items-center justify-center gap-3 text-[var(--app-muted)]"

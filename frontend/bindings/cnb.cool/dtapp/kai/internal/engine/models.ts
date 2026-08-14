@@ -71,6 +71,11 @@ export interface EngineFieldSchema {
     "type": EngineFieldType;
 
     /**
+     * 结构化控件覆盖（ocr_*），空则按 Type 渲染
+     */
+    "widget": FieldWidget;
+
+    /**
      * 启用该引擎时是否必填
      */
     "required": boolean;
@@ -84,6 +89,11 @@ export interface EngineFieldSchema {
      * 可选枚举值（如 tesseract 语言码 chi_sim/eng）。非空时前端渲染为多选，值以 "+" 拼接写入对应字段
      */
     "options": string[] | null;
+
+    /**
+     * 可选：字段下方的说明文案 i18n key
+     */
+    "hint_key": string;
 }
 
 /**
@@ -148,6 +158,37 @@ export interface EngineSchema {
      */
     "fields": EngineFieldSchema[] | null;
 }
+
+/**
+ * FieldWidget 控件形态覆盖。为空时按 Type 默认渲染（string→文本、secret→密码）；
+ * 非空时按此值渲染结构化控件，供 OCR 等引擎复用，使「配置项全部声明于 engineSchemas」。
+ */
+export enum FieldWidget {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * WidgetOCRLangs OCR 识别语言多选（候选项取 OcrLangsOptions()），值以 "+" 拼写入 Extra.langs
+     */
+    WidgetOCRLangs = "ocr_langs",
+
+    /**
+     * WidgetOCRTimeout OCR 超时（秒），正整数，写入 Extra.timeout_sec
+     */
+    WidgetOCRTimeout = "ocr_timeout",
+
+    /**
+     * WidgetOCRCorrect OCR 语言校正开关，写入 Extra.correct_text（仅 vision 语义生效）
+     */
+    WidgetOCRCorrect = "ocr_correct",
+
+    /**
+     * WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
+     */
+    WidgetOCRStatus = "ocr_status",
+};
 
 /**
  * TesseractStatus 描述本机 tesseract 的安装探测结果，供前端按系统类型展示安装状态。

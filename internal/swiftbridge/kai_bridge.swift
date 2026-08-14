@@ -466,7 +466,9 @@ public func kai_selection_point(
 public func kai_ocr(
     _ img: UnsafePointer<CChar>?,
     _ out: UnsafeMutablePointer<CChar>?,
-    _ out_cap: Int32
+    _ out_cap: Int32,
+    _ correct: Int32,
+    _ timeout_sec: Int32
 ) -> Int32 {
     guard let img = img else {
         return writeCString("{\"error\":\"null image\"}", into: out, cap: out_cap)
@@ -479,74 +481,129 @@ public func kai_ocr(
     // 用 CGImageSource 直接从 PNG/JPEG 字节解码为 CGImage，避免 NSImage 的分辨率/方向适配层
     // 在 Vision 下偶发触发 CRImageReaderError error 1（区域截图更常见）。
     guard let src = CGImageSourceCreateWithData(data as CFData, nil),
-          let cgImage = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
+          let rawImage = CGImageSourceCreateImageAtIndex(src, 0, nil) else {
         bridgeFileLog("系统 OCR 失败: 图片解码失败", level: BRIDGE_LOG_ERROR)
         return writeCString("{\"error\":\"decode image failed\"}", into: out, cap: out_cap)
     }
+    // 把原始 cgImage 重绘到一个「标准格式」位图上下文（RGBA8、无 Alpha、sRGB 色彩空间），
+    // 再用重绘后的 cgImage 喂给 Vision。区域截图偶发的
+    // TextRecognition.CRImageReaderError error 1 是 Vision 内部 CRImageReader 对
+    // 特殊像素格式/Alpha 通道/色彩空间拒绝解码所致；强制重绘为标准格式可彻底规避
+    // （Vision 的 VNImageRequestHandler 内部仍会用 CRImageReader 重新解码，无法靠外层
+    // CGImageSource 解码绕过，必须在喂入前把像素格式归一化）。
+    let w = rawImage.width
+    let h = rawImage.height
+    guard w > 0, h > 0 else {
+        bridgeFileLog("系统 OCR 失败: 图片尺寸为空", level: BRIDGE_LOG_ERROR)
+        return writeCString("{\"error\":\"empty image\"}", into: out, cap: out_cap)
+    }
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bytesPerRow = w * 4 // 显式计算每行字节数（RGBA8），避免系统自动对齐在某些尺寸下触发 CRImageReader
+    guard let ctx = CGContext(data: nil,
+                              width: w,
+                              height: h,
+                              bitsPerComponent: 8,
+                              bytesPerRow: bytesPerRow,
+                              space: colorSpace,
+                              bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue) else {
+        bridgeFileLog("系统 OCR 失败: 位图上下文创建失败", level: BRIDGE_LOG_ERROR)
+        return writeCString("{\"error\":\"bitmap ctx failed\"}", into: out, cap: out_cap)
+    }
+    ctx.draw(rawImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+    guard let cgImage = ctx.makeImage() else {
+        bridgeFileLog("系统 OCR 失败: 位图重绘失败", level: BRIDGE_LOG_ERROR)
+        return writeCString("{\"error\":\"bitmap redraw failed\"}", into: out, cap: out_cap)
+    }
+    // 诊断：打印原始图与重绘图的格式，确认 CRImageReaderError 是否因格式未归一化导致。
+    let rawBPP = rawImage.bitsPerPixel
+    let rawAlpha = rawImage.alphaInfo.rawValue
+    let rawCS = rawImage.colorSpace?.name.map({ $0 as String }) ?? "nil"
+    let outBPP = cgImage.bitsPerPixel
+    let outAlpha = cgImage.alphaInfo.rawValue
+    bridgeFileLog("系统 OCR 重绘前 raw bpp=\(rawBPP) alpha=\(rawAlpha) cs=\(rawCS) | 重绘后 bpp=\(outBPP) alpha=\(outAlpha) w=\(w) h=\(h)", level: BRIDGE_LOG_DEBUG)
 
-    let sema = DispatchSemaphore(value: 0)
-    var resultJSON = "{\"error\":\"unknown\"}"
+    // 初始占位非真实错误：若 perform 抛错才会被改写；正常同步完成后必为识别结果。
+    var resultJSON = "{\"error\":\"ocr pending\"}"
     let imgW = CGFloat(cgImage.width)
     let imgH = CGFloat(cgImage.height)
 
-    // Vision 的 perform 内部会把工作 dispatch 到后台线程，再在回调里 signal。
-    // 若在 cgo 阻塞线程上直接 perform，Vision 的回调调度会被阻塞导致永久等待（表现即 20s 超时）。
-    // 因此把 perform 整体放到独立后台串行队列执行，cgo 线程只负责 wait 信号量。
-    let work: () -> Void = {
-        let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
-        let request = VNRecognizeTextRequest { req, err in
-            defer { sema.signal() }
-            if let err = err {
-                resultJSON = "{\"error\":\"\(err.localizedDescription)\"}"
-                bridgeFileLog("系统 OCR 失败: \(err.localizedDescription)", level: BRIDGE_LOG_ERROR)
-                return
-            }
-            guard let observations = req.results as? [VNRecognizedTextObservation] else {
-                resultJSON = "{\"text\":\"\",\"regions\":[]}"
-                return
-            }
-            var lines: [String] = []
-            var regions: [[String: Any]] = []
-            for obs in observations {
-                guard let candidate = obs.topCandidates(1).first else { continue }
-                let text = candidate.string
-                let conf = candidate.confidence
-                // Vision 的 boundingBox 以左下原点、归一化 [0,1]；转成左上原点像素 [x,y,w,h]。
-                let b = obs.boundingBox
-                let x = b.origin.x * imgW
-                let y = (1 - b.origin.y - b.size.height) * imgH
-                let w = b.size.width * imgW
-                let h = b.size.height * imgH
-                lines.append(text)
-                regions.append([
-                    "text": text,
-                    "conf": Double(conf),
-                    "box": [Int(x), Int(y), Int(w), Int(h)],
-                ])
-            }
-            let payload: [String: Any] = [
-                "text": lines.joined(separator: "\n"),
-                "regions": regions,
-            ]
-            if let d = try? JSONSerialization.data(withJSONObject: payload),
-               let str = String(data: d, encoding: .utf8) {
-                resultJSON = str
-                bridgeFileLog("系统 OCR 完成 行数=\(lines.count) 首行长度=\(lines.first?.utf8.count ?? 0)", level: BRIDGE_LOG_DEBUG)
-            }
+    // Vision 的 perform 是同步阻塞调用，若不设超时，遇到异常图片会一直卡在 cgo 线程上，
+    // 导致 Go 侧 30s 超时之后 Swift 仍在后台跑（实测可达 69s），既浪费线程又让用户干等。
+    // 因此改为：perform 放到后台队列异步执行，cgo 线程用信号量带超时等待其完成；
+    // 超时则立即返回 ocr timeout，后台 perform 晚到的结果只写入局部变量，不再拖住 Go 侧。
+    // 超时阈值由调用方传入（默认 60s），保证 Go 侧 ctx.Done() 不会提前假触发。
+    let ocrTimeout: TimeInterval = timeout_sec > 0 ? TimeInterval(timeout_sec) : 60
+    let request = VNRecognizeTextRequest { req, err in
+        if let err = err {
+            resultJSON = "{\"error\":\"\(err.localizedDescription)\"}"
+            bridgeFileLog("系统 OCR 失败: \(err.localizedDescription)", level: BRIDGE_LOG_ERROR)
+            return
         }
-        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en"]
-        request.usesLanguageCorrection = true
+        guard let observations = req.results as? [VNRecognizedTextObservation] else {
+            resultJSON = "{\"text\":\"\",\"regions\":[]}"
+            return
+        }
+        var lines: [String] = []
+        var regions: [[String: Any]] = []
+        for obs in observations {
+            guard let candidate = obs.topCandidates(1).first else { continue }
+            let text = candidate.string
+            let conf = candidate.confidence
+            // Vision 的 boundingBox 以左下原点、归一化 [0,1]；转成左上原点像素 [x,y,w,h]。
+            let b = obs.boundingBox
+            let x = b.origin.x * imgW
+            let y = (1 - b.origin.y - b.size.height) * imgH
+            let w = b.size.width * imgW
+            let h = b.size.height * imgH
+            lines.append(text)
+            regions.append([
+                "text": text,
+                "conf": Double(conf),
+                "box": [Int(x), Int(y), Int(w), Int(h)],
+            ])
+        }
+        let payload: [String: Any] = [
+            "text": lines.joined(separator: "\n"),
+            "regions": regions,
+        ]
+        if let d = try? JSONSerialization.data(withJSONObject: payload),
+           let str = String(data: d, encoding: .utf8) {
+            resultJSON = str
+            bridgeFileLog("系统 OCR 完成 行数=\(lines.count) 首行长度=\(lines.first?.utf8.count ?? 0)", level: BRIDGE_LOG_INFO)
+        }
+    }
+    request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en"]
+    // usesLanguageCorrection=true 会让 Vision 对每个候选做语言模型校正打分，
+    // 在特定像素/文字密度下显著放大 perform 内部耗时，是偶发 60s+ 卡死的主因。
+    // 截图翻译多为中英文短句。校正开关由调用方传入（correct=1 开启 / 0 关闭）：
+    // 开启（默认）更准确，关闭更快、偶发卡死概率更低。
+    request.usesLanguageCorrection = correct != 0
+    // 显式用 .fast 模式（默认 .accurate 更重），配合关闭校正，正常图仍是秒回。
+    request.recognitionLevel = .fast
+    bridgeFileLog("系统 OCR 配置 correction=\(request.usesLanguageCorrection) level=\(request.recognitionLevel.rawValue)", level: BRIDGE_LOG_DEBUG)
 
+    let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+
+    let sig = DispatchSemaphore(value: 0)
+    let performStart = Date()
+    // 后台队列异步执行同步 perform，避免阻塞 cgo 调用线程；完成（或失败）时释放信号量。
+    DispatchQueue.global(qos: .userInitiated).async {
         do {
-            try handler.perform([request])
+            try handler.perform([request]) // 同步：perform 返回即表示识别已完成（completion 已触发）
         } catch {
             resultJSON = "{\"error\":\"\(error.localizedDescription)\"}"
             bridgeFileLog("系统 OCR 失败: \(error.localizedDescription)", level: BRIDGE_LOG_ERROR)
         }
+        let elapsed = Date().timeIntervalSince(performStart)
+        bridgeFileLog("系统 OCR perform 实际耗时=\(String(format: "%.2f", elapsed))s", level: BRIDGE_LOG_DEBUG)
+        sig.signal()
     }
-
-    DispatchQueue.global(qos: .userInitiated).async(execute: work)
-    _ = sema.wait(timeout: .now() + 20)
+    // 带超时等待：ocrTimeout 内未完成则视为 OCR 超时，立即返回，不拖住 Go 侧 30s 超时逻辑。
+    let waitResult = sig.wait(timeout: .now() + ocrTimeout)
+    if waitResult == .timedOut {
+        bridgeFileLog("系统 OCR 超时: perform 超过 \(Int(ocrTimeout))s 未完成", level: BRIDGE_LOG_ERROR)
+        return writeCString("{\"error\":\"ocr timeout\"}", into: out, cap: out_cap)
+    }
     return writeCString(resultJSON, into: out, cap: out_cap)
 }
 

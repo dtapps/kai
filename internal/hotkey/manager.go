@@ -82,6 +82,74 @@ func NewManager(
 	}
 }
 
+// TriggerInput 等效于按下「输入翻译」快捷键：呼起主窗口，并按配置走复制键模拟复制
+// 或（未来）系统取词分支，把选区内容经 EventInputFill 投递到输入框。供托盘菜单点击复用，
+// 使菜单点击与真实快捷键行为完全一致。
+func (h *Manager) TriggerInput() {
+	w := h.mainWindow()
+	if w == nil {
+		return
+	}
+	switch {
+	case h.settingsSvc.Get().ExecKeys.Copy.Key != "" && h.settingsSvc.Get().ExecKeys.Copy.Enabled:
+		// 复制键分支：顺序严格为「先模拟 Cmd+C 复制 → 再 Show/Focus」。
+		// 若先 Focus，焦点切到 Kai，模拟的 Cmd+C 落在 Kai 窗口（无选中内容），
+		// 剪贴板仍是旧值，导致取到错误内容。
+		sel := h.execKeyCtrl.CopySelection()
+		h.log.Info("[快捷键] 复制键读取剪贴板内容", slog.String("来源", "唤起主窗口模拟复制"), slog.Int("长度", len(sel)), slog.String("内容", sel))
+		w.Show()
+		w.Focus()
+		if sel != "" {
+			h.app.Event.Emit(events.EventInputFill, sel)
+		}
+		// TODO(2026-08-11): 暂时禁用「系统取词（macOS Swift 桥接 kai_selected_text）」分支。
+		// 原因：用户反馈启用该路径后电脑偶尔出现奇奇怪怪的问题（疑似与全局快捷键回调内
+		// 延迟 150ms 的 AX 查询/焦点切换有关）。待定位根因后再决定是否恢复。
+		// 恢复方式：取消下面整段注释即可（selSvc 字段及 SelectedTextViaSystem 实现保持不变）。
+		//
+		// case h.selSvc != nil:
+		// 	// 未配置复制键：经系统取词（macOS Swift 桥接 kai_selected_text）。
+		// 	// 关键约束：取词时前台 app 必须仍是「目标 app」，否则 AX 读不到其选区。
+		// 	// 因此不能先 Focus Kai（那会让前台 app 变成 Kai 自己）。
+		// 	// 顺序为「延迟取词（焦点仍在目标 app）→ 再 Show/Focus 拉起 Kai」。
+		// 	// 延迟的原因：全局快捷键回调触发瞬间，系统仍在处理该按键事件，此时同步
+		// 	// 做 AX 查询会被拒绝（kAXErrorCannotComplete -25212）；等事件分发完毕、
+		// 	// 焦点稳定后（此时目标 app 仍是前台）再读，才能拿到选区。
+		// 	time.AfterFunc(150*time.Millisecond, func() {
+		// 		sel := h.selSvc.SelectedTextViaSystem()
+		// 		h.log.Info("系统取词读取选区", slog.String("来源", "Swift桥接取词"), slog.Int("长度", len(sel)))
+		// 		w.Show()
+		// 		w.Focus()
+		// 		if sel != "" {
+		// 			h.app.Event.Emit(events.EventInputFill, sel)
+		// 		}
+		// 		})
+	}
+}
+
+// TriggerScreenshot 等效于按下「截图翻译」快捷键：隐藏截图窗口→区域截图→OCR→翻译→
+// 呼起截图窗口展示。供托盘菜单点击复用，使菜单点击与真实快捷键行为完全一致。
+func (h *Manager) TriggerScreenshot() {
+	// 先隐藏自身窗口，避免遮挡用户选区（screencapture 交互选区需要干净的屏幕）。
+	if w := h.screenshotWindow(); w != nil {
+		w.Hide()
+	}
+	if err := h.screenshotTranslate(); err != nil {
+		h.log.Error("[快捷键] 截图翻译失败", slog.Any("error", err))
+		return
+	}
+	// 流程完成会经 EventScreenshotOCR 投递结果，这里只负责把窗口拉起展示。
+	// 注意：screenshot 窗口也是 Hidden 创建的复用浮窗，必须像 showAndFocus 那样
+	// 连点两次 Show()——首次 Show 仅触发 Run() 创建 webview impl（不会真正 show），
+	// 第二次才能真正 show+聚焦；否则窗口首帧未就绪，用户首次点击标题栏按钮（红绿灯/关闭）
+	// 会被尚未就绪的窗口吞掉、需点第二次才有反应。
+	if w := h.screenshotWindow(); w != nil {
+		w.Show()
+		w.Show()
+		w.Focus()
+	}
+}
+
 // Register 注册全局快捷键（仅注册键：Input/Screenshot）。
 // 注册前先逐个 Unregister，保证热键配置变更后可实时生效（无需重启）。
 func (h *Manager) Register() {
@@ -113,45 +181,7 @@ func (h *Manager) Register() {
 	if hk.Input.Key != "" && hk.Input.Enabled {
 		if err := mgr.Register(hk.Input.Key, func() {
 			h.log.Info("[快捷键] 快捷键触发", slog.String("类型", "唤起主窗口"), slog.String("按键", hk.Input.Key))
-			w := h.mainWindow()
-			if w == nil {
-				return
-			}
-			switch {
-			case h.settingsSvc.Get().ExecKeys.Copy.Key != "" && h.settingsSvc.Get().ExecKeys.Copy.Enabled:
-				// 复制键分支：顺序严格为「先模拟 Cmd+C 复制 → 再 Show/Focus」。
-				// 若先 Focus，焦点切到 Kai，模拟的 Cmd+C 落在 Kai 窗口（无选中内容），
-				// 剪贴板仍是旧值，导致取到错误内容。
-				sel := h.execKeyCtrl.CopySelection()
-				h.log.Info("[快捷键] 复制键读取剪贴板内容", slog.String("来源", "唤起主窗口模拟复制"), slog.String("按键", hk.Input.Key), slog.Int("长度", len(sel)), slog.String("内容", sel))
-				w.Show()
-				w.Focus()
-				if sel != "" {
-					h.app.Event.Emit(events.EventInputFill, sel)
-				}
-				// TODO(2026-08-11): 暂时禁用「系统取词（macOS Swift 桥接 kai_selected_text）」分支。
-				// 原因：用户反馈启用该路径后电脑偶尔出现奇奇怪怪的问题（疑似与全局快捷键回调内
-				// 延迟 150ms 的 AX 查询/焦点切换有关）。待定位根因后再决定是否恢复。
-				// 恢复方式：取消下面整段注释即可（selSvc 字段及 SelectedTextViaSystem 实现保持不变）。
-				//
-				// case h.selSvc != nil:
-				// 	// 未配置复制键：经系统取词（macOS Swift 桥接 kai_selected_text）。
-				// 	// 关键约束：取词时前台 app 必须仍是「目标 app」，否则 AX 读不到其选区。
-				// 	// 因此不能先 Focus Kai（那会让前台 app 变成 Kai 自己）。
-				// 	// 顺序为「延迟取词（焦点仍在目标 app）→ 再 Show/Focus 拉起 Kai」。
-				// 	// 延迟的原因：全局快捷键回调触发瞬间，系统仍在处理该按键事件，此时同步
-				// 	// 做 AX 查询会被拒绝（kAXErrorCannotComplete -25212）；等事件分发完毕、
-				// 	// 焦点稳定后（此时目标 app 仍是前台）再读，才能拿到选区。
-				// 	time.AfterFunc(150*time.Millisecond, func() {
-				// 		sel := h.selSvc.SelectedTextViaSystem()
-				// 		h.log.Info("系统取词读取选区", slog.String("来源", "Swift桥接取词"), slog.String("按键", hk.Input), slog.Int("长度", len(sel)))
-				// 		w.Show()
-				// 		w.Focus()
-				// 		if sel != "" {
-				// 			h.app.Event.Emit(events.EventInputFill, sel)
-				// 		}
-				// 		})
-			}
+			h.TriggerInput()
 		}); err != nil {
 			h.log.Error("[快捷键] 注册快捷键失败", slog.String("类型", "唤起主窗口"), slog.String("按键", hk.Input.Key), slog.Any("error", err))
 		} else {
@@ -166,19 +196,7 @@ func (h *Manager) Register() {
 	if hk.Screenshot.Key != "" && hk.Screenshot.Enabled {
 		if err := mgr.Register(hk.Screenshot.Key, func() {
 			h.log.Info("[快捷键] 快捷键触发", slog.String("类型", "截图翻译"), slog.String("按键", hk.Screenshot.Key))
-			// 先隐藏自身窗口，避免遮挡用户选区（screencapture 交互选区需要干净的屏幕）。
-			if w := h.screenshotWindow(); w != nil {
-				w.Hide()
-			}
-			if err := h.screenshotTranslate(); err != nil {
-				h.log.Error("[快捷键] 截图翻译失败", slog.Any("error", err))
-				return
-			}
-			// 流程完成会经 EventScreenshotOCR 投递结果，这里只负责把窗口拉起展示。
-			if w := h.screenshotWindow(); w != nil {
-				w.Show()
-				w.Focus()
-			}
+			h.TriggerScreenshot()
 		}); err != nil {
 			h.log.Error("[快捷键] 注册快捷键失败", slog.String("类型", "截图翻译"), slog.String("按键", hk.Screenshot.Key), slog.Any("error", err))
 		} else {

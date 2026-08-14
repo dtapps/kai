@@ -11,6 +11,7 @@
     ToggleEngineEnabled,
     RemoveEngine,
     CheckTesseract,
+    GetOcrLangs,
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/enginewrapper.ts';
   import type {
     AllEngineItem,
@@ -47,20 +48,64 @@
   let schema = $state<EngineSchema | null>(null);
   let configValues = $state<Record<string, string>>({});
 
-  // 多选字段（如 tesseract 语言码）的值解析/切换：值以 "+" 拼接，与后端 extra 兼容
-  function parseOpts(val: string | undefined): Set<string> {
-    return new Set(
-      (val ?? '')
-        .split('+')
-        .map((s) => s.trim())
-        .filter(Boolean),
-    );
-  }
-  function toggleOpt(target: Record<string, string>, field: string, code: string) {
-    const set = parseOpts(target[field]);
+  // OCR 引擎（vision / tesseract）统一存放于 Extra(JSON) 的专属参数：
+  //   - ocrLangs:     语言码多选（"+" 拼接，如 "chi_sim+eng"）
+  //   - ocrCorrect:   是否开启语言校正（仅 vision 语义，tesseract 忽略）
+  //   - ocrTimeoutSec: OCR 超时秒数（默认 60）
+  let ocrLangs = $state<string[]>([]);
+  let ocrCorrect = $state(true);
+  let ocrTimeoutSec = $state(60);
+  // OCR 语言码候选项（来自后端 GetOcrLangs，与 Extra(JSON) 解耦）
+  let ocrLangOptions = $state<string[]>([]);
+
+  function toggleOcrLang(code: string) {
+    const set = new Set(ocrLangs);
     if (set.has(code)) set.delete(code);
     else set.add(code);
-    target[field] = [...set].join('+');
+    ocrLangs = [...set];
+  }
+  // 解析引擎 extra(JSON) 中的 OCR 参数，回填到本地状态（vision / tesseract 共用）。
+  // 兼容旧数据：extra 为纯字符串语言码（非 JSON）时，整串作为 langs 兜底。
+  function loadOcrOpts(extra: string | undefined) {
+    ocrLangs = [];
+    ocrCorrect = true;
+    ocrTimeoutSec = 60;
+    if (!extra) return;
+    // 先试 JSON（统一方案）
+    try {
+      const o = JSON.parse(extra);
+      if (typeof o.langs === 'string' && o.langs) {
+        ocrLangs = o.langs
+          .split('+')
+          .map((s: string) => s.trim())
+          .filter(Boolean);
+      }
+      if (typeof o.correct_text === 'boolean') ocrCorrect = o.correct_text;
+      if (typeof o.timeout_sec === 'number' && o.timeout_sec > 0) ocrTimeoutSec = o.timeout_sec;
+      return;
+    } catch {
+      /* 不是 JSON，落下面兼容旧纯字符串语言码 */
+    }
+    ocrLangs = extra
+      .split('+')
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  // 将 OCR 参数合并进 extra(JSON)。langs 仅 tesseract 写入（vision 走系统 Vision 框架，无需语言码）；
+  // correct 仅在 vision（isVision=true）时写入。
+  function buildExtraWithOcr(extra: string | undefined, isVision: boolean): string {
+    let o: Record<string, unknown> = {};
+    if (extra) {
+      try {
+        o = JSON.parse(extra);
+      } catch {
+        o = {};
+      }
+    }
+    if (!isVision) o.langs = ocrLangs.join('+');
+    o.timeout_sec = ocrTimeoutSec;
+    if (isVision) o.correct_text = ocrCorrect;
+    return JSON.stringify(o);
   }
   // system 引擎支持的语言列表（只读展示，由后端从 Translation.framework 读取）
   let systemLangs = $state<string[]>([]);
@@ -81,6 +126,15 @@
     loadEngines();
   });
 
+  async function loadOcrLangs() {
+    try {
+      ocrLangOptions = (await GetOcrLangs()) ?? [];
+    } catch (e) {
+      console.error('[引擎] 加载 OCR 语言候选项失败', e);
+      ocrLangOptions = [];
+    }
+  }
+
   async function loadEngines() {
     try {
       engines = (await GetAllEngines()) ?? [];
@@ -96,11 +150,11 @@
     configValues = {};
     const eng = engines.find((e) => e.id === id);
     if (!eng) return;
+    // 拉取已持久化的完整配置，回填表单（服务地址 / API Key 等不再为空）
+    let saved: EngineConfig | null = null;
     try {
       const s: EngineSchema = await GetEngineSchema(eng.value);
       schema = s;
-      // 拉取已持久化的完整配置，回填表单（服务地址 / API Key 等不再为空）
-      let saved: EngineConfig | null = null;
       try {
         saved = await GetEngineConfig(id);
       } catch (e) {
@@ -125,6 +179,11 @@
       checkTesseract();
     } else {
       tesseract = null;
+    }
+    // 选中任意 OCR 引擎（vision / tesseract）时，回填其 extra(JSON) 中的 OCR 专属参数
+    if (eng.kind === 'ocr') {
+      await loadOcrLangs();
+      loadOcrOpts(saved?.extra);
     }
   }
 
@@ -168,6 +227,11 @@
   async function saveConfig() {
     const eng = engines.find((e) => e.id === selectedId);
     if (!eng) return;
+    // OCR 引擎（vision / tesseract）：把 OCR 专属参数写回 extra(JSON) 再提交
+    let extra = configValues['extra'] || undefined;
+    if (eng.kind === 'ocr') {
+      extra = buildExtraWithOcr(configValues['extra'], eng.value === 'vision');
+    }
     try {
       await UpdateEngineConfig({
         id: eng.id,
@@ -176,7 +240,7 @@
         api_key: configValues['api_key'] || undefined,
         secret: configValues['secret'] || undefined,
         endpoint: configValues['endpoint'] || undefined,
-        extra: configValues['extra'] || undefined,
+        extra,
       });
       await Dialogs.Info({
         Title: t('settings.engineSavedTitle'),
@@ -264,6 +328,9 @@
   async function onAddNameChange(name: string) {
     addName = name;
     addValues = {};
+    ocrLangs = [];
+    ocrCorrect = true;
+    ocrTimeoutSec = 60;
     if (!name) {
       addSchema = [];
       return;
@@ -272,6 +339,9 @@
       const s: EngineSchema = await GetEngineSchema(name);
       addSchema = s.fields ?? [];
       for (const f of addSchema) addValues[f.field] = f.default ?? '';
+      if (s.kind === 'ocr') {
+        await loadOcrLangs();
+      }
     } catch (e) {
       console.error('[引擎] 加载新增引擎字段失败', e);
       addSchema = [];
@@ -286,6 +356,12 @@
       });
       return;
     }
+    // OCR 引擎：把 OCR 专属参数（langs/timeout）拼进 extra(JSON) 再提交
+    let extra = addValues['extra'] || undefined;
+    const addSchemaKind = addSchema.length ? addSchema[0] : null;
+    if (addSchemaKind && (await addEngineIsOcr(addName))) {
+      extra = buildExtraWithOcr(addValues['extra'], addName === 'vision');
+    }
     try {
       await AddEngine({
         id: 0,
@@ -294,7 +370,7 @@
         api_key: addValues['api_key'] || undefined,
         secret: addValues['secret'] || undefined,
         endpoint: addValues['endpoint'] || undefined,
-        extra: addValues['extra'] || undefined,
+        extra,
       });
       showAdd = false;
       await loadEngines();
@@ -303,6 +379,16 @@
         Title: t('settings.engineOpErrorTitle'),
         Message: parseErr(e),
       });
+    }
+  }
+
+  // addEngineIsOcr 判断新增的引擎类型是否为 OCR（按后端 KnownEngines 的 kind）。
+  async function addEngineIsOcr(name: string): Promise<boolean> {
+    try {
+      const s: EngineSchema = await GetEngineSchema(name);
+      return s.kind === 'ocr';
+    } catch {
+      return false;
     }
   }
 </script>
@@ -391,95 +477,146 @@
         </div>
       </div>
     {/if}
-    {#if engines.find((e) => e.id === selectedId)?.value === 'apple'}
-      <div class="u-card mt-4 mb-4 px-4 py-3">
-        <p class="u-label mb-2">{t('settings.engineSystemLangs')}</p>
-        {#if systemLangsLoading}
-          <p class="u-muted text-xs">{t('common.loading')}</p>
-        {:else if systemLangs.length}
-          <div class="flex flex-wrap gap-1.5">
-            {#each systemLangs as code}
-              <span class="u-tag">{langName(code)}</span>
-            {/each}
-          </div>
-        {:else}
-          <p class="u-muted text-xs">{t('settings.engineSystemLangsEmpty')}</p>
-        {/if}
-      </div>
-    {/if}
     {#if (schema?.fields?.length ?? 0) === 0}
       <div class="flex flex-1 flex-col items-center justify-center text-center">
         <p class="u-muted text-sm">{t('settings.engineNoSchema')}</p>
       </div>
     {:else}
-      <div class="space-y-4">
-        {#if engines.find((e) => e.id === selectedId)?.value === 'tesseract' && tesseract}
-          <div
-            class="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
-            class:u-border-danger={!tesseract.installed}
-            class:u-border-ok={tesseract.installed}
-          >
-            <span
-              class="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full"
-              class:u-bg-danger={!tesseract.installed}
-              class:u-bg-ok={tesseract.installed}
-            ></span>
-            <div>
-              {#if tesseract.installed}
-                <p class="font-medium">{t('settings.engine_tip.tesseract_installed')}</p>
-                <p class="u-muted break-all">
-                  {t('settings.engine_tip.tesseract_path')}{tesseract.path}
-                </p>
-                <p class="u-muted break-all">
-                  {t('settings.engine_tip.tesseract_version')}{tesseract.version || '-'}
-                </p>
-              {:else}
-                <p class="font-medium">{t('settings.engine_tip.tesseract_missing')}</p>
-                {#if tesseract.os === 'darwin'}
-                  <p class="u-muted break-all">{t('settings.engine_tip.tesseract_install_mac')}</p>
-                {:else if tesseract.os === 'windows'}
-                  <p class="u-muted break-all">
-                    {t('settings.engine_tip.tesseract_install_windows')}
-                  </p>
-                {:else}
-                  <p class="u-muted break-all">
-                    {t('settings.engine_tip.tesseract_install_linux')}
-                  </p>
-                {/if}
-              {/if}
-            </div>
+      <div class="u-card mt-4 space-y-4 px-4 py-3">
+        {#if schema?.kind === 'translate' && schema?.builtin}
+          <div>
+            <p class="u-label mb-2">{t('settings.engineSystemLangs')}</p>
+            {#if systemLangsLoading}
+              <p class="u-muted text-xs">{t('common.loading')}</p>
+            {:else if systemLangs.length}
+              <div class="flex flex-wrap gap-1.5">
+                {#each systemLangs as code}
+                  <span class="u-tag">{langName(code)}</span>
+                {/each}
+              </div>
+            {:else}
+              <p class="u-muted text-xs">{t('settings.engineSystemLangsEmpty')}</p>
+            {/if}
           </div>
         {/if}
         {#each schema?.fields ?? [] as f}
-          <div>
-            <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
-              {f.label_key ? t(f.label_key as any) : f.field}
-            </label>
-            {#if f.options && f.options.length}
-              <div class="flex flex-wrap gap-1.5">
-                {#each f.options as code}
+          {#if f.widget === 'ocr_status'}
+            <!-- tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract schema 声明 -->
+            {#if tesseract}
+              <div
+                class="flex flex-col gap-2 rounded-md border px-3 py-2 text-xs"
+                class:u-border-danger={!tesseract.installed}
+                class:u-border-ok={tesseract.installed}
+              >
+                <div class="flex items-start gap-2">
+                  <span
+                    class="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full"
+                    class:u-bg-danger={!tesseract.installed}
+                    class:u-bg-ok={tesseract.installed}
+                  ></span>
+                  <div>
+                    {#if tesseract.installed}
+                      <p class="font-medium">{t('settings.engine_tip.tesseract_installed')}</p>
+                      <p class="u-muted break-all">
+                        {t('settings.engine_tip.tesseract_path')}{tesseract.path}
+                      </p>
+                      <p class="u-muted break-all">
+                        {t('settings.engine_tip.tesseract_version')}{tesseract.version || '-'}
+                      </p>
+                    {:else}
+                      <p class="font-medium">{t('settings.engine_tip.tesseract_missing')}</p>
+                      {#if tesseract.os === 'darwin'}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_mac')}
+                        </p>
+                      {:else if tesseract.os === 'windows'}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_windows')}
+                        </p>
+                      {:else}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_linux')}
+                        </p>
+                      {/if}
+                    {/if}
+                  </div>
+                </div>
+                <div class="mt-1">
+                  <label class="mb-1 block text-xs font-medium" for={'ef-' + f.field}>
+                    {f.label_key ? t(f.label_key as any) : f.field}
+                  </label>
+                  <input
+                    id={'ef-' + f.field}
+                    type="text"
+                    class="u-field w-full px-3 py-1.5 text-xs"
+                    placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                    bind:value={configValues[f.field]}
+                  />
+                </div>
+              </div>
+            {/if}
+          {:else if f.widget === 'ocr_langs'}
+            <!-- OCR 识别语言多选（仅 tesseract），候选项取 ocrLangOptions -->
+            <div>
+              <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+              {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                {#each ocrLangOptions as code}
                   <button
                     type="button"
                     class="u-chip"
-                    class:is-on={parseOpts(configValues[f.field]).has(code)}
-                    onclick={() => toggleOpt(configValues, f.field, code)}
+                    class:is-on={ocrLangs.includes(code)}
+                    onclick={() => toggleOcrLang(code)}
                   >
                     {langName(code)}
                   </button>
                 {/each}
               </div>
-              <p class="u-muted mt-1.5 text-xs">{t('settings.engineLangsHint')}</p>
-            {:else}
+            </div>
+          {:else if f.widget === 'ocr_timeout'}
+            <!-- OCR 超时（秒） -->
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="5"
+                max="300"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={ocrTimeoutSec}
+              />
+            </div>
+          {:else if f.widget === 'ocr_correct'}
+            <!-- OCR 语言校正开关（仅 vision） -->
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <label class="u-switch" aria-label={f.label_key ? t(f.label_key as any) : f.field}>
+                <input type="checkbox" bind:checked={ocrCorrect} />
+                <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
+              </label>
+            </div>
+          {:else}
+            <!-- 普通文本 / 密码字段 -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
               <input
                 id={'ef-' + f.field}
+                type={f.type === 'secret' ? 'password' : 'text'}
                 class="u-field w-full px-3 py-2 text-sm"
                 placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
                 bind:value={configValues[f.field]}
               />
-            {/if}
-          </div>
+            </div>
+          {/if}
         {/each}
-        <div class="pt-2">
+        <div class="u-border-t pt-4">
           <button class="u-btn u-btn--primary px-5 py-2 text-sm" onclick={saveConfig}>
             {t('settings.engineSave')}
           </button>
@@ -547,32 +684,116 @@
           </select>
         </div>
         {#each addSchema as f}
-          <div>
-            <label class="mb-1.5 block text-sm font-medium" for={'add-ef-' + f.field}>
-              {f.label_key ? t(f.label_key as any) : f.field}
-            </label>
-            {#if f.options && f.options.length}
-              <div class="flex flex-wrap gap-1.5">
-                {#each f.options as code}
+          {#if f.widget === 'ocr_status'}
+            {#if tesseract}
+              <div
+                class="flex flex-col gap-2 rounded-md border px-3 py-2 text-xs"
+                class:u-border-danger={!tesseract.installed}
+                class:u-border-ok={tesseract.installed}
+              >
+                <div class="flex items-start gap-2">
+                  <span
+                    class="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full"
+                    class:u-bg-danger={!tesseract.installed}
+                    class:u-bg-ok={tesseract.installed}
+                  ></span>
+                  <div>
+                    {#if tesseract.installed}
+                      <p class="font-medium">{t('settings.engine_tip.tesseract_installed')}</p>
+                      <p class="u-muted break-all">
+                        {t('settings.engine_tip.tesseract_path')}{tesseract.path}
+                      </p>
+                      <p class="u-muted break-all">
+                        {t('settings.engine_tip.tesseract_version')}{tesseract.version || '-'}
+                      </p>
+                    {:else}
+                      <p class="font-medium">{t('settings.engine_tip.tesseract_missing')}</p>
+                      {#if tesseract.os === 'darwin'}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_mac')}
+                        </p>
+                      {:else if tesseract.os === 'windows'}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_windows')}
+                        </p>
+                      {:else}
+                        <p class="u-muted break-all">
+                          {t('settings.engine_tip.tesseract_install_linux')}
+                        </p>
+                      {/if}
+                    {/if}
+                  </div>
+                </div>
+                <div class="mt-1">
+                  <label class="mb-1 block text-xs font-medium" for={'add-ef-' + f.field}>
+                    {f.label_key ? t(f.label_key as any) : f.field}
+                  </label>
+                  <input
+                    id={'add-ef-' + f.field}
+                    type="text"
+                    class="u-field w-full px-3 py-1.5 text-xs"
+                    placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                    bind:value={addValues[f.field]}
+                  />
+                </div>
+              </div>
+            {/if}
+          {:else if f.widget === 'ocr_langs'}
+            <div>
+              <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+              {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              <div class="mt-2 flex flex-wrap gap-1.5">
+                {#each ocrLangOptions as code}
                   <button
                     type="button"
                     class="u-chip"
-                    class:is-on={parseOpts(addValues[f.field]).has(code)}
-                    onclick={() => toggleOpt(addValues, f.field, code)}
+                    class:is-on={ocrLangs.includes(code)}
+                    onclick={() => toggleOcrLang(code)}
                   >
                     {langName(code)}
                   </button>
                 {/each}
               </div>
-            {:else}
+            </div>
+          {:else if f.widget === 'ocr_timeout'}
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="5"
+                max="300"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={ocrTimeoutSec}
+              />
+            </div>
+          {:else if f.widget === 'ocr_correct'}
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <label class="u-switch" aria-label={f.label_key ? t(f.label_key as any) : f.field}>
+                <input type="checkbox" bind:checked={ocrCorrect} />
+                <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
+              </label>
+            </div>
+          {:else}
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'add-ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
               <input
                 id={'add-ef-' + f.field}
+                type={f.type === 'secret' ? 'password' : 'text'}
                 class="u-field w-full px-3 py-2 text-sm"
                 placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
                 bind:value={addValues[f.field]}
               />
-            {/if}
-          </div>
+            </div>
+          {/if}
         {/each}
         <div class="flex justify-end gap-2 pt-1">
           <button class="u-btn u-btn--ghost px-4 py-1.5 text-sm" onclick={() => (showAdd = false)}

@@ -79,6 +79,12 @@ type DictItem struct {
 type OcrRequest struct {
 	ImageData []byte `json:"-"`      // 图片二进制数据（不序列化）
 	Engine    string `json:"engine"` // 指定 OCR 引擎标识
+	// CorrectText Vision 的 usesLanguageCorrection（语言校正）。
+	// true=开启（更准确，默认）；false=关闭（更快、偶发卡死概率更低，但准确率略降）。
+	// 指针类型以便区分"未设置"与"false"，未设置时引擎用默认值 true。
+	CorrectText *bool `json:"correct_text,omitempty"`
+	// TimeoutSec Vision OCR 超时秒数。<=0 时引擎用各自默认值（vision 默认 60s）。
+	TimeoutSec int `json:"timeout_sec,omitempty"`
 }
 
 // OcrResult OCR 结果
@@ -120,4 +126,5 @@ type ScreenshotResult struct {
 	Text         string            `json:"text"`         // OCR 识别出的原文
 	Translations []TranslateResult `json:"translations"` // 各引擎译文
 	To           Language          `json:"to"`           // 目标语言
+	Error        string            `json:"error"`        // 流程失败原因（非空时前端停止转圈并展示错误）
 }

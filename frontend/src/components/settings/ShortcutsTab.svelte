@@ -11,7 +11,8 @@
     CheckScreenRecording,
     OpenScreenRecordingSettings,
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/appservice.ts';
-  import { System, Dialogs } from '@wailsio/runtime';
+  import { Dialogs } from '@wailsio/runtime';
+  import { isMac as detectMac } from '../../runtime/platform';
 
   // 单个注册类快捷键的表单形态（按键 + 启用状态），与后端 HotkeyEntry 对齐。
   type HotkeyEntry = { key: string; enabled: boolean };
@@ -52,8 +53,9 @@
   // 授权卡片仅 macOS 需要（辅助功能 / 屏幕录制均为 macOS TCC 权限）。
   // Windows 复制键走 makc 调用 user32.dll、全局热键走 RegisterHotKey，均无需用户授权；
   // Linux 同样无需此类授权。故非 Mac 平台直接隐藏授权区块。
-  // 使用 Wails v3 的 System.IsMac() 判断（优于已废弃的 navigator.platform）。
-  const isMac = System.IsMac();
+  // 使用统一的平台判断（Wails v3 多窗口下 _wails 可能丢失，需 UA 兜底）。
+  const isMac = detectMac();
+  console.debug('[ShortcutsTab] isMac =', isMac);
 
   // 辅助功能授权状态（macOS）：true=已授权，false=未授权，null=检测中/未知（非 darwin 始终 true）
   let accGranted = $state<boolean | null>(null);

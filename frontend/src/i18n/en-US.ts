@@ -21,6 +21,8 @@ export const en: Dict = {
     ocrEmpty: 'No text recognized',
     source: 'From',
     translateFailed: 'Translation failed',
+    ocrError: 'Recognition failed',
+    retryHint: 'Please retry the screenshot translation',
   },
   titlebar: {
     minimize: 'Minimize',
@@ -101,7 +103,7 @@ export const en: Dict = {
     engineSystemLangsEmpty: 'No system language pack available',
     engineSchema: 'Fields',
     engineNoSchema: 'This engine needs no extra config',
-    engineLangsHint:
+    engineLangsHintTesseract:
       'Multiple selections allowed; chosen languages are used in order (e.g. Chinese+English). Requires the corresponding Tesseract language packs installed locally.',
     engine_field: {
       endpoint: 'Endpoint',
@@ -147,11 +149,18 @@ export const en: Dict = {
       apple_builtin: 'Built-in translation engine',
       apple_builtin_desc: 'macOS Translation.framework, no config needed, works out of the box',
     },
+    engineOcrTitle: 'System OCR options',
+    engineOcrLangs: 'Recognition languages',
+    engineOcrCorrect: 'Language correction',
+    engineOcrCorrectDesc:
+      'On (default) = more accurate; Off = faster and less prone to occasional hangs',
+    engineOcrTimeout: 'OCR timeout (seconds)',
+    engineOcrTimeoutDesc: 'Max wait per OCR; a timeout returns failure',
     shortcuts: 'Shortcuts',
     shortcutsTitle: 'Shortcuts',
     shortcutsHint:
       'Set global shortcuts and save to apply immediately. On macOS, Alt maps to the Option key.',
-    hkInput: 'Show main window',
+    hkInput: 'Input translate',
     hkScreenshot: 'Screenshot translate',
     hkCopy: 'Copy key',
     hkCopyFallback: 'Fall back to system default copy key on failure',

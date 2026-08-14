@@ -171,7 +171,7 @@
       // 窗口整体高度 = 固定区 + 结果区 + 标题栏补偿 + webview 内布局间距补偿。
       // 只让结果区参与伸缩；LAYOUT_EXTRA 补 main 的 p-4(32)+gap-4(16)，否则窗口矮 48px 出滚动条。
       const targetH = fixedH + resultH + TITLE_BAR_H + LAYOUT_EXTRA;
-      console.log('[KAI-HEIGHT] 设置窗口高度', {
+      console.debug('[KAI-HEIGHT] 设置窗口高度', {
         窗口宽度: winW,
         固定区: fixedH,
         结果区: resultH,
@@ -226,7 +226,7 @@
       try {
         const size = await Window.Size();
         winW = size.width;
-        console.log('[KAI-HEIGHT] 初始化窗口宽度 =', winW);
+        console.debug('[KAI-HEIGHT] 初始化窗口宽度 =', winW);
       } catch (e) {
         console.error('[输入翻译] 读取窗口尺寸失败', e);
       }
@@ -236,7 +236,7 @@
       // 首屏主动计算一次高度：等引擎列表渲染进结果区后，用真实测量得到准确窗口高。
       tick().then(async () => {
         await tick();
-        console.log('[KAI-HEIGHT] 首屏主动调整');
+        console.debug('[KAI-HEIGHT] 首屏主动调整');
         adjustWindowHeight();
       });
       // 字体异步加载（如自定义字体）会改变文本实际高度，加载完成后再补一次，

@@ -18,6 +18,8 @@ export const zh = {
     ocrEmpty: '未识别到文字',
     source: '识别来源',
     translateFailed: '翻译失败',
+    ocrError: '识别失败',
+    retryHint: '请重试截图翻译',
   },
   titlebar: {
     minimize: '最小化',
@@ -98,7 +100,7 @@ export const zh = {
     engineSystemLangsEmpty: '暂无可用的系统语言包',
     engineSchema: '配置项',
     engineNoSchema: '该引擎无需额外配置',
-    engineLangsHint:
+    engineLangsHintTesseract:
       '可多选，所选语言将按顺序参与识别（如简体中文+英语）。需本机已安装对应 Tesseract 语言包。',
     engine_field: {
       endpoint: '服务地址',
@@ -144,10 +146,16 @@ export const zh = {
       apple_builtin: '系统内置翻译引擎',
       apple_builtin_desc: 'macOS Translation.framework，无需配置，开箱即用',
     },
+    engineOcrTitle: '系统 OCR 参数',
+    engineOcrLangs: '识别语言',
+    engineOcrCorrect: '语言校正模式',
+    engineOcrCorrectDesc: '开启后识别更准（默认）；关闭后更快，偶发卡死概率更低',
+    engineOcrTimeout: 'OCR 超时（秒）',
+    engineOcrTimeoutDesc: '单次 OCR 的最长等待时间，超时将返回失败',
     shortcuts: '快捷键',
     shortcutsTitle: '快捷键',
     shortcutsHint: '设置全局快捷键后保存即可立即生效。macOS 上 Alt 对应键盘上的 Option 键。',
-    hkInput: '唤起主窗口',
+    hkInput: '输入翻译',
     hkScreenshot: '截图翻译',
     hkCopy: '复制键',
     hkCopyFallback: '复制失败时回退使用系统默认复制键',

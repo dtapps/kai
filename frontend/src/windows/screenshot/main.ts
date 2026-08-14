@@ -12,7 +12,7 @@ initWindow();
 
 // 把 WebView 的 UA 传给后端，作为全局 HTTP 请求默认 User-Agent
 AppService.SetUserAgent(navigator.userAgent);
-console.log('UA:', navigator.userAgent);
+console.debug('UA:', navigator.userAgent);
 
 const app = mount(ScreenshotWindow, {
   target: document.getElementById('app')!,

@@ -355,7 +355,7 @@ func main() {
 		screenshotWindow.Hide()
 	})
 
-	registerTray(app, configSvc, settingsService, mainWindow, settingsWindow)
+	registerTray(app, hm, configSvc, settingsService, mainWindow, settingsWindow)
 
 	// 语言变更后，用最新语言重建托盘菜单文案（托盘为原生，只能后端重建）。
 	// 优先用事件 payload 携带的语言（mode 可能含 auto，由 i18n 解析为具体语言），
@@ -370,7 +370,12 @@ func main() {
 				}
 			}
 		}
-		rebuildTrayMenu(app, settingsService)
+		rebuildTrayMenu(app, hm, configSvc, settingsService)
+	})
+
+	// 快捷键启用状态变更（保存后重注册完成会广播）后，重建托盘菜单动态显示对应项。
+	app.Event.On(kevents.EventHotkeysChanged, func(e *application.CustomEvent) {
+		rebuildTrayMenu(app, hm, configSvc, settingsService)
 	})
 
 	// 配置自更新功能
@@ -495,7 +500,7 @@ func showScreenshotWindow() {
 	}
 }
 
-func registerTray(app *application.App, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
+func registerTray(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
 	tray = app.SystemTray.New()
 	tray.SetIcon(selectTrayIcon(app))
 	// 不要用 AttachWindow：macOS 上点击托盘激活 app 时会连带恢复(settings)等所有窗口。
@@ -507,11 +512,12 @@ func registerTray(app *application.App, configSvc *service.ConfigWrapper, ss *se
 			mainWindow.Show().Focus()
 		}
 	})
-	buildTrayMenu(app, ss, mainWindow, settingsWindow)
+	buildTrayMenu(app, hm, configSvc, ss, mainWindow, settingsWindow)
 }
 
-// buildTrayMenu 用当前语言构建托盘菜单（语言变更时重建）
-func buildTrayMenu(app *application.App, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
+// buildTrayMenu 用当前语言构建托盘菜单（语言/快捷键启用状态变更时重建）。
+// 菜单项按配置中对应快捷键的「是否启用」动态显示：仅启用时才加入托盘菜单。
+func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
 	// lang 取空串，由 i18n.T 回退到 SetLocale 设置的全局语言（含 auto 解析），
 	// 确保语言广播后即时重建菜单用最新语言，不依赖配置落盘时序。
 	trayMenu := app.Menu.New()
@@ -519,11 +525,22 @@ func buildTrayMenu(app *application.App, ss *settings.Service, mainWindow applic
 	trayMenu.Add(i18n.T("app.name_version", "Version", buildinfo.Version)).SetEnabled(false)
 	// 分隔符隔开
 	trayMenu.AddSeparator()
-	// 输入翻译，打开翻译主窗口
-	trayMenu.Add(i18n.T("menu.input_translate")).OnClick(func(ctx *application.Context) {
-		mainWindow.Show().Focus()
+	// 根据快捷键启用状态动态添加菜单项：输入翻译 / 截图翻译。
+	// 两项之间按需补分隔符，保持与「设置」之间始终有分隔。
+	cfg := configSvc.GetConfig()
+	inputEnabled := cfg != nil && cfg.Hotkeys.Input.Enabled
+	screenshotEnabled := cfg != nil && cfg.Hotkeys.Screenshot.Enabled
+	// 始终显示「输入翻译」「截图翻译」两项，但按启用状态决定可点（禁用=置灰）。
+	// 直接隐藏会让用户看不见功能入口，置灰更直观：知道有此功能，只是当前未启用。
+	trayMenu.Add(i18n.T("menu.input_translate")).SetEnabled(inputEnabled).OnClick(func(ctx *application.Context) {
+		// 等效于按下「输入翻译」快捷键：走复制键/系统取词分支并投递输入框。
+		hm.TriggerInput()
 	})
-	// 分隔符隔开
+	trayMenu.Add(i18n.T("menu.screenshot_translate")).SetEnabled(screenshotEnabled).OnClick(func(ctx *application.Context) {
+		// 等效于按下「截图翻译」快捷键：区域截图→OCR→翻译→呼起截图窗口。
+		hm.TriggerScreenshot()
+	})
+	// 翻译类菜单项与下方「设置」之间补一个分隔符
 	trayMenu.AddSeparator()
 	// 设置，打开设置窗口
 	trayMenu.Add(i18n.T("menu.settings")).OnClick(func(ctx *application.Context) {
@@ -554,12 +571,12 @@ func buildTrayMenu(app *application.App, ss *settings.Service, mainWindow applic
 	tray.SetTooltip(i18n.T("menu.tooltip"))
 }
 
-// rebuildTrayMenu 语言变更时重建托盘菜单文案
-func rebuildTrayMenu(app *application.App, ss *settings.Service) {
+// rebuildTrayMenu 语言/快捷键启用状态变更时重建托盘菜单（动态显示菜单项）
+func rebuildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service) {
 	if mainWindow == nil || settingsWindow == nil {
 		return
 	}
-	buildTrayMenu(app, ss, mainWindow, settingsWindow)
+	buildTrayMenu(app, hm, configSvc, ss, mainWindow, settingsWindow)
 }
 
 // checkUpdateOnStart 启动后异步检查更新，有更新时发通知（对齐 certflow）。

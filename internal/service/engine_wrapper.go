@@ -117,9 +117,9 @@ func (w *EngineWrapper) registerEngines() {
 	// 优先使用用户在设置页启用的 tesseract；否则若 vision（系统 OCR）在库内启用则注册它。
 	// vision / tesseract 均已落库（engine 表），由 engines map 的 Enabled 决定注册哪个。
 	if e, ok := engines["tesseract"]; ok && e.Enabled {
-		w.registry.RegisterOcr(engine.NewTesseractOCR(e.Extra, e.Endpoint))
+		w.registry.RegisterOcr(engine.NewTesseractOCR(e))
 	} else if e, ok := engines["vision"]; ok && e.Enabled {
-		w.registry.RegisterOcr(engine.NewVisionOCR())
+		w.registry.RegisterOcr(engine.NewVisionOCR(e))
 	}
 }
 
@@ -235,6 +235,12 @@ func (w *EngineWrapper) GetKnownEngines() []EngineListItem {
 // GetEngineSchema 返回指定引擎的「真实」配置字段 schema，供前端动态渲染右列表单。
 func (w *EngineWrapper) GetEngineSchema(engineName string) engine.EngineSchema {
 	return engine.GetEngineSchema(engineName)
+}
+
+// GetOcrLangs 返回 OCR 引擎（vision / tesseract）语言码候选项，
+// 供前端 OCR 专属 UI 渲染 langs 多选。与 Extra(JSON) 解耦，由代码唯一维护。
+func (w *EngineWrapper) GetOcrLangs() []string {
+	return engine.OcrLangsOptions()
 }
 
 // CheckTesseract 探测本机是否已安装 tesseract，返回安装状态与可执行路径，

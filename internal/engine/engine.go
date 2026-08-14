@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"runtime"
 
@@ -124,6 +125,12 @@ func DefaultEngineConfigs() []*EngineConfig {
 		cfg := &EngineConfig{
 			Engine:  m.Name,
 			Enabled: true, // 默认内置的免 Key 引擎均启用
+		}
+		// vision（系统 OCR）的 OCR 专属参数存于 Extra(JSON)：默认开启语言校正 + 60s 超时。
+		// 注意：vision 走 macOS 系统 Vision 框架，语言自动识别，不需要 langs 字段
+		// （langs 仅 tesseract 使用，两者共用 Extra 结构仅为格式统一，vision 忽略 langs）。
+		if m.Name == "vision" {
+			cfg.Extra = `{"correct_text":true,"timeout_sec":60}`
 		}
 		// 预填带 Default 的真实值字段（endpoint / 语言码等）
 		for _, f := range GetEngineSchema(m.Name).Fields {
@@ -335,6 +342,21 @@ const (
 	FieldSecret EngineFieldType = "secret"
 )
 
+// FieldWidget 控件形态覆盖。为空时按 Type 默认渲染（string→文本、secret→密码）；
+// 非空时按此值渲染结构化控件，供 OCR 等引擎复用，使「配置项全部声明于 engineSchemas」。
+type FieldWidget string
+
+const (
+	// WidgetOCRLangs OCR 识别语言多选（候选项取 OcrLangsOptions()），值以 "+" 拼写入 Extra.langs
+	WidgetOCRLangs FieldWidget = "ocr_langs"
+	// WidgetOCRTimeout OCR 超时（秒），正整数，写入 Extra.timeout_sec
+	WidgetOCRTimeout FieldWidget = "ocr_timeout"
+	// WidgetOCRCorrect OCR 语言校正开关，写入 Extra.correct_text（仅 vision 语义生效）
+	WidgetOCRCorrect FieldWidget = "ocr_correct"
+	// WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
+	WidgetOCRStatus FieldWidget = "ocr_status"
+)
+
 // EngineFieldSchema 描述某个引擎所需的单个配置字段。
 // Field 对应 EngineConfig 的真实字段名（api_key / secret / endpoint / extra），
 // 这样前端渲染时直接读写对应字段，而不是对所有引擎套用同一套万能表单。
@@ -343,9 +365,11 @@ type EngineFieldSchema struct {
 	LabelKey       string          `json:"label_key"`       // i18n key（前端取 settings.engine_field.<name>）
 	PlaceholderKey string          `json:"placeholder_key"` // i18n key（前端取 settings.engine_ph.<name>，可为空）
 	Type           EngineFieldType `json:"type"`            // string / secret
+	Widget         FieldWidget     `json:"widget"`          // 结构化控件覆盖（ocr_*），空则按 Type 渲染
 	Required       bool            `json:"required"`        // 启用该引擎时是否必填
 	Default        string          `json:"default"`         // 可选 URL/地址等字段的真实默认值，前端在字段为空时预填展示
 	Options        []string        `json:"options"`         // 可选枚举值（如 tesseract 语言码 chi_sim/eng）。非空时前端渲染为多选，值以 "+" 拼接写入对应字段
+	HintKey        string          `json:"hint_key"`        // 可选：字段下方的说明文案 i18n key
 }
 
 // EngineSchema 某个引擎的全部配置字段（顺序即渲染顺序）。
@@ -370,77 +394,209 @@ type EngineSchema struct {
 //   - deepl：endpoint 默认免费版端点（可改为 Pro 版）；api_key 必填（免费版也需注册获取）
 //   - openai：api_key + endpoint(作为完整接口地址，默认 chat/completions) + extra(作为 model)
 //   - baidu/tencent/youdao：appkey/appid = api_key，密钥 = secret
-//   - tesseract：仅 extra（逗号分隔语言码）
+//   - tesseract：endpoint(可选 tesseract 二进制路径)；语言码/超时等 OCR 专属参数统一存于 Extra(JSON)
 var engineSchemas = map[string]EngineSchema{
 	// apple 为 macOS 系统内置翻译引擎（Translation.framework），无需配置、不可移除。
-	"apple": {Kind: KindTranslator, Builtin: true, Fields: nil},
+	"apple": {
+		Kind:    KindTranslator,
+		Builtin: true,
+		Fields:  nil,
+	},
 	// vision 为 macOS 系统内置 OCR 引擎（Vision.framework），无需配置、不可移除。
-	"vision": {Kind: KindOCR, Builtin: true, Fields: nil},
+	// 其 OCR 参数（语言校正 / 超时）统一声明于此，前端按 schema 顺序渲染，与 tesseract 同源。
+	"vision": {
+		Kind:    KindOCR,
+		Builtin: true,
+		Fields: []EngineFieldSchema{
+			{
+				Field:    "extra",
+				Widget:   WidgetOCRCorrect,
+				LabelKey: "settings.engineOcrCorrect",
+				HintKey:  "settings.engineOcrCorrectDesc",
+			},
+			{
+				Field:    "extra",
+				Widget:   WidgetOCRTimeout,
+				LabelKey: "settings.engineOcrTimeout",
+				HintKey:  "settings.engineOcrTimeoutDesc",
+			},
+		},
+	},
 	"google": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.google_endpoint", Type: FieldString, Required: false, Default: DefaultEndpoint},
+			{
+				Field: "endpoint",
+
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.google_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        DefaultEndpoint,
+			},
 		},
 	},
 	"deepl": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.deepl_endpoint", Type: FieldString, Required: false, Default: DeepLFreeEndpoint},
-			{Field: "api_key", LabelKey: "settings.engine_field.api_key", PlaceholderKey: "settings.engine_ph.deepl_api_key", Type: FieldSecret, Required: true},
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.deepl_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        DeepLFreeEndpoint,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.api_key",
+				PlaceholderKey: "settings.engine_ph.deepl_api_key",
+				Type:           FieldSecret,
+				Required:       true,
+			},
 		},
 	},
 	"openai": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.openai_endpoint", Type: FieldString, Required: false, Default: OpenAIDefaultChatEndpoint},
-			{Field: "api_key", LabelKey: "settings.engine_field.api_key", PlaceholderKey: "settings.engine_ph.openai_api_key", Type: FieldSecret, Required: true},
-			{Field: "extra", LabelKey: "settings.engine_field.model", PlaceholderKey: "settings.engine_ph.openai_model", Type: FieldString, Required: false},
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.openai_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        OpenAIDefaultChatEndpoint,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.api_key",
+				PlaceholderKey: "settings.engine_ph.openai_api_key",
+				Type:           FieldSecret,
+				Required:       true,
+			},
+			{
+				Field:          "extra",
+				LabelKey:       "settings.engine_field.model",
+				PlaceholderKey: "settings.engine_ph.openai_model",
+				Type:           FieldString,
+				Required:       false,
+			},
 		},
 	},
 	"baidu": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.baidu_endpoint", Type: FieldString, Required: false, Default: BaiduDefaultEndpoint},
-			{Field: "api_key", LabelKey: "settings.engine_field.app_id", PlaceholderKey: "settings.engine_ph.baidu_app_id", Type: FieldString, Required: true},
-			{Field: "secret", LabelKey: "settings.engine_field.app_secret", PlaceholderKey: "settings.engine_ph.baidu_app_secret", Type: FieldSecret, Required: true},
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.baidu_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        BaiduDefaultEndpoint,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.app_id",
+				PlaceholderKey: "settings.engine_ph.baidu_app_id",
+				Type:           FieldString,
+				Required:       true,
+			},
+			{
+				Field:          "secret",
+				LabelKey:       "settings.engine_field.app_secret",
+				PlaceholderKey: "settings.engine_ph.baidu_app_secret",
+				Type:           FieldSecret,
+				Required:       true,
+			},
 		},
 	},
 	"tencent": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.tencent_endpoint", Type: FieldString, Required: false, Default: TencentDefaultEndpoint},
-			{Field: "api_key", LabelKey: "settings.engine_field.secret_id", PlaceholderKey: "settings.engine_ph.tencent_secret_id", Type: FieldString, Required: true},
-			{Field: "secret", LabelKey: "settings.engine_field.secret_key", PlaceholderKey: "settings.engine_ph.tencent_secret_key", Type: FieldSecret, Required: true},
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.tencent_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        TencentDefaultEndpoint,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.secret_id",
+				PlaceholderKey: "settings.engine_ph.tencent_secret_id",
+				Type:           FieldString,
+				Required:       true,
+			},
+			{
+				Field:          "secret",
+				LabelKey:       "settings.engine_field.secret_key",
+				PlaceholderKey: "settings.engine_ph.tencent_secret_key",
+				Type:           FieldSecret,
+				Required:       true,
+			},
 		},
 	},
 	"youdao": {
 		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
-			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.youdao_endpoint", Type: FieldString, Required: false, Default: YoudaoDefaultEndpoint},
-			{Field: "api_key", LabelKey: "settings.engine_field.app_key", PlaceholderKey: "settings.engine_ph.youdao_app_key", Type: FieldString, Required: true},
-			{Field: "secret", LabelKey: "settings.engine_field.app_secret", PlaceholderKey: "settings.engine_ph.youdao_app_secret", Type: FieldSecret, Required: true},
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.youdao_endpoint",
+				Type:           FieldString, Required: false, Default: YoudaoDefaultEndpoint},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.app_key",
+				PlaceholderKey: "settings.engine_ph.youdao_app_key",
+				Type:           FieldString, Required: true},
+			{
+				Field:          "secret",
+				LabelKey:       "settings.engine_field.app_secret",
+				PlaceholderKey: "settings.engine_ph.youdao_app_secret",
+				Type:           FieldSecret, Required: true},
 		},
 	},
 	"tesseract": {
 		Kind: KindOCR,
+		// 配置项全部声明于此，顺序即前端渲染顺序（单一事实源）：
+		//   1) ocr_status  安装状态探测卡（含可编辑自定义二进制路径 endpoint）
+		//   2) ocr_langs   识别语言多选（写入 Extra.langs）
+		//   3) ocr_timeout OCR 超时（写入 Extra.timeout_sec）
 		Fields: []EngineFieldSchema{
 			{
 				Field:          "endpoint",
+				Widget:         WidgetOCRStatus,
 				LabelKey:       "settings.engine_field.binary",
 				PlaceholderKey: "settings.engine_ph.tesseract_binary",
 				Type:           FieldString,
 				Required:       false,
 			},
 			{
-				Field:          "extra",
-				LabelKey:       "settings.engine_field.langs",
-				PlaceholderKey: "settings.engine_ph.tesseract_langs",
-				Type:           FieldString,
-				Required:       true,
-				Options:        []string{"chi_sim", "chi_tra", "eng", "jpn", "kor", "fra", "deu", "spa", "rus", "por", "ita"},
+				Field:    "extra",
+				Widget:   WidgetOCRLangs,
+				LabelKey: "settings.engineOcrLangs",
+				HintKey:  "settings.engineLangsHintTesseract",
+			},
+			{
+				Field:    "extra",
+				Widget:   WidgetOCRTimeout,
+				LabelKey: "settings.engineOcrTimeout",
+				HintKey:  "settings.engineOcrTimeoutDesc",
 			},
 		},
 	},
+}
+
+// ocrLangsOptions OCR 引擎（vision / tesseract）语言码候选项，
+// 供前端 OCR 专属 UI 渲染 langs 多选。与 schema 解耦，由代码唯一维护。
+var ocrLangsOptions = []string{"chi_sim", "chi_tra", "eng", "jpn", "kor", "fra", "deu", "spa", "rus", "por", "ita"}
+
+// OcrLangsOptions 返回 OCR 引擎语言码候选项（供前端渲染 langs 多选）。
+func OcrLangsOptions() []string {
+	out := make([]string, len(ocrLangsOptions))
+	copy(out, ocrLangsOptions)
+	return out
 }
 
 // GetEngineSchema 返回指定引擎的配置字段 schema；未定义时返回空 schema。
@@ -449,4 +605,54 @@ func GetEngineSchema(name string) EngineSchema {
 		return s
 	}
 	return EngineSchema{}
+}
+
+// ocrExtra OCR 引擎 Extra 的统一 JSON 解析结果。
+// 所有 OCR 引擎（vision / tesseract）共用同一 Extra(JSON) 结构，保证「统一改 JSON」。
+//   - langs:      语言码，如 "chi_sim+eng"（"+" 分隔）。
+//   - timeoutSec: OCR 超时秒数；<=0 回落默认 60。
+//   - correct:    是否开启语言校正；仅 vision 语义生效，tesseract 忽略。nil/true=开启。
+type ocrExtra struct {
+	Langs      string `json:"langs"`        // 语言码（+ 分隔），缺省回落默认
+	TimeoutSec int    `json:"timeout_sec"`  // OCR 超时秒数，<=0 用默认 60
+	Correct    *bool  `json:"correct_text"` // 语言校正（nil/true=开启），仅 vision 生效
+}
+
+// DefaultOCRLangs 各 OCR 引擎的语言码默认（无 Extra 或 Extra 不含 langs 时回落）。
+var DefaultOCRLangs = map[string]string{
+	"vision":    "chi_sim+eng",
+	"tesseract": "chi_sim+eng",
+}
+
+// DefaultOCRTimeoutSec OCR 超时默认值（秒）。
+const DefaultOCRTimeoutSec = 60
+
+// parseOCRExtra 统一解析 OCR 引擎 Extra(JSON)。两引擎共用，保证 extra 格式一致。
+// 兼容旧数据：Extra 为纯字符串语言码（非 JSON）时，整串作为 langs 兜底，超时回落默认。
+// timeoutSec/correct 允许由请求 req 显式覆盖（在各自 Recognize 内处理）。
+func parseOCRExtra(engineName, extra string) ocrExtra {
+	out := ocrExtra{
+		Langs:      DefaultOCRLangs[engineName],
+		TimeoutSec: DefaultOCRTimeoutSec,
+	}
+	if extra == "" {
+		return out
+	}
+	// 优先按 JSON 解析（统一方案）。
+	var je ocrExtra
+	if err := json.Unmarshal([]byte(extra), &je); err == nil {
+		if je.Langs != "" {
+			out.Langs = je.Langs
+		}
+		if je.TimeoutSec > 0 {
+			out.TimeoutSec = je.TimeoutSec
+		}
+		if je.Correct != nil {
+			out.Correct = je.Correct
+		}
+		return out
+	}
+	// 兼容旧纯字符串语言码（如 "chi_sim+eng"）。
+	out.Langs = extra
+	return out
 }

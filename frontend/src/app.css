@@ -393,11 +393,11 @@ body {
 
   .u-winbtn {
     display: flex;
-    height: 1.5rem;
-    width: 2rem;
+    height: 1.25rem;
+    width: 1.5rem;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
+    font-size: 0.7rem;
     line-height: 1;
     color: var(--app-muted);
     cursor: pointer;

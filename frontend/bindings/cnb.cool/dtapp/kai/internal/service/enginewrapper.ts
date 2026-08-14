@@ -81,6 +81,14 @@ export function GetKnownEngines(): $CancellablePromise<$models.EngineListItem[] 
 }
 
 /**
+ * GetOcrLangs 返回 OCR 引擎（vision / tesseract）语言码候选项，
+ * 供前端 OCR 专属 UI 渲染 langs 多选。与 Extra(JSON) 解耦，由代码唯一维护。
+ */
+export function GetOcrLangs(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(3491230379);
+}
+
+/**
  * RemoveEngine 按 ID 删除单个引擎配置。
  * 系统内置引擎（apple / vision）禁止删除：它们免配置、由代码保证存在，
  * 删除会导致 OCR 单选 / 系统翻译不可用。前端已对 builtin 项隐藏删除按钮，

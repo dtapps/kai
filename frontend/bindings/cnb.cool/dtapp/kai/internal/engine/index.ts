@@ -3,7 +3,8 @@
 
 export {
     EngineFieldType,
-    EngineKind
+    EngineKind,
+    FieldWidget
 } from "./models.js";
 
 export type {

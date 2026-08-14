@@ -107,6 +107,18 @@ export interface OcrRequest {
      * 指定 OCR 引擎标识
      */
     "engine": string;
+
+    /**
+     * CorrectText Vision 的 usesLanguageCorrection（语言校正）。
+     * true=开启（更准确，默认）；false=关闭（更快、偶发卡死概率更低，但准确率略降）。
+     * 指针类型以便区分"未设置"与"false"，未设置时引擎用默认值 true。
+     */
+    "correct_text"?: boolean | null;
+
+    /**
+     * TimeoutSec Vision OCR 超时秒数。<=0 时引擎用各自默认值（vision 默认 60s）。
+     */
+    "timeout_sec"?: number;
 }
 
 /**
@@ -152,6 +164,11 @@ export interface ScreenshotResult {
      * 目标语言
      */
     "to": Language;
+
+    /**
+     * 流程失败原因（非空时前端停止转圈并展示错误）
+     */
+    "error": string;
 }
 
 /**

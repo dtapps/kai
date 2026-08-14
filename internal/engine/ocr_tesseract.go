@@ -46,10 +46,12 @@ func resolveTesseract() string {
 
 // TesseractOCR 基于系统 tesseract 命令的本地 OCR 引擎（纯 Go exec 调用，无 CGO）。
 // 需要本机安装 tesseract（mac: brew install tesseract；linux: apt install tesseract-ocr）。
+// 持有所属引擎配置，OCR 专属参数（langs / timeout）统一从 Extra(JSON) 读取，
+// 与 vision 共用 parseOCRExtra 解析，保证 extra 格式一致。
 type TesseractOCR struct {
-	name string
-	lang string // tesseract 语言码，如 eng/chi_sim
-	bin  string // tesseract 可执行路径（用户指定或自动探测）
+	name   string
+	config *EngineConfig // 持有所属引擎配置，从 Extra(JSON) 读取 langs / timeout
+	bin    string        // tesseract 可执行路径（用户指定或自动探测）
 }
 
 // TesseractStatus 描述本机 tesseract 的安装探测结果，供前端按系统类型展示安装状态。
@@ -94,16 +96,43 @@ func tesseractVersion(bin string) string {
 	return ""
 }
 
-// NewTesseractOCR 构造 OCR 引擎。lang 默认 chi_sim+eng；bin 为空时自动探测本机 tesseract，
-// 非空则使用用户指定的可执行文件路径（覆盖自动检测）。
-func NewTesseractOCR(lang, bin string) *TesseractOCR {
-	if lang == "" {
-		lang = "chi_sim+eng"
+// NewTesseractOCR 构造 OCR 引擎。cfg 为 tesseract 引擎的 EngineConfig（含 Extra(JSON) 中的
+// langs / timeout_sec）；bin(Endpoint) 为空时自动探测本机 tesseract。
+func NewTesseractOCR(cfg *EngineConfig) *TesseractOCR {
+	bin := ""
+	if cfg != nil {
+		bin = cfg.Endpoint
 	}
 	if bin == "" {
 		bin = resolveTesseract()
 	}
-	return &TesseractOCR{name: "tesseract", lang: lang, bin: bin}
+	return &TesseractOCR{name: "tesseract", config: cfg, bin: bin}
+}
+
+// ocrOptions 解析当前配置与本次请求的参数，得到最终生效的 langs / timeout。
+// 优先级：req 显式覆盖 > 引擎 Extra 配置 > 内置默认(chi_sim+eng / 60s)。
+func (t *TesseractOCR) ocrOptions(req model.OcrRequest) (langs string, timeoutSec int) {
+	langs = DefaultOCRLangs["tesseract"]
+	timeoutSec = DefaultOCRTimeoutSec
+	e := parseOCRExtra(t.name, optExtra(t.config))
+	if e.Langs != "" {
+		langs = e.Langs
+	}
+	if e.TimeoutSec > 0 {
+		timeoutSec = e.TimeoutSec
+	}
+	if req.TimeoutSec > 0 {
+		timeoutSec = req.TimeoutSec
+	}
+	return
+}
+
+// optExtra 安全取 EngineConfig.Extra；cfg 为 nil 时返回空串。
+func optExtra(cfg *EngineConfig) string {
+	if cfg == nil {
+		return ""
+	}
+	return cfg.Extra
 }
 
 // Name 引擎名
@@ -114,6 +143,15 @@ func (t *TesseractOCR) Recognize(ctx context.Context, req model.OcrRequest) (*mo
 	if len(req.ImageData) == 0 {
 		return nil, ErrEmptyImage
 	}
+	langs, timeoutSec := t.ocrOptions(req)
+
+	// 以 req 携带的 ctx 为主，叠加引擎配置的超时上限（含 Swift/vision 约定的 +10s 余量）。
+	if _, ok := ctx.Deadline(); !ok && timeoutSec > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(timeoutSec+10)*time.Second)
+		defer cancel()
+	}
+
 	tmp, err := os.CreateTemp("", "kai-ocr-*.png")
 	if err != nil {
 		return nil, err
@@ -129,7 +167,7 @@ func (t *TesseractOCR) Recognize(ctx context.Context, req model.OcrRequest) (*mo
 	if bin == "" {
 		bin = "tesseract" // 兜底，便于在错误中暴露 PATH 问题
 	}
-	cmd := exec.CommandContext(ctx, bin, tmp.Name(), outBase, "-l", t.lang, "--psm", "6")
+	cmd := exec.CommandContext(ctx, bin, tmp.Name(), outBase, "-l", langs, "--psm", "6")
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	if err := cmd.Run(); err != nil {

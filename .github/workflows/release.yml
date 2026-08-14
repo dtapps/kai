@@ -9,6 +9,7 @@
 # https://github.com/actions/upload-artifact
 # https://github.com/actions/download-artifact
 # https://github.com/softprops/action-gh-release
+# https://github.com/arduino/setup-task
 name: Release
 
 on:
@@ -235,10 +236,18 @@ jobs:
           GOBIN: ${{ env.GO_BIN_DIR }}
         run: go install github.com/wailsapp/wails/v3/cmd/wails3@latest
 
-      # 把 GOBIN（$HOME/go/bin）加入 PATH，否则后续 wails3 doctor / wails3 task build 会 command not found。
+      # 把 GOBIN（$HOME/go/bin）加入 PATH，否则后续 wails3 doctor / task（go-task）会 command not found。
       # setup-go 只把它的 GOPATH(/go/bin) 加进 PATH，与我们安装目录不一致，必须显式追加。
       - name: 将 GOBIN 加入 PATH
         run: echo "${{ env.GO_BIN_DIR }}" >> $GITHUB_PATH
+
+      # 安装 go-task（go-task / Task）：macOS 打包走 build/darwin/Taskfile.yml，
+      # 用 APP_NAME=Kai + 自定义 icons.icns；wails3 内置 package 会取项目名 kai + 默认图标，
+      # 这正是旧 CI 产物名为 kai、图标为 wails3 默认的根因，故统一改用 go-task 流程。
+      - name: 安装 go-task
+        uses: arduino/setup-task@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       # 环境检查：wails3 doctor 仅做环境体检，不影响实际编译/打包，故允许失败不阻断构建。
       - name: 检查构建环境
@@ -339,9 +348,10 @@ jobs:
           echo "EXTRA_TAGS=$EXTRA_TAGS" >> "$GITHUB_ENV"
 
       # 构建和打包（BUILD_TIME 由上面的步骤统一生成，确保打印和实际使用一致）
-      - name: 构建
+      # 三平台统一走 go-task 的对应命名空间（darwin/windows/linux），均使用根 Taskfile 的 APP_NAME=Kai
+      # 与各自自定义图标/资源；wails3 内置 task 会取 module 名 kai + 默认图标，正是旧 CI 产物名错乱的根因。
+      - name: 构建（go-task / {{ matrix.goos }}）
         shell: bash
-        # wails3 task build 内部会调用 go 编译，必须覆盖 setup-go 注入的只读 GOPATH(/go)，否则写 /go 失败。
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
@@ -350,11 +360,10 @@ jobs:
           if [ -n "$EXTRA_TAGS" ]; then
             EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
           fi
-          wails3 task build BUILD_TIME=${{ needs.prepare.outputs.build_time }} PRODUCTION=true VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
+          task ${{ matrix.goos }}:build ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
 
-      - name: 打包
+      - name: 打包（go-task / {{ matrix.goos }}）
         shell: bash
-        # wails3 task package 内部同样调用 go，需可写 GOPATH（覆盖 setup-go 的只读 /go）。
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
@@ -363,15 +372,19 @@ jobs:
           if [ -n "$EXTRA_TAGS" ]; then
             EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
           fi
-          wails3 task package BUILD_TIME=${{ needs.prepare.outputs.build_time }} PRODUCTION=true VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
+          task ${{ matrix.goos }}:package ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
 
       # macOS: 签名 + 公证（解决 Gatekeeper 在系统升级后阻止 App 的问题）
       - name: macOS 签名与公证
         # 判断用 workflow 级 env（已在 workflow env 中由 secret 赋值），步骤级 env 在 if 求值时尚不存在。
+        # 走 go-task 的 darwin 流程并透传与打包一致的变量，避免 wails3 代理时用默认 ARCH 重编错架构。
         if: ${{ runner.os == 'macOS' && env.APPLE_DEVELOPER_ID_CERTIFICATE != '' }}
         shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
         run: |
-          wails3 task darwin:sign:notarize
+          task darwin:sign:notarize ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG
 
       # Windows: 将 base64 编码的证书 secret 解码为本地 .pfx 文件
       # WINDOWS_SIGN_CERTIFICATE 中存放的是 .pfx 的 base64（含私钥，禁止入库，仅作 secret）
@@ -400,7 +413,7 @@ jobs:
           TIMESTAMP_SERVER: ${{ secrets.WINDOWS_TIMESTAMP_SERVER }}
         shell: bash
         run: |
-          wails3 task windows:sign:installer
+          task windows:sign:installer
 
       # Windows: 再签名独立 exe（供自更新 updater-*.zip 使用，保证替换后的二进制已签名）
       - name: Windows 可执行文件签名
@@ -412,7 +425,7 @@ jobs:
           TIMESTAMP_SERVER: ${{ secrets.WINDOWS_TIMESTAMP_SERVER }}
         shell: bash
         run: |
-          wails3 task windows:sign
+          task windows:sign
 
       - name: 重命名产物
         shell: bash
@@ -429,8 +442,8 @@ jobs:
           # - updater-Kai-...-darwin-...zip：升级文件（隐藏）。
           # wails 文档要求 macOS 自更新替换整个 .app 目录以保留 Gatekeeper
           # 签名，故升级文件必须是 .app 归档，不能只压裸二进制。
-          if [ -d "kai.app" ]; then
-            zip -r "Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" kai.app
+          if [ -d "Kai.app" ]; then
+            zip -r "Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" Kai.app
             cp "Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip"
             mv "Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" renamed/
             mv "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" renamed/
@@ -438,11 +451,11 @@ jobs:
 
           # Windows: 升级专用文件（updater- 前缀，不在下载表格显示）
           # Windows 的 git-bash 不带 zip 命令，改用 PowerShell 内置的 Compress-Archive
-          if [ -f "kai.exe" ]; then
+          if [ -f "Kai.exe" ]; then
             if [ "$RUNNER_OS" = "Windows" ]; then
-              pwsh -Command "Compress-Archive -Path 'kai.exe' -DestinationPath 'updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip' -Force"
+              pwsh -Command "Compress-Archive -Path 'Kai.exe' -DestinationPath 'updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip' -Force"
             else
-              zip "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" kai.exe
+              zip "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" Kai.exe
             fi
             mv "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.zip" renamed/
           fi
@@ -458,7 +471,7 @@ jobs:
           # 用 $PLATFORM 守卫，避免 macOS/Linux 通用的 kai 二进制被误判为
           # Linux 产物（每个 matrix job 只构建一个平台）。
           if [ "$PLATFORM" = "linux" ] && [ -f "Kai" ]; then
-            tar -czf "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.tar.gz" kai
+            tar -czf "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.tar.gz" Kai
             mv "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.tar.gz" renamed/
           fi
           # Linux: 各格式安装包（打包文件，显示在下载表格）

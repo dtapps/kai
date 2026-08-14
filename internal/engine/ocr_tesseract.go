@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"cnb.cool/dtapp/kai/internal/model"
 )
@@ -48,15 +49,61 @@ func resolveTesseract() string {
 type TesseractOCR struct {
 	name string
 	lang string // tesseract 语言码，如 eng/chi_sim
-	bin  string // tesseract 可执行路径（已探测）
+	bin  string // tesseract 可执行路径（用户指定或自动探测）
 }
 
-// NewTesseractOCR 构造 OCR 引擎。lang 默认 chi_sim+eng。
-func NewTesseractOCR(lang string) *TesseractOCR {
+// TesseractStatus 描述本机 tesseract 的安装探测结果，供前端按系统类型展示安装状态。
+type TesseractStatus struct {
+	Installed bool   `json:"installed"` // 是否探测到 tesseract 可执行文件
+	Path      string `json:"path"`      // 探测到的可执行路径（未安装则为空）
+	Version   string `json:"version"`   // 探测到的版本号（未安装则为空），取自 `tesseract --version`
+	OS        string `json:"os"`        // 当前运行系统（darwin/linux/windows），供前端选择对应安装命令
+}
+
+// TesseractInstalled 探测本机是否已安装 tesseract，返回路径、版本与系统类型。
+// 与 NewTesseractOCR 的探测逻辑一致（PATH + 常见安装路径）；
+// 命中后追加执行 `tesseract --version` 提取版本号（首行形如 tesseract 5.3.4）。
+func TesseractInstalled() TesseractStatus {
+	status := TesseractStatus{OS: runtime.GOOS}
+	if p := resolveTesseract(); p != "" {
+		status.Installed = true
+		status.Path = p
+		status.Version = tesseractVersion(p)
+	}
+	return status
+}
+
+// tesseractVersion 执行 `tesseract --version` 提取版本号（首行形如 "tesseract 5.3.4"）。
+// 解析失败返回空串（不影响「已安装」判定）。
+func tesseractVersion(bin string) string {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, bin, "--version").Output()
+	if err != nil {
+		return ""
+	}
+	// 首行示例：tesseract 5.3.4  leptonica-1.83.0  ...
+	first, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	fields := strings.FieldsSeq(first)
+	for f := range fields {
+		// 版本号形如 5.3.4（含点、纯数字段）
+		if strings.Count(f, ".") >= 1 && !strings.ContainsAny(f, " /\\") {
+			return f
+		}
+	}
+	return ""
+}
+
+// NewTesseractOCR 构造 OCR 引擎。lang 默认 chi_sim+eng；bin 为空时自动探测本机 tesseract，
+// 非空则使用用户指定的可执行文件路径（覆盖自动检测）。
+func NewTesseractOCR(lang, bin string) *TesseractOCR {
 	if lang == "" {
 		lang = "chi_sim+eng"
 	}
-	return &TesseractOCR{name: "tesseract", lang: lang, bin: resolveTesseract()}
+	if bin == "" {
+		bin = resolveTesseract()
+	}
+	return &TesseractOCR{name: "tesseract", lang: lang, bin: bin}
 }
 
 // Name 引擎名

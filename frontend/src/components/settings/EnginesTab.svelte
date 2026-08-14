@@ -10,6 +10,7 @@
     UpdateEngineConfig,
     ToggleEngineEnabled,
     RemoveEngine,
+    CheckTesseract,
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/enginewrapper.ts';
   import type {
     AllEngineItem,
@@ -42,7 +43,7 @@
     return order.map((k) => map.get(k)!).filter((g) => g.items.length > 0);
   });
   let selectedId = $state<number | null>(null);
-  let schema = $state<EngineFieldSchema[]>([]);
+  let schema = $state<EngineSchema | null>(null);
   let configValues = $state<Record<string, string>>({});
 
   // 多选字段（如 tesseract 语言码）的值解析/切换：值以 "+" 拼接，与后端 extra 兼容
@@ -63,6 +64,10 @@
   // system 引擎支持的语言列表（只读展示，由后端从 Translation.framework 读取）
   let systemLangs = $state<string[]>([]);
   let systemLangsLoading = $state(false);
+  // tesseract 安装探测结果（选中 tesseract 时刷新，供右侧展示「已安装/未安装」+ 路径/版本）
+  let tesseract = $state<{ installed: boolean; path: string; version: string; os: string } | null>(
+    null,
+  );
 
   // 新增引擎弹层
   let showAdd = $state(false);
@@ -106,7 +111,7 @@
     if (!eng) return;
     try {
       const s: EngineSchema = await GetEngineSchema(eng.value);
-      schema = s.fields ?? [];
+      schema = s;
       // 拉取已持久化的完整配置，回填表单（服务地址 / API Key 等不再为空）
       let saved: EngineConfig | null = null;
       try {
@@ -115,18 +120,34 @@
         console.error('[引擎] 读取引擎配置失败', e);
         saved = null;
       }
-      for (const f of schema) {
+      for (const f of schema.fields ?? []) {
         configValues[f.field] = (saved?.[f.field as keyof typeof saved] as string) ?? '';
       }
     } catch (e) {
       console.error('[引擎] 加载引擎字段失败', e);
-      schema = [];
+      schema = null;
     }
     // 选中系统翻译引擎时，拉取并显示其支持的语言列表（只读）
     if (eng.value === 'apple' && eng.supported) {
       loadSystemLangs();
     } else {
       systemLangs = [];
+    }
+    // 选中 tesseract 时探测本机是否安装，供右侧展示安装状态
+    if (eng.value === 'tesseract') {
+      checkTesseract();
+    } else {
+      tesseract = null;
+    }
+  }
+
+  // checkTesseract 调用后端探测本机 tesseract 安装情况
+  async function checkTesseract() {
+    try {
+      tesseract = await CheckTesseract();
+    } catch (e) {
+      console.error('[引擎] 探测 tesseract 失败', e);
+      tesseract = { installed: false, path: '', version: '', os: '' };
     }
   }
 
@@ -266,7 +287,7 @@
       await AddEngine({
         id: 0,
         engine: addName,
-        enabled: true,
+        enabled: false,
         api_key: addValues['api_key'] || undefined,
         secret: addValues['secret'] || undefined,
         endpoint: addValues['endpoint'] || undefined,
@@ -343,6 +364,27 @@
     <div class="u-label mb-4">
       {t('settings.engineConfig')}
     </div>
+    {#if schema?.builtin}
+      <div class="flex items-start gap-2 rounded-md border u-border-ok px-3 py-2 text-xs">
+        <span class="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full u-bg-ok"></span>
+        <div>
+          <p class="font-medium">
+            {#if schema?.kind === 'ocr'}
+              {t('settings.engine_tip.vision_builtin')}
+            {:else}
+              {t('settings.engine_tip.apple_builtin')}
+            {/if}
+          </p>
+          <p class="u-muted">
+            {#if schema?.kind === 'ocr'}
+              {t('settings.engine_tip.vision_builtin_desc')}
+            {:else}
+              {t('settings.engine_tip.apple_builtin_desc')}
+            {/if}
+          </p>
+        </div>
+      </div>
+    {/if}
     {#if engines.find((e) => e.id === selectedId)?.value === 'apple'}
       <div
         class="mb-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-3"
@@ -363,7 +405,7 @@
         {/if}
       </div>
     {/if}
-    {#if schema.length === 0}
+    {#if (schema?.fields?.length ?? 0) === 0}
       <div class="flex flex-1 flex-col items-center justify-center text-center">
         <p class="u-muted text-sm">{t('settings.engineNoSchema')}</p>
       </div>
@@ -375,7 +417,44 @@
         {#if formOk}
           <p class="u-text-ok text-xs">{formOk}</p>
         {/if}
-        {#each schema as f}
+        {#if engines.find((e) => e.id === selectedId)?.value === 'tesseract' && tesseract}
+          <div
+            class="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
+            class:u-border-danger={!tesseract.installed}
+            class:u-border-ok={tesseract.installed}
+          >
+            <span
+              class="mt-0.5 inline-block h-2 w-2 shrink-0 rounded-full"
+              class:u-bg-danger={!tesseract.installed}
+              class:u-bg-ok={tesseract.installed}
+            ></span>
+            <div>
+              {#if tesseract.installed}
+                <p class="font-medium">{t('settings.engine_tip.tesseract_installed')}</p>
+                <p class="u-muted break-all">
+                  {t('settings.engine_tip.tesseract_path')}{tesseract.path}
+                </p>
+                <p class="u-muted break-all">
+                  {t('settings.engine_tip.tesseract_version')}{tesseract.version || '-'}
+                </p>
+              {:else}
+                <p class="font-medium">{t('settings.engine_tip.tesseract_missing')}</p>
+                {#if tesseract.os === 'darwin'}
+                  <p class="u-muted break-all">{t('settings.engine_tip.tesseract_install_mac')}</p>
+                {:else if tesseract.os === 'windows'}
+                  <p class="u-muted break-all">
+                    {t('settings.engine_tip.tesseract_install_windows')}
+                  </p>
+                {:else}
+                  <p class="u-muted break-all">
+                    {t('settings.engine_tip.tesseract_install_linux')}
+                  </p>
+                {/if}
+              {/if}
+            </div>
+          </div>
+        {/if}
+        {#each schema?.fields ?? [] as f}
           <div>
             <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
               {f.label_key ? t(f.label_key as any) : f.field}

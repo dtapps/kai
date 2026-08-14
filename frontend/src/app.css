@@ -73,6 +73,22 @@ body {
     color: var(--app-ok);
   }
 
+  .u-border-danger {
+    border-color: var(--app-danger);
+  }
+
+  .u-border-ok {
+    border-color: var(--app-ok);
+  }
+
+  .u-bg-danger {
+    background: var(--app-danger);
+  }
+
+  .u-bg-ok {
+    background: var(--app-ok);
+  }
+
   .u-text-warn {
     color: var(--app-warn);
   }

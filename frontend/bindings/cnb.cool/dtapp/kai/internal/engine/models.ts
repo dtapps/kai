@@ -107,8 +107,69 @@ export enum EngineFieldType {
 };
 
 /**
+ * EngineKind 引擎种类：翻译 or OCR
+ */
+export enum EngineKind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * KindTranslator 翻译引擎
+     */
+    KindTranslator = "translate",
+
+    /**
+     * KindOCR OCR 引擎
+     */
+    KindOCR = "ocr",
+};
+
+/**
  * EngineSchema 某个引擎的全部配置字段（顺序即渲染顺序）。
  */
 export interface EngineSchema {
+    /**
+     * Kind 引擎类型（translate 翻译 / ocr OCR），单一事实源；前端据此区分渲染，
+     * 取代此前依赖 AllEngineItem.kind 的散落判断。
+     */
+    "kind": EngineKind;
+
+    /**
+     * Builtin 是否为系统内置引擎（如 apple 系统翻译 / vision 系统 OCR），
+     * 无需配置、不可移除。前端据此项统一渲染「系统内置」状态卡，取代逐引擎 hardcode 判断。
+     */
+    "builtin": boolean;
+
+    /**
+     * Fields 该引擎在前端配置表单中渲染的字段列表（顺序即渲染顺序）。
+     * 每一项对应一个输入框（endpoint / api_key / secret / 语言等），前端据此动态生成表单。
+     */
     "fields": EngineFieldSchema[] | null;
+}
+
+/**
+ * TesseractStatus 描述本机 tesseract 的安装探测结果，供前端按系统类型展示安装状态。
+ */
+export interface TesseractStatus {
+    /**
+     * 是否探测到 tesseract 可执行文件
+     */
+    "installed": boolean;
+
+    /**
+     * 探测到的可执行路径（未安装则为空）
+     */
+    "path": string;
+
+    /**
+     * 探测到的版本号（未安装则为空），取自 `tesseract --version`
+     */
+    "version": string;
+
+    /**
+     * 当前运行系统（darwin/linux/windows），供前端选择对应安装命令
+     */
+    "os": string;
 }

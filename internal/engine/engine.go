@@ -350,6 +350,14 @@ type EngineFieldSchema struct {
 
 // EngineSchema 某个引擎的全部配置字段（顺序即渲染顺序）。
 type EngineSchema struct {
+	// Kind 引擎类型（translate 翻译 / ocr OCR），单一事实源；前端据此区分渲染，
+	// 取代此前依赖 AllEngineItem.kind 的散落判断。
+	Kind EngineKind `json:"kind"`
+	// Builtin 是否为系统内置引擎（如 apple 系统翻译 / vision 系统 OCR），
+	// 无需配置、不可移除。前端据此项统一渲染「系统内置」状态卡，取代逐引擎 hardcode 判断。
+	Builtin bool `json:"builtin"`
+	// Fields 该引擎在前端配置表单中渲染的字段列表（顺序即渲染顺序）。
+	// 每一项对应一个输入框（endpoint / api_key / secret / 语言等），前端据此动态生成表单。
 	Fields []EngineFieldSchema `json:"fields"`
 }
 
@@ -364,19 +372,25 @@ type EngineSchema struct {
 //   - baidu/tencent/youdao：appkey/appid = api_key，密钥 = secret
 //   - tesseract：仅 extra（逗号分隔语言码）
 var engineSchemas = map[string]EngineSchema{
-	"apple": {Fields: nil},
+	// apple 为 macOS 系统内置翻译引擎（Translation.framework），无需配置、不可移除。
+	"apple": {Kind: KindTranslator, Builtin: true, Fields: nil},
+	// vision 为 macOS 系统内置 OCR 引擎（Vision.framework），无需配置、不可移除。
+	"vision": {Kind: KindOCR, Builtin: true, Fields: nil},
 	"google": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.google_endpoint", Type: FieldString, Required: false, Default: DefaultEndpoint},
 		},
 	},
 	"deepl": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.deepl_endpoint", Type: FieldString, Required: false, Default: DeepLFreeEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.api_key", PlaceholderKey: "settings.engine_ph.deepl_api_key", Type: FieldSecret, Required: true},
 		},
 	},
 	"openai": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.openai_endpoint", Type: FieldString, Required: false, Default: OpenAIDefaultChatEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.api_key", PlaceholderKey: "settings.engine_ph.openai_api_key", Type: FieldSecret, Required: true},
@@ -384,6 +398,7 @@ var engineSchemas = map[string]EngineSchema{
 		},
 	},
 	"baidu": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.baidu_endpoint", Type: FieldString, Required: false, Default: BaiduDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.app_id", PlaceholderKey: "settings.engine_ph.baidu_app_id", Type: FieldString, Required: true},
@@ -391,6 +406,7 @@ var engineSchemas = map[string]EngineSchema{
 		},
 	},
 	"tencent": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.tencent_endpoint", Type: FieldString, Required: false, Default: TencentDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.secret_id", PlaceholderKey: "settings.engine_ph.tencent_secret_id", Type: FieldString, Required: true},
@@ -398,6 +414,7 @@ var engineSchemas = map[string]EngineSchema{
 		},
 	},
 	"youdao": {
+		Kind: KindTranslator,
 		Fields: []EngineFieldSchema{
 			{Field: "endpoint", LabelKey: "settings.engine_field.endpoint", PlaceholderKey: "settings.engine_ph.youdao_endpoint", Type: FieldString, Required: false, Default: YoudaoDefaultEndpoint},
 			{Field: "api_key", LabelKey: "settings.engine_field.app_key", PlaceholderKey: "settings.engine_ph.youdao_app_key", Type: FieldString, Required: true},
@@ -405,7 +422,15 @@ var engineSchemas = map[string]EngineSchema{
 		},
 	},
 	"tesseract": {
+		Kind: KindOCR,
 		Fields: []EngineFieldSchema{
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.binary",
+				PlaceholderKey: "settings.engine_ph.tesseract_binary",
+				Type:           FieldString,
+				Required:       false,
+			},
 			{
 				Field:          "extra",
 				LabelKey:       "settings.engine_field.langs",

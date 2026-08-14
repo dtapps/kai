@@ -30,6 +30,14 @@ export function AddEngine(cfg: engine$0.EngineConfig | null): $CancellablePromis
 }
 
 /**
+ * CheckTesseract 探测本机是否已安装 tesseract，返回安装状态与可执行路径，
+ * 供设置页展示 Tesseract 引擎的「已安装/未安装」提示。
+ */
+export function CheckTesseract(): $CancellablePromise<engine$0.TesseractStatus> {
+    return $Call.ByID(2067219980);
+}
+
+/**
  * GetAllEngines 返回 config.db 的 engines 表中「全部」引擎及其启用状态。
  * 列表数据直接来自数据库（configStore.LoadEngines），不经由 settings 副本、也不与
  * 代码里的 KnownEngines 合并——引擎配置是 config.db 的独立数据源，与界面偏好 settings 无关。

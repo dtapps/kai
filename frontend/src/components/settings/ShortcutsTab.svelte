@@ -11,6 +11,7 @@
     CheckScreenRecording,
     OpenScreenRecordingSettings,
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/appservice.ts';
+  import { System, Dialogs } from '@wailsio/runtime';
 
   // 单个注册类快捷键的表单形态（按键 + 启用状态），与后端 HotkeyEntry 对齐。
   type HotkeyEntry = { key: string; enabled: boolean };
@@ -44,10 +45,15 @@
   let execKeyForm = $state<ExecKeyForm>({
     copy: { ...defaultExecKeys.copy },
   });
-  let hkMessage = $state('');
   // 录制态：正在捕获按键的快捷键字段名（null 表示未录制）。注册键与执行键分两个分类。
   type RecordableKey = keyof HotkeyForm | keyof ExecKeyForm;
   let recordingKey = $state<RecordableKey | null>(null);
+
+  // 授权卡片仅 macOS 需要（辅助功能 / 屏幕录制均为 macOS TCC 权限）。
+  // Windows 复制键走 makc 调用 user32.dll、全局热键走 RegisterHotKey，均无需用户授权；
+  // Linux 同样无需此类授权。故非 Mac 平台直接隐藏授权区块。
+  // 使用 Wails v3 的 System.IsMac() 判断（优于已废弃的 navigator.platform）。
+  const isMac = System.IsMac();
 
   // 辅助功能授权状态（macOS）：true=已授权，false=未授权，null=检测中/未知（非 darwin 始终 true）
   let accGranted = $state<boolean | null>(null);
@@ -159,7 +165,6 @@
   }
 
   function startRecord(key: keyof HotkeyForm | 'copy') {
-    hkMessage = '';
     recordingKey = key;
   }
 
@@ -192,7 +197,6 @@
   }
 
   async function saveShortcuts() {
-    hkMessage = '';
     try {
       const cfg = (await GetConfig()) ?? ({} as any);
       const next = {
@@ -204,10 +208,18 @@
         execkeys: { copy: execKeyForm.copy },
       };
       await SaveConfig(next as any);
-      hkMessage = t('settings.hkSaved');
+      // 桌面软件用 Wails v3 原生信息对话框，与失败错误框风格统一、更醒目
+      await Dialogs.Info({
+        Title: t('settings.hkSavedTitle'),
+        Message: t('settings.hkSaved'),
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      hkMessage = t('settings.hkSaveError') + msg;
+      // 桌面软件用 Wails v3 原生错误对话框，比内联文字更醒目
+      await Dialogs.Error({
+        Title: t('settings.hkSaveErrorTitle'),
+        Message: msg,
+      });
     }
   }
 </script>
@@ -219,90 +231,92 @@
   <p class="u-muted mt-1 text-sm">{t('settings.shortcutsHint')}</p>
 </header>
 
-<!-- 快捷键所需授权状态（macOS）：辅助功能 + 屏幕录制 -->
-<div class="u-card u-card--panel mb-5 p-5">
-  {#if permAllGranted && !permExpanded}
-    <!-- 折叠态：都已授权时默认收起，仅显示概览一行 -->
-    <div class="flex items-center justify-between gap-4">
-      <div class="flex items-center gap-2">
-        <span class="text-sm font-medium">{t('settings.permTitle')}</span>
-        <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
-      </div>
-      <div class="flex shrink-0 items-center gap-2">
-        <button class="u-btn u-btn--ghost px-3 py-1.5 text-sm" onclick={loadShortcutPermissions}>
-          {t('settings.accRefresh')}
-        </button>
-        <button
-          class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
-          onclick={() => (permExpanded = true)}
-        >
-          {t('settings.permExpand')}
-        </button>
-      </div>
-    </div>
-  {:else}
-    <!-- 展开态：显示明细 + 刷新/收起 -->
-    <div class="mb-1 flex items-center justify-between gap-4">
-      <div class="text-sm font-medium">{t('settings.permTitle')}</div>
-      <div class="flex shrink-0 items-center gap-2">
-        {#if permAllGranted}
+<!-- 快捷键所需授权状态：仅 macOS 需要（辅助功能 + 屏幕录制均为 macOS TCC 权限） -->
+{#if isMac}
+  <div class="u-card u-card--panel mb-5 p-5">
+    {#if permAllGranted && !permExpanded}
+      <!-- 折叠态：都已授权时默认收起，仅显示概览一行 -->
+      <div class="flex items-center justify-between gap-4">
+        <div class="flex items-center gap-2">
+          <span class="text-sm font-medium">{t('settings.permTitle')}</span>
+          <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
+        </div>
+        <div class="flex shrink-0 items-center gap-2">
+          <button class="u-btn u-btn--ghost px-3 py-1.5 text-sm" onclick={loadShortcutPermissions}>
+            {t('settings.accRefresh')}
+          </button>
           <button
             class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
-            onclick={() => (permExpanded = false)}
+            onclick={() => (permExpanded = true)}
           >
-            {t('settings.permCollapse')}
+            {t('settings.permExpand')}
           </button>
-        {/if}
-        <button class="u-btn u-btn--ghost px-3 py-1.5 text-sm" onclick={loadShortcutPermissions}>
-          {t('settings.accRefresh')}
-        </button>
-      </div>
-    </div>
-    <p class="u-muted mb-4 text-xs">{t('settings.permHint')}</p>
-
-    <div class="space-y-4">
-      <!-- 辅助功能 -->
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0">
-          <div class="text-sm font-medium">{t('settings.permAccessibility')}</div>
-          <p class="u-muted text-xs">{t('settings.permAccessibilityHint')}</p>
         </div>
+      </div>
+    {:else}
+      <!-- 展开态：显示明细 + 刷新/收起 -->
+      <div class="mb-1 flex items-center justify-between gap-4">
+        <div class="text-sm font-medium">{t('settings.permTitle')}</div>
         <div class="flex shrink-0 items-center gap-2">
-          {#if accGranted === null}
-            <span class="u-muted text-sm">{accLoading ? t('common.loading') : '—'}</span>
-          {:else if accGranted}
-            <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
-          {:else}
-            <span class="u-text-warn text-sm font-medium">{t('settings.accDenied')}</span>
+          {#if permAllGranted}
+            <button
+              class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
+              onclick={() => (permExpanded = false)}
+            >
+              {t('settings.permCollapse')}
+            </button>
           {/if}
-          <button class="u-btn u-btn--primary px-3 py-1.5 text-sm" onclick={openAccessibility}>
-            {t('settings.accOpen')}
+          <button class="u-btn u-btn--ghost px-3 py-1.5 text-sm" onclick={loadShortcutPermissions}>
+            {t('settings.accRefresh')}
           </button>
         </div>
       </div>
+      <p class="u-muted mb-4 text-xs">{t('settings.permHint')}</p>
 
-      <!-- 屏幕录制：截图翻译依赖 -->
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0">
-          <div class="text-sm font-medium">{t('settings.permScreenRecording')}</div>
-          <p class="u-muted text-xs">{t('settings.permScreenRecordingHint')}</p>
+      <div class="space-y-4">
+        <!-- 辅助功能 -->
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="text-sm font-medium">{t('settings.permAccessibility')}</div>
+            <p class="u-muted text-xs">{t('settings.permAccessibilityHint')}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            {#if accGranted === null}
+              <span class="u-muted text-sm">{accLoading ? t('common.loading') : '—'}</span>
+            {:else if accGranted}
+              <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
+            {:else}
+              <span class="u-text-warn text-sm font-medium">{t('settings.accDenied')}</span>
+            {/if}
+            <button class="u-btn u-btn--primary px-3 py-1.5 text-sm" onclick={openAccessibility}>
+              {t('settings.accOpen')}
+            </button>
+          </div>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
-          {#if srGranted === null}
-            <span class="u-muted text-sm">{srLoading ? t('common.loading') : '—'}</span>
-          {:else if srGranted}
-            <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
-          {:else}
-            <span class="u-text-warn text-sm font-medium">{t('settings.accDenied')}</span>
-          {/if}
-          <button class="u-btn u-btn--primary px-3 py-1.5 text-sm" onclick={openScreenRecording}>
-            {t('settings.accOpen')}
-          </button>
+
+        <!-- 屏幕录制：截图翻译依赖 -->
+        <div class="flex items-center justify-between gap-4">
+          <div class="min-w-0">
+            <div class="text-sm font-medium">{t('settings.permScreenRecording')}</div>
+            <p class="u-muted text-xs">{t('settings.permScreenRecordingHint')}</p>
+          </div>
+          <div class="flex shrink-0 items-center gap-2">
+            {#if srGranted === null}
+              <span class="u-muted text-sm">{srLoading ? t('common.loading') : '—'}</span>
+            {:else if srGranted}
+              <span class="u-text-ok text-sm font-medium">{t('settings.accGranted')}</span>
+            {:else}
+              <span class="u-text-warn text-sm font-medium">{t('settings.accDenied')}</span>
+            {/if}
+            <button class="u-btn u-btn--primary px-3 py-1.5 text-sm" onclick={openScreenRecording}>
+              {t('settings.accOpen')}
+            </button>
+          </div>
         </div>
       </div>
-    </div>
-  {/if}
-</div>
+    {/if}
+  </div>
+{/if}
 
 <div class="u-card u-card--panel space-y-5 p-6">
   {#each [{ key: 'input', label: t('settings.hkInput') }, { key: 'screenshot', label: t('settings.hkScreenshot') }] satisfies { key: keyof HotkeyForm; label: string }[] as row}
@@ -365,9 +379,6 @@
     </div>
   </div>
   <p class="u-muted text-xs">{t('settings.hkFormatHint')}</p>
-  {#if hkMessage}
-    <p class="u-text-ok text-xs">{hkMessage}</p>
-  {/if}
   <div class="flex justify-end pt-1">
     <button class="u-btn u-btn--primary px-4 py-1.5 text-sm" onclick={saveShortcuts}>
       {t('settings.hkSave')}

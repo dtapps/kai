@@ -3,11 +3,12 @@
   import { t } from '../i18n';
   import { isDark } from '../stores/theme';
   import { EventWindowClosing } from '../utils/events';
+  import { System } from '@wailsio/runtime';
 
   let { onClose }: { onClose?: () => void } = $props();
 
-  const platform = navigator.platform.toLowerCase();
-  const isMac = $derived(platform.includes('mac'));
+  // 使用 Wails v3 的 System.IsMac() 判断平台（优于已废弃的 navigator.platform）
+  const isMac = System.IsMac();
 
   function minimize() {
     Window.Minimise();

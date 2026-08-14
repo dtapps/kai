@@ -56,6 +56,19 @@ body {
     color: var(--app-muted);
   }
 
+  /* 行内小标签（如系统翻译支持的语言码列表） */
+  .u-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    background: var(--app-card);
+    border: 1px solid var(--app-border);
+    color: var(--app-fg);
+  }
+
   .u-label {
     font-size: 0.75rem;
     line-height: 1rem;

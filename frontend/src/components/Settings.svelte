@@ -13,7 +13,20 @@
   import HistoryTab from './settings/HistoryTab.svelte';
 
   type Tab = 'general' | 'engines' | 'shortcuts' | 'history';
-  let tab = $state<Tab>('general');
+  const TAB_KEY = 'settingsTab';
+  const VALID_TABS: Tab[] = ['general', 'engines', 'shortcuts', 'history'];
+
+  // 记住上次选中的 Tab，刷新后恢复（默认通用）
+  function readSavedTab(): Tab {
+    try {
+      const saved = localStorage.getItem(TAB_KEY) as Tab | null;
+      if (saved && VALID_TABS.includes(saved)) return saved;
+    } catch {
+      /* localStorage 不可用时忽略，回退默认 */
+    }
+    return 'general';
+  }
+  let tab = $state<Tab>(readSavedTab());
   let curLang = $state<LangCode>(Lang.ZHCN);
 
   const tabs = $derived.by<{ id: Tab; label: string; icon: string }[]>(() => [
@@ -60,6 +73,11 @@
           class:is-active={tab === item.id}
           onclick={() => {
             tab = item.id;
+            try {
+              localStorage.setItem(TAB_KEY, item.id);
+            } catch {
+              /* 忽略写入失败 */
+            }
           }}
         >
           <svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">

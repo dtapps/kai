@@ -8,6 +8,7 @@
     ClearHistory,
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/historywrapper.ts';
   import type { HistoryItem } from '@bindings/cnb.cool/dtapp/kai/internal/service/models.ts';
+  import { Dialogs } from '@wailsio/runtime';
 
   let history = $state<HistoryItem[]>([]);
   // 历史分页与搜索
@@ -37,6 +38,10 @@
     } catch (e) {
       console.error('[历史] 加载历史记录失败', e);
       history = [];
+      await Dialogs.Error({
+        Title: t('settings.historyOpErrorTitle'),
+        Message: t('settings.historyLoadError'),
+      });
     } finally {
       historyLoading = false;
     }
@@ -70,6 +75,10 @@
       await loadHistory();
     } catch (e) {
       console.error('[历史] 删除历史记录失败', e);
+      await Dialogs.Error({
+        Title: t('settings.historyOpErrorTitle'),
+        Message: t('settings.historyDeleteError'),
+      });
     }
   }
 
@@ -78,8 +87,16 @@
       await ClearHistory();
       historyPage = 1;
       await loadHistory();
+      await Dialogs.Info({
+        Title: t('settings.historyOkTitle'),
+        Message: t('settings.historyCleared'),
+      });
     } catch (e) {
       console.error('[历史] 清空历史记录失败', e);
+      await Dialogs.Error({
+        Title: t('settings.historyOpErrorTitle'),
+        Message: t('settings.historyClearError'),
+      });
     }
   }
 

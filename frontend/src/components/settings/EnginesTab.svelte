@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from 'svelte';
+  import { onMount } from 'svelte';
   import { t, langName, engineName } from '../../i18n';
   import {
     GetAllEngines,
@@ -22,6 +22,7 @@
     EngineConfig,
   } from '@bindings/cnb.cool/dtapp/kai/internal/engine/models.ts';
   import { SystemLanguages } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
+  import { Dialogs } from '@wailsio/runtime';
   let engines = $state<AllEngineItem[]>([]);
 
   // 按 Kind 分组展示：翻译引擎 / OCR 引擎（TTS 的 apple 引擎归入翻译类）
@@ -75,20 +76,6 @@
   let addName = $state('');
   let addSchema = $state<EngineFieldSchema[]>([]);
   let addValues = $state<Record<string, string>>({});
-  let addError = $state('');
-  // 右侧配置面板的校验错误提示（保存/启用失败原因）
-  let formError = $state('');
-  // 保存成功的轻量反馈（几秒后自动消失）
-  let formOk = $state('');
-  let formOkTimer: ReturnType<typeof setTimeout> | null = null;
-  function flashOk(msg: string) {
-    formOk = msg;
-    if (formOkTimer) clearTimeout(formOkTimer);
-    formOkTimer = setTimeout(() => (formOk = ''), 2500);
-  }
-  onDestroy(() => {
-    if (formOkTimer) clearTimeout(formOkTimer);
-  });
 
   onMount(() => {
     loadEngines();
@@ -181,7 +168,6 @@
   async function saveConfig() {
     const eng = engines.find((e) => e.id === selectedId);
     if (!eng) return;
-    formError = '';
     try {
       await UpdateEngineConfig({
         id: eng.id,
@@ -192,14 +178,19 @@
         endpoint: configValues['endpoint'] || undefined,
         extra: configValues['extra'] || undefined,
       });
-      flashOk(t('settings.engineSaved'));
+      await Dialogs.Info({
+        Title: t('settings.engineSavedTitle'),
+        Message: t('settings.engineSaved'),
+      });
     } catch (e) {
-      formError = parseErr(e);
+      await Dialogs.Error({
+        Title: t('settings.engineOpErrorTitle'),
+        Message: parseErr(e),
+      });
     }
   }
 
   async function toggleEngine(id: number, enabled: boolean, el?: HTMLInputElement) {
-    formError = '';
     const eng = engines.find((x) => x.id === id);
     // 系统内置引擎（如 vision 系统 OCR / apple 系统翻译）可切换启用，但不可删除；
     // OCR 内置项切换时由后端保证 OCR 单选（自动禁用其它 OCR）。
@@ -214,7 +205,10 @@
       // 成功：重新拉取以与后端保持一致
       await loadEngines();
     } catch (e) {
-      formError = parseErr(e);
+      await Dialogs.Error({
+        Title: t('settings.engineOpErrorTitle'),
+        Message: parseErr(e),
+      });
       // 回滚本地状态：校验失败时 checkbox 已被用户点动，Svelte 的 keyed each
       // 复用同一 DOM 节点不会主动撤销浏览器已翻动过的 checked，导致视觉卡住。
       // 因此直接用 DOM 把勾选态同步回滚，并同步 engines 数据源。
@@ -229,14 +223,20 @@
       await RemoveEngine(id);
       selectedId = null;
       await loadEngines();
+      await Dialogs.Info({
+        Title: t('settings.engineSavedTitle'),
+        Message: t('settings.engineRemoved'),
+      });
     } catch (e) {
-      console.error('[引擎] 删除引擎失败', e);
+      await Dialogs.Error({
+        Title: t('settings.engineOpErrorTitle'),
+        Message: parseErr(e),
+      });
     }
   }
 
   // 打开新增引擎弹层（下拉来自 GetKnownEngines，列表只渲染数据库已有项）
   async function openAdd() {
-    addError = '';
     showAdd = true;
     addName = '';
     addSchema = [];
@@ -280,7 +280,10 @@
 
   async function submitAdd() {
     if (!addName) {
-      addError = t('settings.engineAddSelect');
+      await Dialogs.Error({
+        Title: t('settings.engineOpErrorTitle'),
+        Message: t('settings.engineAddSelect'),
+      });
       return;
     }
     try {
@@ -296,7 +299,10 @@
       showAdd = false;
       await loadEngines();
     } catch (e) {
-      addError = String(e);
+      await Dialogs.Error({
+        Title: t('settings.engineOpErrorTitle'),
+        Message: parseErr(e),
+      });
     }
   }
 </script>
@@ -386,12 +392,8 @@
       </div>
     {/if}
     {#if engines.find((e) => e.id === selectedId)?.value === 'apple'}
-      <div
-        class="mb-4 rounded-lg border border-[var(--app-border)] bg-[var(--app-surface-2)] px-4 py-3"
-      >
-        <p class="mb-2 text-xs font-medium text-[var(--app-text-muted)]">
-          {t('settings.engineSystemLangs')}
-        </p>
+      <div class="u-card mt-4 mb-4 px-4 py-3">
+        <p class="u-label mb-2">{t('settings.engineSystemLangs')}</p>
         {#if systemLangsLoading}
           <p class="u-muted text-xs">{t('common.loading')}</p>
         {:else if systemLangs.length}
@@ -411,12 +413,6 @@
       </div>
     {:else}
       <div class="space-y-4">
-        {#if formError}
-          <p class="u-text-danger text-xs">{formError}</p>
-        {/if}
-        {#if formOk}
-          <p class="u-text-ok text-xs">{formOk}</p>
-        {/if}
         {#if engines.find((e) => e.id === selectedId)?.value === 'tesseract' && tesseract}
           <div
             class="flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
@@ -578,9 +574,6 @@
             {/if}
           </div>
         {/each}
-        {#if addError}
-          <p class="u-text-danger text-xs">{addError}</p>
-        {/if}
         <div class="flex justify-end gap-2 pt-1">
           <button class="u-btn u-btn--ghost px-4 py-1.5 text-sm" onclick={() => (showAdd = false)}
             >{t('common.cancel')}</button

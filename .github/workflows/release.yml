@@ -697,13 +697,19 @@ jobs:
           VERSION="${{ inputs.version }}"
           TAG="v${{ inputs.version }}"
           BUILD_TIME="${{ needs.prepare.outputs.build_time }}"
+          # 将 UTC 构建时间转换为中国时区（UTC+8）用于通知展示，SHA256SUMS 比对仍用原始 UTC。
+          BUILD_TIME_CN=$(date -d "${BUILD_TIME}" -u +'%Y-%m-%d %H:%M:%S' 2>/dev/null)
+          BUILD_TIME_CN="${BUILD_TIME_CN} (UTC+8)"
           REPO="${{ github.repository }}"
           RELEASE_URL="https://github.com/${REPO}/releases/tag/${TAG}"
 
           TITLE="Kai v${VERSION} 构建完成"
-          DESP="**版本**: \`${VERSION}\`"$'\n'
-          DESP="${DESP}**构建时间**: ${BUILD_TIME}"$'\n'
-          DESP="${DESP}**GitHub Release**: [${TAG}](${RELEASE_URL})"$'\n'
+          TAGS="Kai|stable"
+          DESP="**版本**: \`${VERSION}\`  "$'\n'
+          DESP="${DESP}**构建时间**: ${BUILD_TIME_CN}  "$'\n'
+          DESP="${DESP}**Git 提交**: ${{ needs.prepare.outputs.git_commit }}  "$'\n'
+          DESP="${DESP}**GitHub Release**: [${TAG}](${RELEASE_URL})  "$'\n'
+          DESP="${DESP}**CNB Release**: [${TAG}](https://cnb.cool/dtapp/kai/-/releases/tag/${TAG})  "$'\n'
           DESP="${DESP}**CNB 同步**: 已请求 CNB 执行镜像构建"
 
           echo "推送 ServerChan3 通知: ${TITLE}"
@@ -712,7 +718,8 @@ jobs:
             -d "$(jq -n \
               --arg title "$TITLE" \
               --arg desp "$DESP" \
-              '{title: $title, desp: $desp}')" \
+              --arg tags "$TAGS" \
+              '{title: $title, desp: $desp, tags: $tags}')" \
             "$URL")
 
           echo "ServerChan3 响应 HTTP=${HTTP}"

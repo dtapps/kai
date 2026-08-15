@@ -6,10 +6,10 @@
 		"0000": {
 			"ProductVersion": "0.0.1",
 			"CompanyName": "DTApp",
-			"FileDescription": "跨平台翻译 & OCR 工具",
+			"FileDescription": "常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。",
 			"LegalCopyright": "(c) 2026, DTApp",
 			"ProductName": "Kai",
-			"Comments": "Kai - 翻译 & OCR"
+			"Comments": "A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR."
 		}
 	}
 }

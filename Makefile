@@ -1,4 +1,4 @@
-.PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe
+.PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe check-cross
 
 # 开发端口固定为 9247
 PORT ?= 9247
@@ -24,11 +24,18 @@ install: ## 安装前端依赖
 bindings: ## 生成 Wails TypeScript 绑定
 	wails3 generate bindings -clean=true -ts -i
 
-icons: ## 基于 build/appicon.png 重新生成 appicon.icon / Assets.car / *.icns
-	wails3 generate icons -input build/appicon.png
+icons: ## 生成图标资源（icns/ico/Assets.car）
+	task common:generate:icons
 
-build-assets: ## 更新 build-assets（写回 plist 的 CFBundleIconName 等）
-	wails3 task common:update:build-assets
+build-assets: ## 同步版本号/应用名到构建资源（Info.plist、Windows 清单）
+	task common:update:build-assets
+
+# wails3 生成命令全集（备查）：
+#   通用（全平台）：generate bindings / generate icons / update build-assets  ← 已聚合进下方 wails3-generate
+#   Windows 专属：generate syso / generate webview2bootstrapper  ← 由 build/windows/Taskfile.yml 在 build/package 时自动触发
+#   Linux  专属：generate appimage / generate .desktop            ← 由 build/linux/Taskfile.yml 在 build/package 时自动触发
+# 平台专属命令不在本 Makefile 暴露（非目标平台跑无意义，依赖各自 Taskfile 自动跑）。
+wails3-generate: bindings icons build-assets ## 生成 Wails 绑定/图标/构建资源
 
 sqlc: ## 生成 sqlc 代码（internal/historystore internal/configstore internal/httplogstore）
 	cd internal/historystore && sqlc generate
@@ -69,7 +76,18 @@ format-i18n-frontend: ## 格式化前端 i18n JSON 文件
 
 # ==================== 检查 / 测试 ====================
 
-check: lint-go lint-frontend test-go fuzz-go vuln-go ## 检查和测试（全部）
+check: lint-go lint-frontend test-go fuzz-go vuln-go check-cross ## 检查和测试（全部）
+
+check-cross: ## 交叉编译验证（darwin/arm64 开 CGO + windows CGO=0；过滤 ld:warning）
+	@echo "==> 交叉编译 darwin/arm64 (CGO)"
+	GOOS=darwin GOARCH=arm64 go build ./... 2>&1 | grep -v 'ld: warning' || true
+# 	@echo "==> 交叉编译 darwin/amd64 (CGO)"
+# 	GOOS=darwin GOARCH=amd64 go build ./... 2>&1 | grep -v 'ld: warning' || true
+	@echo "==> 交叉编译 windows/arm64 (CGO_ENABLED=0)"
+	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./... 2>&1 | grep -v 'ld: warning' || true
+	@echo "==> 交叉编译 windows/amd64 (CGO_ENABLED=0)"
+	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./... 2>&1 | grep -v 'ld: warning' || true
+	@echo "==> 交叉编译验证完成"
 
 lint-go: ## Go 代码检查（有 issue 即停止）
 	golangci-lint run ./...

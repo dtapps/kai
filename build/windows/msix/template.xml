@@ -25,7 +25,7 @@
         </Capabilities>
         <Applications>
             <Application
-                Id="com.dtapp.kai"
+                Id="net.dtapp.kai"
                 Description="A kai_scaffold application"
                 DisplayName="Kai"
                 ExecutableName="kai_scaffold"

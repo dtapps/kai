@@ -34,7 +34,6 @@ permissions:
 
 jobs:
   # 统一生成构建参数（BUILD_TIME / GIT_COMMIT），确保「所有平台注入的 build_time」
-  # 与「SHA256SUMS 写入的 build_time」是同一时刻的同一个值，供客户端 nightly 时间对比对齐。
   prepare:
     runs-on: ubuntu-latest
     outputs:
@@ -347,6 +346,31 @@ jobs:
           fi
           echo "EXTRA_TAGS=$EXTRA_TAGS" >> "$GITHUB_ENV"
 
+      # 发布前：把版本号写入 build/config.yml，再同步到各平台资源
+      - name: 同步版本到构建资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: |
+          sed -i.bak -E "s/^([[:space:]]*)version:[[:space:]]*\"[^\"]*\"/\1version: \"${{ needs.prepare.outputs.version }}\"/" build/config.yml && rm -f build/config.yml.bak
+          echo "✔ build/config.yml 版本号已同步为 ${{ needs.prepare.outputs.version }}"
+          
+      # 生成图标资源（icns/ico/Assets.car）。所有平台均执行。
+      - name: 生成图标资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: task common:generate:icons
+
+      - name: 同步版本到构建资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: task common:update:build-assets
+
       # 构建和打包（BUILD_TIME 由上面的步骤统一生成，确保打印和实际使用一致）
       # 三平台统一走 go-task 的对应命名空间（darwin/windows/linux），均使用根 Taskfile 的 APP_NAME=Kai
       # 与各自自定义图标/资源；wails3 内置 task 会取 module 名 kai + 默认图标，正是旧 CI 产物名错乱的根因。
@@ -546,12 +570,6 @@ jobs:
           else
             shasum -a 256 * > SHA256SUMS
           fi
-          # 写入构建时间（与注入二进制的 BUILD_TIME 完全一致，UTC, RFC3339），
-          # 供客户端对比「远端 SHA256SUMS 的 build_time」与「本机已装二进制 build_time」。
-          echo "# build_time=${{ needs.prepare.outputs.build_time }}" >> SHA256SUMS
-          # 写入 Git 提交（短 sha，与注入二进制的 GIT_COMMIT 一致），
-          # 供客户端 nightly 路径优先比对「远端 commit == 本机 commit」：相等则同一份代码直接跳过更新。
-          echo "# git_commit=${{ needs.prepare.outputs.git_commit }}" >> SHA256SUMS
           echo "SHA256SUMS："
           cat SHA256SUMS
 

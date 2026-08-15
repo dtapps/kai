@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="{{.Lang}}">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Updater</title>
+  <style>
+    :root {
+      --bg: #15161a;
+      --card: #1e1f25;
+      --card-2: #26272f;
+      --text: #f4f4f6;
+      --muted: #8b8d98;
+      --faint: #5c5e6b;
+      --accent: #4C8DFF;
+      --accent-soft: rgba(76, 141, 255, 0.14);
+      --success: #30d158;
+      --error: #ff5b50;
+      --line: rgba(255, 255, 255, 0.07);
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    }
+    body[data-theme="light"] {
+      --bg: #eef0f4;
+      --card: #ffffff;
+      --card-2: #f5f6f9;
+      --text: #16181d;
+      --muted: #6b6e7b;
+      --faint: #a3a6b2;
+      --accent: #2f7bff;
+      --accent-soft: rgba(47, 123, 255, 0.12);
+      --success: #1bb14a;
+      --error: #e23b30;
+      --line: rgba(0, 0, 0, 0.07);
+      --shadow: 0 12px 40px rgba(20, 30, 60, 0.12);
+    }
+    * { box-sizing: border-box; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      overflow: auto;
+    }
+    #app {
+      min-width: 440px;
+      min-height: 100%;
+      padding: 40px 36px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      box-sizing: border-box;
+    }
+
+    /* 状态图标 */
+    .icon {
+      width: 72px;
+      height: 72px;
+      border-radius: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+      background: var(--accent-soft);
+      flex-shrink: 0;
+    }
+    .icon svg { width: 38px; height: 38px; }
+    .icon.success { background: rgba(48, 209, 88, 0.16); }
+    .icon.success svg { color: var(--success); }
+    .icon.error { background: rgba(255, 91, 80, 0.16); }
+    .icon.error svg { color: var(--error); }
+    .icon.info svg { color: var(--accent); }
+    .icon .ring {
+      width: 40px; height: 40px;
+      border-radius: 50%;
+      border: 3px solid var(--line);
+      border-top-color: var(--accent);
+      animation: spin 0.85s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .title {
+      font-size: 22px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+      margin: 0 0 8px;
+    }
+    .subtitle {
+      color: var(--muted);
+      font-size: 13.5px;
+      line-height: 1.5;
+      margin: 0;
+      max-width: 380px;
+    }
+
+    /* 版本对比胶囊 */
+    .versions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 22px 0 4px;
+      padding: 10px 18px;
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      font-size: 13px;
+    }
+    .versions .v { font-weight: 600; font-variant-numeric: tabular-nums; }
+    .versions .from { color: var(--faint); }
+    .versions .to { color: var(--accent); }
+    .versions .arrow { color: var(--faint); font-size: 12px; }
+
+    /* 进度条 */
+    .progress {
+      width: 100%;
+      max-width: 380px;
+      margin: 26px 0 6px;
+    }
+    .progress-track {
+      height: 10px;
+      background: var(--card-2);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--accent), #6fa6ff);
+      transition: width 0.25s ease;
+    }
+    .progress-meta {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 12.5px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* 更新说明卡片 */
+    .notes {
+      width: 100%;
+      max-width: 400px;
+      margin: 24px 0 4px;
+      text-align: left;
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 18px 20px;
+      max-height: 340px;
+      overflow-y: auto;
+      box-shadow: var(--shadow);
+      line-height: 1.65;
+    }
+    .notes:empty { display: none; }
+    .notes h1, .notes h2, .notes h3 { margin: 0.5em 0 0.3em; line-height: 1.3; }
+    .notes h1 { font-size: 17px; }
+    .notes h2 { font-size: 15.5px; }
+    .notes h3 { font-size: 14px; }
+    .notes p { margin: 0.5em 0; }
+    .notes ul { padding-left: 20px; margin: 0.4em 0; }
+    .notes li { margin: 0.25em 0; }
+    .notes code {
+      background: var(--card-2);
+      padding: 1.5px 6px;
+      border-radius: 5px;
+      font-size: 12.5px;
+      font-family: "SF Mono", Menlo, Consolas, monospace;
+    }
+    .notes pre {
+      background: var(--card-2);
+      padding: 12px 14px;
+      border-radius: 10px;
+      overflow-x: auto;
+    }
+    .notes pre code { background: none; padding: 0; }
+    .notes a { color: var(--accent); text-decoration: none; }
+    .notes a:hover { text-decoration: underline; }
+
+    /* 错误条 */
+    .error {
+      width: 100%;
+      max-width: 380px;
+      margin: 20px 0 4px;
+      padding: 12px 16px;
+      background: rgba(255, 91, 80, 0.1);
+      border: 1px solid rgba(255, 91, 80, 0.35);
+      color: var(--error);
+      border-radius: 12px;
+      font-size: 13px;
+      text-align: left;
+      line-height: 1.5;
+    }
+
+    /* 按钮 */
+    .actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 28px;
+      width: 100%;
+      max-width: 400px;
+      justify-content: center;
+    }
+    button {
+      font-family: inherit;
+      font-size: 14px;
+      font-weight: 550;
+      border: 1px solid var(--line);
+      background: var(--card-2);
+      color: var(--text);
+      padding: 11px 22px;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: transform 0.12s ease, background 0.15s ease, opacity 0.15s ease;
+      flex: 1;
+    }
+    button:hover { background: var(--card); }
+    button:active { transform: scale(0.97); }
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      flex: 1.4;
+    }
+    button.primary:hover { background: #5f9bff; }
+    button.hidden { display: none; }
+  </style>
+</head>
+<body data-theme="{{.Theme}}">
+<div id="app">
+  <div class="icon info" id="icon">
+    <div class="ring" id="ring" style="display:none"></div>
+    <span id="iconGlyph"></span>
+  </div>
+
+  <h1 class="title" id="title">—</h1>
+  <p class="subtitle" id="subtitle"></p>
+
+  <div class="versions" id="versions" style="display:none">
+    <span class="from" id="fromLabel">当前</span>
+    <span class="v from" id="currentVersion">—</span>
+    <span class="arrow">→</span>
+    <span class="to" id="newVersion">—</span>
+  </div>
+
+  <div class="progress" id="progress" style="display:none">
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-meta">
+      <span id="progressPercent">0%</span>
+      <span id="progressDetail"></span>
+    </div>
+  </div>
+
+  <div class="error" id="errorBox" style="display:none"></div>
+
+  <div class="notes" id="notes"></div>
+
+  <div class="actions">
+    <button id="btnSkip" class="hidden">跳过此版本</button>
+    <button id="btnRemind" class="hidden">稍后提醒</button>
+    <button id="btnClose" class="hidden">关闭</button>
+    <button id="btnInstallUpdate" class="primary hidden">安装更新</button>
+    <button id="btnRestart" class="primary hidden">重启应用</button>
+    <button id="btnRetry" class="primary hidden">重试</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  var THEME = "{{.Theme}}";
+  var LANG  = "{{.Lang}}";
+
+  function t(key) {
+    var table = (LANG === "zh-CN") ? ZH : EN;
+    return table[key] || (EN[key] || key);
+  }
+
+  var ZH = {
+    window_checking_title: "正在检查更新",
+    window_up_to_date: "已是最新版本",
+    window_update_available: "发现新版本",
+    window_downloading_title: "正在下载更新",
+    window_download_starting: "准备下载…",
+    window_downloaded: "已下载",
+    window_verifying: "正在校验更新",
+    window_installing_title: "正在安装更新",
+    window_unpacking: "正在解包并准备…",
+    window_update_ready: "更新已就绪",
+    window_update_failed: "更新失败",
+    window_error_default: "发生未知错误",
+    window_current: "当前",
+    window_new_version: "新版本",
+    window_release_notes: "更新说明",
+    window_notes_empty: "本次更新未提供说明。",
+    window_close: "关闭",
+    window_skip_version: "跳过此版本",
+    window_remind_later: "稍后提醒",
+    window_install_update: "安装更新",
+    window_restart: "重启应用",
+    window_try_again: "重试"
+  };
+  var EN = {
+    window_checking_title: "Checking for Updates",
+    window_up_to_date: "You're Up to Date",
+    window_update_available: "Update Available",
+    window_downloading_title: "Downloading Update",
+    window_download_starting: "Preparing download…",
+    window_downloaded: "Downloaded",
+    window_verifying: "Verifying Update",
+    window_installing_title: "Installing Update",
+    window_unpacking: "Unpacking and staging…",
+    window_update_ready: "Update Ready",
+    window_update_failed: "Update Failed",
+    window_error_default: "An unexpected error occurred.",
+    window_current: "Current",
+    window_new_version: "New",
+    window_release_notes: "Release notes",
+    window_notes_empty: "No release notes were provided for this update.",
+    window_close: "Close",
+    window_skip_version: "Skip This Version",
+    window_remind_later: "Remind Me Later",
+    window_install_update: "Install Update",
+    window_restart: "Restart",
+    window_try_again: "Try Again"
+  };
+
+  // ---- 元素引用 ----
+  var $ = function (id) { return document.getElementById(id); };
+  var elTitle = $("title"), elSub = $("subtitle");
+  var elIcon = $("icon"), elRing = $("ring"), elGlyph = $("iconGlyph");
+  var elVersions = $("versions"), elCur = $("currentVersion"), elNew = $("newVersion"), elFromLabel = $("fromLabel");
+  var elProg = $("progress"), elProgFill = $("progressFill");
+  var elProgPct = $("progressPercent"), elProgDetail = $("progressDetail");
+  var elNotes = $("notes"), elErr = $("errorBox");
+  var btnSkip = $("btnSkip"), btnRemind = $("btnRemind"), btnClose = $("btnClose");
+  var btnInstall = $("btnInstallUpdate"), btnRestart = $("btnRestart"), btnRetry = $("btnRetry");
+
+  var ICON = {
+    download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 21h14"/></svg>',
+    refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
+    check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>'
+  };
+
+  // i18n 静态文案
+  elFromLabel.textContent = t("window_current");
+  btnSkip.textContent = t("window_skip_version");
+  btnRemind.textContent = t("window_remind_later");
+  btnClose.textContent = t("window_close");
+  btnInstall.textContent = t("window_install_update");
+  btnRestart.textContent = t("window_restart");
+  btnRetry.textContent = t("window_try_again");
+
+  // ---- 状态机 ----
+  var RANK = {
+    checking: 0, available: 1, downloading: 2,
+    verifying: 3, installing: 4, ready: 5, error: 6
+  };
+  var rank = RANK.checking;
+  var lastProgress = 0;
+  var currentVersion = "{{.CurrentVersion}}"; // 模板注入当前版本，EventMeta 到达后可再刷新
+
+  function setRank(next) { if (next > rank) rank = next; return rank; }
+  function show(el, v) { el.style.display = v ? "" : "none"; if (el.classList) el.classList.toggle("hidden", !v); }
+  function resetActions() {
+    [btnSkip, btnRemind, btnClose, btnInstall, btnRestart, btnRetry].forEach(function (b) { show(b, false); });
+  }
+
+  // 图标状态：kind = info|success|error；spinning = 显示旋转环
+  function setIcon(kind, spinning, glyph) {
+    elIcon.className = "icon " + kind;
+    if (spinning) {
+      show(elRing, true);
+      elGlyph.innerHTML = "";
+    } else {
+      show(elRing, false);
+      elGlyph.innerHTML = glyph || "";
+    }
+  }
+
+  function renderMarkdown(md) {
+    if (!md) return "";
+    var esc = md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    esc = esc.replace(/```([\s\S]*?)```/g, function (_, c) {
+      return "<pre><code>" + c.replace(/^\n/, "") + "</code></pre>";
+    });
+    esc = esc.replace(/`([^`]+)`/g, "<code>$1</code>");
+    esc = esc.replace(/^######\s?(.*)$/gm, "<h3>$1</h3>");
+    esc = esc.replace(/^#####\s?(.*)$/gm, "<h3>$1</h3>");
+    esc = esc.replace(/^####\s?(.*)$/gm, "<h3>$1</h3>");
+    esc = esc.replace(/^###\s?(.*)$/gm, "<h2>$1</h2>");
+    esc = esc.replace(/^##\s?(.*)$/gm, "<h2>$1</h2>");
+    esc = esc.replace(/^#\s?(.*)$/gm, "<h1>$1</h1>");
+    esc = esc.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+    esc = esc.replace(/^\s*[-*]\s+(.*)$/gm, "<li>$1</li>");
+    esc = esc.replace(/(?:<li>[\s\S]*?<\/li>)+/g, function (m) { return "<ul>" + m + "</ul>"; });
+    esc = esc.replace(/\n{2,}/g, "</p><p>");
+    esc = esc.replace(/\n/g, "<br>");
+    return "<p>" + esc + "</p>";
+  }
+
+  function renderNotes(notes) {
+    if (!notes || !notes.trim()) { elNotes.innerHTML = ""; show(elNotes, false); return; }
+    var looksHtml = /<([a-z][a-z0-9]*)\b[^>]*>/.test(notes);
+    elNotes.innerHTML = looksHtml ? notes : renderMarkdown(notes);
+    show(elNotes, true);
+  }
+
+  function setVersions(current, next) {
+    if (current || next) {
+      elCur.textContent = current || "—";
+      elNew.textContent = next || "—";
+      show(elVersions, true);
+    } else {
+      show(elVersions, false);
+    }
+  }
+
+  function setProgress(percent, detail) {
+    var p = Math.max(0, Math.min(100, Math.round(percent)));
+    elProgFill.style.width = p + "%";
+    elProgPct.textContent = p + "%";
+    if (detail !== undefined) elProgDetail.textContent = detail;
+    show(elProg, true);
+  }
+  function hideProgress() { show(elProg, false); }
+
+  function showError(msg) { elErr.textContent = msg || t("window_error_default"); show(elErr, true); }
+  function clearError() { show(elErr, false); }
+
+  // ---- 事件处理 ----
+  function onChecking() {
+    setRank(RANK.checking);
+    clearError(); resetActions(); hideProgress(); renderNotes("");
+    setVersions("", ""); setIcon("info", true);
+    elTitle.textContent = t("window_checking_title");
+    elSub.textContent = "";
+  }
+
+  function onUpdateAvailable(data) {
+    var rel = data; // 框架 EventUpdateAvailable 的 payload 即 *Release 本身
+    if (!rel) return;
+    setRank(RANK.available);
+    clearError(); hideProgress(); renderNotes("");
+    setVersions(currentVersion, rel.version || "");
+    setIcon("info", false, ICON.spark);
+    elTitle.textContent = t("window_update_available");
+    elSub.textContent = "";
+    resetActions(); show(btnInstall, true); show(btnSkip, true); show(btnRemind, true);
+    if (rel.notes) renderNotes(rel.notes);
+  }
+
+  function onDownloadStarted() {
+    setRank(RANK.downloading);
+    clearError(); lastProgress = 0; renderNotes(""); setVersions("", "");
+    setIcon("info", true);
+    elTitle.textContent = t("window_downloading_title");
+    elSub.textContent = t("window_download_starting");
+    setProgress(0, ""); resetActions();
+  }
+
+  function onDownloadProgress(data) {
+    if (typeof data !== "object" || data === null) return;
+    var pct = 0, detail = "";
+    var written = Number(data.written) || 0;
+    var total = Number(data.total) || 0;
+    if (total > 0) {
+      pct = (written / total) * 100;
+      var fmt = function (n) {
+        if (n >= 1048576) return (n / 1048576).toFixed(1) + " MB";
+        if (n >= 1024) return (n / 1024).toFixed(1) + " KB";
+        return n + " B";
+      };
+      detail = fmt(written) + " / " + fmt(total);
+    } else if (written > 0) {
+      detail = t("window_downloaded") + " " + (written / 1048576).toFixed(1) + " MB";
+    }
+    if (pct > lastProgress) lastProgress = pct;
+    setProgress(lastProgress, detail);
+  }
+
+  function onDownloadComplete() {
+    if (rank < RANK.downloading) return;
+    setProgress(100, t("window_downloaded"));
+  }
+
+  function onVerifying() {
+    setRank(RANK.verifying); setIcon("info", true);
+    elTitle.textContent = t("window_verifying");
+    elSub.textContent = ""; setProgress(100, "");
+  }
+
+  function onInstalling() {
+    setRank(RANK.installing); setIcon("info", true);
+    elTitle.textContent = t("window_installing_title");
+    elSub.textContent = t("window_unpacking"); setProgress(100, "");
+  }
+
+  function onUpdateReady(data) {
+    var rel = data; // 框架 EventUpdateReady 的 payload 即 *Release 本身
+    setRank(RANK.ready);
+    clearError(); hideProgress(); setIcon("success", false, ICON.check);
+    elTitle.textContent = t("window_update_ready");
+    elSub.textContent = "";
+    resetActions(); show(btnRestart, true); show(btnClose, true);
+    if (rel) { setVersions(currentVersion, rel.version || ""); if (rel.notes) renderNotes(rel.notes); }
+    else { setVersions(currentVersion, ""); }
+    if (!elNotes.innerHTML.trim()) { elNotes.textContent = t("window_notes_empty"); show(elNotes, true); }
+  }
+
+  function onError(data) {
+    setRank(RANK.error); hideProgress(); setIcon("error", false, ICON.alert);
+    elTitle.textContent = t("window_update_failed");
+    var msg = (data && (data.message || data.error)) || t("window_error_default");
+    showError(msg); resetActions(); show(btnRetry, true); show(btnClose, true);
+  }
+
+  function onUpdaterNotNeeded() {
+    setRank(RANK.available);
+    clearError(); hideProgress(); renderNotes(""); setVersions("", "");
+    setIcon("success", false, ICON.check);
+    elTitle.textContent = t("window_up_to_date");
+    elSub.textContent = ""; resetActions(); show(btnClose, true);
+  }
+
+  // ---- 按钮动作（事件名必须与框架 window_lifecycle.go 监听的 user:* 一致）----
+  function emit(name) {
+    if (window.wails && window.wails.Events && window.wails.Events.Emit) {
+      window.wails.Events.Emit(name);
+    }
+  }
+  btnClose.addEventListener("click", function () { emit("wails:updater:user:cancel"); });
+  btnSkip.addEventListener("click", function () { emit("wails:updater:user:skip"); });
+  btnRemind.addEventListener("click", function () { emit("wails:updater:user:remind"); });
+  btnInstall.addEventListener("click", function () { emit("wails:updater:user:install"); });
+  btnRestart.addEventListener("click", function () { emit("wails:updater:user:restart"); });
+  // 错误态的"重试"等价于重新安装（框架只有 user:install 触发 DownloadAndInstall）
+  btnRetry.addEventListener("click", function () { emit("wails:updater:user:install"); });
+
+  // ---- 事件订阅（框架真实事件名，见 wails updater 包 events.go）----
+  var Events = window.wails && window.wails.Events;
+  if (Events && Events.On) {
+    Events.On("wails:updater:check-started", function () { onChecking(); });
+    Events.On("wails:updater:update-available", function (ev) { onUpdateAvailable(ev && ev.data); });
+    Events.On("wails:updater:no-update", function () { onUpdaterNotNeeded(); });
+    Events.On("wails:updater:download-started", function (ev) { onDownloadStarted(ev && ev.data); });
+    Events.On("wails:updater:download-progress", function (ev) { onDownloadProgress(ev && ev.data); });
+    Events.On("wails:updater:download-complete", function () { onDownloadComplete(); });
+    Events.On("wails:updater:verifying", function () { onVerifying(); });
+    Events.On("wails:updater:installing", function () { onInstalling(); });
+    Events.On("wails:updater:update-ready", function (ev) { onUpdateReady(ev && ev.data); });
+    Events.On("wails:updater:error", function (ev) { onError(ev && ev.data); });
+    Events.On("wails:updater:meta", function (ev) {
+      var m = ev && ev.data;
+      if (m && m.currentVersion) currentVersion = m.currentVersion;
+    });
+  }
+
+  onChecking();
+
+  // 注：Wails 内联事件 shim 的 Events.Emit 会丢弃 payload（仅发事件名），
+  // 因此无法把高度数据回传给 Go。窗口高度由 Go 侧固定为 globalWindowH，
+  // 前端只负责在内容变化时通知 Go「重新贴合」（Go 按固定高度 SetSize），
+  // 真实高度贴合由 CSS(#app min-height:100%) + 内容内部滚动保证不溢出、不黑屏。
+  var WINDOW_WIDTH = 520;
+  function notifyResize() {
+    if (window.wails && window.wails.Events) {
+      window.wails.Events.Emit("wails:updater:resize");
+    }
+  }
+  window.addEventListener("load", function () {
+    notifyResize();
+    // 通知框架本窗口已就绪，触发 replayStateSnapshot（补发 meta + 当前状态事件），
+    // 解决「检查已在后台开始、窗口才打开」时进度/可用态丢失的问题。
+    if (window.wails && window.wails.Events) {
+      window.wails.Events.Emit("wails:updater:window:ready");
+    }
+  });
+  if (document.readyState === "complete") {
+    notifyResize();
+    if (window.wails && window.wails.Events) {
+      window.wails.Events.Emit("wails:updater:window:ready");
+    }
+  }
+  new MutationObserver(notifyResize).observe(document.getElementById("app"), { childList: true, subtree: true, attributes: true, characterData: true });
+})();
+</script>
+</body>
+</html>

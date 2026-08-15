@@ -10,7 +10,7 @@ version: "0.0.1"
 section: "default"
 priority: "extra"
 maintainer: ${GIT_COMMITTER_NAME} <${GIT_COMMITTER_EMAIL}>
-description: "跨平台翻译 & OCR 工具"
+description: "常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。"
 vendor: "DTApp"
 homepage: "https://wails.io"
 license: "MIT"

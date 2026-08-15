@@ -44,7 +44,6 @@ env:
 
 jobs:
   # 统一生成版本号与构建参数（BUILD_TIME 等），确保「所有平台注入的 build_time」
-  # 与「SHA256SUMS 写入的 build_time」一致，供客户端 nightly 时间对比对齐。
   prepare:
     runs-on: ubuntu-latest
     outputs:
@@ -356,6 +355,37 @@ jobs:
           fi
           echo "EXTRA_TAGS=$EXTRA_TAGS" >> "$GITHUB_ENV"
 
+      # 发布前：把版本号写入 build/config.yml，再同步到各平台资源
+      - name: 同步版本到构建资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: |
+          # NSIS 的 VIFileVersion 仅接受纯数字四段 (X.X.X.X)，nightly 后缀 "-nightly"
+          # 会拼成 "0.0.2-nightly.0" 导致 makensis 报错。故写入 config.yml 时剥离子版本后缀，
+          # 仅保留数字段（如 0.0.2-nightly -> 0.0.2），由 project.nsi 自动补 .0 成合法四段。
+          # 展示名/产物文件名仍使用完整带后缀版本（不读 config.yml 的 version 字段）。
+          CFG_VERSION="${{ needs.prepare.outputs.version }}"
+          CFG_VERSION="${CFG_VERSION%%-*}"
+          sed -i.bak -E "s/^([[:space:]]*)version:[[:space:]]*\"[^\"]*\"/\1version: \"${CFG_VERSION}\"/" build/config.yml && rm -f build/config.yml.bak
+          echo "✔ build/config.yml 版本号已同步为 ${CFG_VERSION}（源版本 ${{ needs.prepare.outputs.version }}）"
+          
+      # 生成图标资源（icns/ico/Assets.car）。所有平台均执行。
+      - name: 生成图标资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: task common:generate:icons
+
+      - name: 同步版本到构建资源
+        shell: bash
+        env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
+        run: task common:update:build-assets
+
       # 构建和打包（BUILD_TIME/VERSION 由 prepare job 统一生成，各平台一致）
       # 三平台统一走 go-task 的对应命名空间（darwin/windows/linux），均使用根 Taskfile 的 APP_NAME=Kai
       # 与各自自定义图标/资源；wails3 内置 task 会取 module 名 kai + 默认图标，正是旧 CI 产物名错乱的根因。
@@ -545,21 +575,21 @@ jobs:
         shell: bash
         run: |
           cd release
+          # 先生成独立文件：构建时间 / Git 提交，随 release 资产一起发布；
+          # 文件名 GIT_COMMIT / BUILD_TIME 与 updater provider 默认 gitCommitFile / buildTimeFile 对齐。
+          printf '%s\n' "${{ needs.prepare.outputs.build_time }}" > BUILD_TIME
+          printf '%s\n' "${{ needs.prepare.outputs.git_commit }}" > GIT_COMMIT
+          # 再一次性生成 SHA256SUMS（不含自身，先删旧文件避免自包含），覆盖全部资产含上述两个文件。
           rm -f SHA256SUMS
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum * > SHA256SUMS
           else
             shasum -a 256 * > SHA256SUMS
           fi
-          # 写入构建时间（与注入二进制的 BUILD_TIME 完全一致，RFC3339, UTC），
-          # 供客户端对比「远端 SHA256SUMS 的 build_time」与「本机已装二进制 build_time」。
-          echo "# build_time=${{ needs.prepare.outputs.build_time }}" >> SHA256SUMS
-          # 写入 Git 提交（短 sha，与注入二进制的 GIT_COMMIT 一致），
-          # 供客户端优先比对「远端 commit == 本机 commit」：相等则同一份代码直接跳过更新
-          # （每日重打同一 commit 不再频繁提示），不等再退回到 build_time 对比。
-          echo "# git_commit=${{ needs.prepare.outputs.git_commit }}" >> SHA256SUMS
           echo "SHA256SUMS："
           cat SHA256SUMS
+          echo "BUILD_TIME 文件内容：${{ needs.prepare.outputs.build_time }}"
+          echo "GIT_COMMIT 文件内容：${{ needs.prepare.outputs.git_commit }}"
 
       - name: 生成发布说明
         shell: bash

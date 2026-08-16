@@ -362,29 +362,29 @@ jobs:
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
-        run: task common:generate:icons
+        run: wails3 task common:generate:icons
 
       - name: 同步版本到构建资源
         shell: bash
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
-        run: task common:update:build-assets
+        run: wails3 task common:update:build-assets
 
       # 构建和打包（BUILD_TIME 由上面的步骤统一生成，确保打印和实际使用一致）
       # 三平台统一走 go-task 的对应命名空间（darwin/windows/linux），均使用根 Taskfile 的 APP_NAME=Kai
       # 与各自自定义图标/资源；wails3 内置 task 会取 module 名 kai + 默认图标，正是旧 CI 产物名错乱的根因。
-      - name: 构建（go-task / {{ matrix.goos }}）
-        shell: bash
-        env:
-          GOPATH: ${{ env.GO_PATH_DIR }}
-          GOBIN: ${{ env.GO_BIN_DIR }}
-        run: |
-          EXTRA_ARGS=""
-          if [ -n "$EXTRA_TAGS" ]; then
-            EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
-          fi
-          task ${{ matrix.goos }}:build ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
+      # - name: 构建（go-task / {{ matrix.goos }}）
+      #   shell: bash
+      #   env:
+      #     GOPATH: ${{ env.GO_PATH_DIR }}
+      #     GOBIN: ${{ env.GO_BIN_DIR }}
+      #   run: |
+      #     EXTRA_ARGS=""
+      #     if [ -n "$EXTRA_TAGS" ]; then
+      #       EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
+      #     fi
+      #     wails3 task ${{ matrix.goos }}:build ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
 
       - name: 打包（go-task / {{ matrix.goos }}）
         shell: bash
@@ -396,7 +396,7 @@ jobs:
           if [ -n "$EXTRA_TAGS" ]; then
             EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
           fi
-          task ${{ matrix.goos }}:package ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
+          wails3 task ${{ matrix.goos }}:package ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG $EXTRA_ARGS
 
       # macOS: 签名 + 公证（解决 Gatekeeper 在系统升级后阻止 App 的问题）
       - name: macOS 签名与公证
@@ -408,7 +408,7 @@ jobs:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
         run: |
-          task darwin:sign:notarize ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG
+          wails3 task darwin:sign:notarize ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG
 
       # Windows: 将 base64 编码的证书 secret 解码为本地 .pfx 文件
       # WINDOWS_SIGN_CERTIFICATE 中存放的是 .pfx 的 base64（含私钥，禁止入库，仅作 secret）
@@ -431,25 +431,29 @@ jobs:
       - name: Windows 安装包签名
         if: ${{ runner.os == 'Windows' && env.SIGN_CERTIFICATE != '' }}
         env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
           SIGN_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERTIFICATE_PASSWORD }}
           WAILS_WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERTIFICATE_PASSWORD }}
           SIGN_THUMBPRINT: ${{ secrets.WINDOWS_SIGN_THUMBPRINT }}
           TIMESTAMP_SERVER: ${{ secrets.WINDOWS_TIMESTAMP_SERVER }}
         shell: bash
         run: |
-          task windows:sign:installer
+          wails3 task windows:sign:installer ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG
 
       # Windows: 再签名独立 exe（供自更新 updater-*.zip 使用，保证替换后的二进制已签名）
       - name: Windows 可执行文件签名
         if: ${{ runner.os == 'Windows' && env.SIGN_CERTIFICATE != '' }}
         env:
+          GOPATH: ${{ env.GO_PATH_DIR }}
+          GOBIN: ${{ env.GO_BIN_DIR }}
           SIGN_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERTIFICATE_PASSWORD }}
           WAILS_WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERTIFICATE_PASSWORD }}
           SIGN_THUMBPRINT: ${{ secrets.WINDOWS_SIGN_THUMBPRINT }}
           TIMESTAMP_SERVER: ${{ secrets.WINDOWS_TIMESTAMP_SERVER }}
         shell: bash
         run: |
-          task windows:sign
+          wails3 task windows:sign ARCH=${{ matrix.goarch }} PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN $CGO_FLAG
 
       - name: 重命名产物
         shell: bash

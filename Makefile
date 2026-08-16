@@ -25,10 +25,10 @@ bindings: ## 生成 Wails TypeScript 绑定
 	wails3 generate bindings -clean=true -ts -i
 
 icons: ## 生成图标资源（icns/ico/Assets.car）
-	task common:generate:icons
+	wails3 task common:generate:icons
 
 build-assets: ## 同步版本号/应用名到构建资源（Info.plist、Windows 清单）
-	task common:update:build-assets
+	wails3 task common:update:build-assets
 
 # wails3 生成命令全集（备查）：
 #   通用（全平台）：generate bindings / generate icons / update build-assets  ← 已聚合进下方 wails3-generate
@@ -120,25 +120,25 @@ CNB_TOKEN   ?=
 DEV         ?= false
 
 darwin-build: ## [macOS] 编译正式二进制 -> bin/Kai（不打包成 .app）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task darwin:build
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task darwin:build
 
 darwin-package: ## [macOS] 正式打包 -> bin/Kai.app（打包成 .app）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task darwin:package
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task darwin:package
 
 darwin-package-dmg: ## [macOS] 打包并生成 bin/Kai.dmg 安装包
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task darwin:package:dmg
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task darwin:package:dmg
 
 windows-build: ## [Windows] 编译正式二进制 -> bin/Kai.exe（不打包）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task windows:build
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task windows:build
 
 windows-package: ## [Windows] 正式打包 -> bin/Kai.exe + 安装包（nsis/msix）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task windows:package
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task windows:package
 
 linux-build: ## [Linux] 编译正式二进制（本地联调用）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task linux:build
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task linux:build
 
 linux-package: ## [Linux] 正式打包 -> bin/Kai（本地联调用）
-	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) task linux:package
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task linux:package
 
 # ==================== 其他 ====================
 

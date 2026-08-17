@@ -165,15 +165,18 @@ private func writeCString(_ str: String, into buf: UnsafeMutablePointer<CChar>?,
 
 // detectSourceLanguage：用 NaturalLanguage 的 LanguageRecognizer 自动识别文本主导语言，
 // 并在本机已安装语言列表中求交集，保证返回的源语言一定是已下载、可直接用于 TranslationSession 的。
-// installed：本机已安装语言码集合（小写形式用于匹配）。返回已安装的匹配源语言码；
-// 若识别失败或识别出的语言未安装，则回退到 installed 中的首选（通常第一个，如 en），
+// installed：本机已安装语言码集合（小写形式用于匹配）。
+// detectedLang：输出参数，返回 NaturalLanguage 识别到的原始主导语言码（无论是否已安装），用于错误提示。
+// 返回已安装的匹配源语言码；若识别失败或识别出的语言未安装，则回退到 installed 中的首选（通常第一个，如 en），
 // 若 installed 为空则返回 nil。
-func detectSourceLanguage(_ text: String, installed: [String]) -> String? {
+func detectSourceLanguage(_ text: String, installed: [String], detectedLang: inout String?) -> String? {
     let recognizer = NLLanguageRecognizer()
     recognizer.processString(text)
     guard let detected = recognizer.dominantLanguage?.rawValue else {
+        detectedLang = nil
         return installed.first
     }
+    detectedLang = detected
     let detectedLower = detected.lowercased()
     if let exact = installed.first(where: { $0.lowercased() == detectedLower }) { return exact }
     if let prefix = installed.first(where: { $0.lowercased().hasPrefix(detectedLower) }) { return prefix }
@@ -223,8 +226,9 @@ public func kai_translate(
         }
 
         var effectiveSource = sourceCode
+        var detectedLang: String? = nil
         if sourceCode.isEmpty {
-            if let detected = detectSourceLanguage(inputText, installed: installed) {
+            if let detected = detectSourceLanguage(inputText, installed: installed, detectedLang: &detectedLang) {
                 effectiveSource = detected
                 bridgeFileLog("系统翻译自动检测源语言=\(effectiveSource) dst=\(targetCode)")
             } else {
@@ -232,7 +236,14 @@ public func kai_translate(
             }
         }
         guard !effectiveSource.isEmpty else {
-            resultJSON = "{\"error\":\"no installed source language for auto detect\"}"
+            let installedDesc = installed.isEmpty ? "（本机未安装任何翻译语言包）" : "已安装语言: \(installed.joined(separator: ", "))"
+            let detectedDesc = detectedLang.map { "，识别到的源语言为 \($0)" } ?? ""
+            let msg = "未找到已安装的可用于自动检测的源语言\(detectedDesc)。\(installedDesc)。请在系统设置-通用-语言与地区-翻译中下载对应语言包。"
+            bridgeFileLog("系统翻译失败: \(msg)", level: BRIDGE_LOG_ERROR)
+            if let data = try? JSONSerialization.data(withJSONObject: ["error": msg]),
+               let str = String(data: data, encoding: .utf8) {
+                resultJSON = str
+            }
             sema.signal()
             return
         }

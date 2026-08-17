@@ -11,19 +11,27 @@ import Translation
 import Vision
 
 // kai_ocr：对传入的图片（base64 PNG/JPEG）执行 Vision 文本识别（默认中文，支持更多语言）。
+// 参数顺序/类型必须与 Go 端 cgo 声明一致：
+//   int kai_ocr(const char* img, char* out, int out_cap, int correct, int timeout_sec);
 // out 接收 {"text":"...","regions":[{"text","conf","box"}]}（OCRSuccess）；失败写入 {"code":"...","detail":"..."}（BridgeError）。
-// correction 为 "none"/"fast"/"balanced"（对应 VNRequestTextRecognitionLevel）。level 预留扩展（当前忽略）。
+// correct 为 0/1（对应 Go 端 usesLanguageCorrection 开关）；timeout_sec 为识别超时秒数（替代原硬编码 15s）。
 @_cdecl("kai_ocr")
 public func kai_ocr(
   _ base64: UnsafePointer<CChar>?,
-  _ correction: UnsafePointer<CChar>?,
-  _ level: Int32,
   _ out: UnsafeMutablePointer<CChar>?,
-  _ out_cap: Int32
+  _ out_cap: Int32,
+  _ correct: Int32,
+  _ timeout_sec: Int32
 ) -> Int32 {
   let b64 = base64.flatMap { String(cString: $0) } ?? ""
-  let correctionStr = correction.flatMap { String(cString: $0) } ?? "balanced"
-  bridgeFileLog(bridgeLogText("ocr.config", correctionStr, level), level: BRIDGE_LOG_DEBUG)
+  let correctionOn = correct != 0
+  let timeout = max(Int(timeout_sec), 1)
+  // 诊断：确认 cgo 调用约定是否生效（out_cap 应收到 1<<20 量级，out 不应为 nil）。
+  bridgeFileLog(
+    bridgeLogText("ocr.entry", out == nil ? "nil" : "ok", out_cap, correctionOn ? "on" : "off", timeout),
+    level: BRIDGE_LOG_DEBUG)
+  bridgeFileLog(
+    bridgeLogText("ocr.config", correctionOn ? "on" : "off", timeout), level: BRIDGE_LOG_DEBUG)
 
   guard let data = Data(base64Encoded: b64) else {
     bridgeFileLog(bridgeLogText("ocr.base64_fail"), level: BRIDGE_LOG_WARN)
@@ -86,12 +94,10 @@ public func kai_ocr(
     level: BRIDGE_LOG_DEBUG)
 
   let request = VNRecognizeTextRequest()
-  switch correctionStr {
-  case "none": request.recognitionLevel = .fast
-  case "fast": request.recognitionLevel = .fast
-  default: request.recognitionLevel = .accurate
-  }
-  request.usesLanguageCorrection = true
+  // correctionOn（Go 端 correct 0/1）：开启语言校正时用 accurate 级别；关闭时仍用 accurate
+  // 但关闭 usesLanguageCorrection 以换取更快推理（fast 级别在中文密集场景召回更差，故保留 accurate）。
+  request.recognitionLevel = .accurate
+  request.usesLanguageCorrection = correctionOn
   request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en", "ja", "ko"]
 
   let handler = VNImageRequestHandler(cgImage: redrawn, options: [:])
@@ -136,10 +142,10 @@ public func kai_ocr(
   }
 
   let cost = Date().timeIntervalSince(start)
-  if sema.wait(timeout: .now() + 15) == .timedOut {
-    let detail = "Vision perform exceeded 15s, aborted"
+  if sema.wait(timeout: .now() + Double(timeout)) == .timedOut {
+    let detail = "Vision perform exceeded \(timeout)s, aborted"
     resultJSON = bridgeErrorJSON(code: BRIDGE_ERR_OCR_TIMEOUT, detail: detail)
-    bridgeFileLog(bridgeLogText("ocr.timeout", 15), level: BRIDGE_LOG_ERROR)
+    bridgeFileLog(bridgeLogText("ocr.timeout", timeout), level: BRIDGE_LOG_ERROR)
   } else {
     bridgeFileLog(
       bridgeLogText("ocr.perform_cost", String(format: "%.3f", cost)), level: BRIDGE_LOG_DEBUG)

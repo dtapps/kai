@@ -35,7 +35,8 @@ echo ">> building $OUT for $TARGET"
 # （Swift 单编译单元，不支持逐文件编译再 ar）。-c 模式会为每个源文件产出同名 .o，
 # 再由 ar 全部打包成静态库供 cgo 链接。-parse-as-library 让 swiftc 以库模式处理
 # （不注入默认 _main 入口），避免与 Go 的 main 符号冲突。
-swiftc -c -parse-as-library *.swift \
+# 仅编译真实源文件，排除 .bak/.tmp 等备份（否则旧 kai_ocr 等符号会被重复编译进 .a）。
+swiftc -c -parse-as-library $(ls *.swift | grep -v '\.bak$') \
     -framework Translation \
     -framework ApplicationServices \
     -framework AppKit \

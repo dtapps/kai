@@ -79,8 +79,9 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 
 	outBuf := make([]byte, 1<<20) // 1MB 输出缓冲，足以容纳大图 OCR 的 region 明细
 	n := C.kai_ocr(cImg, (*C.char)(unsafe.Pointer(&outBuf[0])), C.int(len(outBuf)), boolToCInt(correct), C.int(timeoutSec))
+	slog.Debug(i18n.T("log.vision_ocr_call"), "n", int(n), "out_cap", len(outBuf), "correct", correct, "timeout", timeoutSec)
 	if n < 0 {
-		slog.Error(i18n.T("err.vision_ocr_buffer"))
+		slog.Error(i18n.T("err.vision_ocr_buffer"), "n", int(n))
 		return nil, fmt.Errorf(i18n.T("err.vision_ocr_buffer"))
 	}
 

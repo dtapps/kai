@@ -1,6 +1,7 @@
 {
   "_comment": "⚠️ 此文件由 scripts/merge-go-i18n.sh 自动生成，请勿手动编辑！修改请编辑 split/ 目录下的文件后重新合并。",
   "app.description": "Cross-platform Translate & OCR tool",
+  "app.name_version": "Kai {{.Version}}",
   "engine.baidu": "Baidu",
   "engine.deepl": "DeepL",
   "engine.google": "Google",
@@ -147,6 +148,7 @@
   "log.copykey_restore_clipboard_failed": "[CopyKey] Raise main window: restore clipboard failed",
   "log.copykey_send_combo_empty": "[CopyKey] Send combo succeeded but clipboard empty (possible missing Accessibility permission)",
   "log.copykey_send_combo_failed": "[CopyKey] Send combo failed (possible missing Accessibility permission)",
+  "log.data_dir": "Data directory: {{.Dir}}",
   "log.engine_query_id_failed": "failed to query engine ID",
   "log.engine_table_empty_init": "config.db engine table is empty, initializing with default engines",
   "log.execkey_config": "Exec key config",
@@ -166,6 +168,8 @@
   "log.field_value_not_set": "Not set",
   "log.field_value_screenshot": "Screenshot translation",
   "log.frontend_log_init_failed": "Failed to init frontend log, skipped: %v",
+  "log.global_panic": "Global unrecovered panic",
+  "log.global_panic_stack": "Global unrecovered panic stack",
   "log.hotkey_read_clipboard": "[Hotkey] Copy key read clipboard content",
   "log.hotkey_register_failed": "[Hotkey] Failed to register hotkey",
   "log.hotkey_registered": "[Hotkey] Hotkey registered",
@@ -229,6 +233,7 @@
   "menu.tooltip": "Kai - Translate & OCR",
   "notification.update_available_subtitle": "New version {{.version}} found, click \"Check for Updates\" to install",
   "notification.update_available_title": "Kai update available",
+  "window.screenshot_title": "Kai Screenshot Translate",
   "window.selection_title": "Kai Selection",
   "window.settings_title": "Kai Settings",
   "window.translate_title": "Kai Translate"

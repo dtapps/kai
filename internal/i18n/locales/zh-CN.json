@@ -1,6 +1,7 @@
 {
   "_comment": "⚠️ 此文件由 scripts/merge-go-i18n.sh 自动生成，请勿手动编辑！修改请编辑 split/ 目录下的文件后重新合并。",
   "app.description": "跨平台翻译 & OCR 工具",
+  "app.name_version": "Kai {{.Version}}",
   "engine.baidu": "百度",
   "engine.deepl": "DeepL",
   "engine.google": "Google",
@@ -147,6 +148,7 @@
   "log.copykey_restore_clipboard_failed": "[复制键] 唤起主窗口 还原剪贴板失败",
   "log.copykey_send_combo_empty": "[复制键] 发送组合键成功但剪贴板为空（疑似未获辅助功能授权）",
   "log.copykey_send_combo_failed": "[复制键] 发送组合键失败（可能未获辅助功能授权）",
+  "log.data_dir": "数据目录: {{.Dir}}",
   "log.engine_query_id_failed": "查询引擎 ID 失败",
   "log.engine_table_empty_init": "config.db 引擎表为空，使用默认引擎初始化",
   "log.execkey_config": "执行键配置",
@@ -166,6 +168,8 @@
   "log.field_value_not_set": "未设置",
   "log.field_value_screenshot": "截图翻译",
   "log.frontend_log_init_failed": "初始化前端日志失败，跳过: %v",
+  "log.global_panic": "全局未捕获 panic",
+  "log.global_panic_stack": "全局未捕获 panic 调用栈",
   "log.hotkey_read_clipboard": "[快捷键] 复制键读取剪贴板内容",
   "log.hotkey_register_failed": "[快捷键] 注册快捷键失败",
   "log.hotkey_registered": "[快捷键] 已注册快捷键",
@@ -229,6 +233,7 @@
   "menu.tooltip": "Kai - 翻译 & OCR",
   "notification.update_available_subtitle": "发现新版本 {{.version}}，点击菜单「检查更新」安装",
   "notification.update_available_title": "Kai 有更新可用",
+  "window.screenshot_title": "Kai 截图翻译",
   "window.selection_title": "Kai 划词",
   "window.settings_title": "Kai 设置",
   "window.translate_title": "Kai 翻译"

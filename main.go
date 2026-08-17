@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -144,7 +145,7 @@ func main() {
 	defer func() {
 		if r := recover(); r != nil {
 			slog.Error(i18n.T("log.global_panic"), "panic", r)
-			log.Printf("FATAL panic (recovered, see log): %v", r)
+			slog.Error(i18n.T("log.global_panic_stack"), "stack", string(debug.Stack()))
 			_ = logRotator.Close()
 		}
 	}()
@@ -243,6 +244,10 @@ func main() {
 	historySvc := service.NewHistoryWrapper(histDB, cfgDB)
 	translateSvc := service.NewTranslateWrapper(trSvc)
 	appSvc = service.NewAppService(settingsService, trSvc, ekCtrl, hm, reg, histDB, cfgDB, nil)
+	// 必须先初始化 wails notifications 单例（notifications.New 才会给 NotificationService_ 赋值），
+	// 否则它是 nil 指针，传给 application.NewService 后 wails 在反射绑定方法时
+	// 会对 nil 指针调 reflect.Value.Type → panic "reflect.Value.Type on zero Value"。
+	notifications.New()
 	notifySvc = service.NewNotificationService(notifications.NotificationService_)
 
 	app = application.New(application.Options{
@@ -259,9 +264,9 @@ func main() {
 			application.NewService(windowSvc),
 			// 前端日志桥接：接收前端 console / JS 错误，写入 logs/frontend.log
 			application.NewService(frontendLogSvc),
-			// 原生桌面通知（Wails notifications service，macOS 走 UNUserNotificationCenter，
+			// 原生桌面通知（封装授权检查的 NotificationService wrapper，macOS 走 UNUserNotificationCenter，
 			// 不再经前端 Web Notification 转发）
-			application.NewService(notifications.NotificationService_),
+			application.NewService(notifySvc),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

@@ -98,5 +98,8 @@
   "log.log_initialized": "日志已初始化，写入: %s",
   "log.log_config_applied": "日志配置已应用",
   "log.updater_init_failed": "初始化更新器失败",
-  "log.updater_ready": "更新已就绪，重启后生效"
+  "log.updater_ready": "更新已就绪，重启后生效",
+  "log.global_panic": "全局未捕获 panic",
+  "log.global_panic_stack": "全局未捕获 panic 调用栈",
+  "log.data_dir": "数据目录: {{.Dir}}"
 }

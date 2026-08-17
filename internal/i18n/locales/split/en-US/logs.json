@@ -98,5 +98,8 @@
   "log.log_initialized": "Log initialized, writing to: %s",
   "log.log_config_applied": "Log config applied",
   "log.updater_init_failed": "Failed to init updater",
-  "log.updater_ready": "Update ready, takes effect after restart"
+  "log.updater_ready": "Update ready, takes effect after restart",
+  "log.global_panic": "Global unrecovered panic",
+  "log.global_panic_stack": "Global unrecovered panic stack",
+  "log.data_dir": "Data directory: {{.Dir}}"
 }

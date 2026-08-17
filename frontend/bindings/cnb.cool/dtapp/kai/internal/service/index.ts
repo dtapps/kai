@@ -5,6 +5,7 @@ import * as AppService from "./appservice.js";
 import * as ConfigWrapper from "./configwrapper.js";
 import * as EngineWrapper from "./enginewrapper.js";
 import * as HistoryWrapper from "./historywrapper.js";
+import * as NotificationService from "./notificationservice.js";
 import * as TranslateWrapper from "./translatewrapper.js";
 import * as WindowWrapper from "./windowwrapper.js";
 export {
@@ -12,6 +13,7 @@ export {
     ConfigWrapper,
     EngineWrapper,
     HistoryWrapper,
+    NotificationService,
     TranslateWrapper,
     WindowWrapper
 };

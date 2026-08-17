@@ -75,16 +75,23 @@ func GetLocale() string {
 }
 
 // T translates a key with named template parameters.
-// Usage: i18n.T("error.ca_name_required")
+// Usage: i18n.T("err.empty_text")
 //
-//	i18n.T("error.ca_not_found_with_id", "id", 123)
-//	i18n.T("notification.cert_applied.body", "domain", "example.com", "issuer", "Let's Encrypt")
+//	i18n.T("err.configstore_get_engine_id", "id", 123)
+//	i18n.T("notification.update_available_subtitle", "version", "1.2.3")
 func T(key string, templateData ...any) string {
 	l := localizer()
 
 	data := make(map[string]any)
 	for i := 0; i < len(templateData)-1; i += 2 {
 		if k, ok := templateData[i].(string); ok {
+			// 防止传入 nil 接口：go-i18n 渲染模板时会对值做 reflect.Value.Type，
+			// 零值 interface{} 会得到 zero Value 并触发 "reflect.Value.Type on zero Value" panic。
+			// 用空串兜底，既避免 panic，也保证模板 {{.k}} 渲染为占位而非崩溃。
+			if templateData[i+1] == nil {
+				data[k] = ""
+				continue
+			}
 			data[k] = templateData[i+1]
 		}
 	}

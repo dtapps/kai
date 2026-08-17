@@ -1,0 +1,10 @@
+{
+  "menu.input_translate": "Input Translation",
+  "menu.screenshot_translate": "Screenshot Translate",
+  "menu.settings": "Settings",
+  "menu.auto_start": "Launch at startup",
+  "menu.quit": "Quit",
+  "menu.check_update": "Check for Updates",
+  "menu.prerelease": "Pre-release Updates",
+  "menu.tooltip": "Kai - Translate & OCR"
+}

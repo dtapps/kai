@@ -1,0 +1,10 @@
+{
+  "engine.system": "System",
+  "engine.deepl": "DeepL",
+  "engine.google": "Google",
+  "engine.openai": "OpenAI",
+  "engine.baidu": "Baidu",
+  "engine.tencent": "Tencent",
+  "engine.youdao": "Youdao",
+  "engine.tesseract": "Tesseract"
+}

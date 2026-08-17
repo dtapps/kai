@@ -1,0 +1,10 @@
+{
+  "engine.system": "系统翻译",
+  "engine.deepl": "DeepL",
+  "engine.google": "Google",
+  "engine.openai": "OpenAI",
+  "engine.baidu": "百度",
+  "engine.tencent": "腾讯",
+  "engine.youdao": "有道",
+  "engine.tesseract": "Tesseract"
+}

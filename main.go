@@ -584,6 +584,21 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 	})
 	// 翻译类菜单项与下方「设置」之间补一个分隔符
 	trayMenu.AddSeparator()
+	// 开机自启开关：紧贴「设置」上方。勾选状态由 Wails Autostart 库当前状态决定，
+	// 点击由框架自动翻转 checked，回调中调库 Enable/Disable（库自身管理持久化）。
+	if enabled, err := app.Autostart.IsEnabled(); err == nil {
+		trayMenu.AddCheckbox(i18n.T("menu.auto_start"), enabled).OnClick(func(ctx *application.Context) {
+			if ctx.IsChecked() {
+				if e := app.Autostart.Enable(); e != nil {
+					slog.Warn("启用开机自启失败", slog.String("error", e.Error()))
+				}
+			} else {
+				if e := app.Autostart.Disable(); e != nil {
+					slog.Warn("禁用开机自启失败", slog.String("error", e.Error()))
+				}
+			}
+		})
+	}
 	// 设置，打开设置窗口
 	trayMenu.Add(i18n.T("menu.settings")).OnClick(func(ctx *application.Context) {
 		settingsWindow.Show().Focus()

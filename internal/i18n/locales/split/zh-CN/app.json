@@ -1,0 +1,11 @@
+{
+  "app.name_version": "Kai {{.Version}}",
+  "app.description": "跨平台翻译 & OCR 工具",
+
+  "window.translate_title": "Kai 翻译",
+  "window.settings_title": "Kai 设置",
+  "window.selection_title": "Kai 划词",
+
+  "notification.update_available_title": "Kai 有更新可用",
+  "notification.update_available_subtitle": "发现新版本 {{.version}}，点击菜单「检查更新」安装"
+}

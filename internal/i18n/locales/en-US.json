@@ -1,7 +1,6 @@
 {
   "_comment": "⚠️ 此文件由 scripts/merge-go-i18n.sh 自动生成，请勿手动编辑！修改请编辑 split/ 目录下的文件后重新合并。",
   "app.description": "Cross-platform Translate & OCR tool",
-  "app.name_version": "Kai {{.Version}}",
   "engine.baidu": "Baidu",
   "engine.deepl": "DeepL",
   "engine.google": "Google",
@@ -11,6 +10,7 @@
   "engine.tesseract": "Tesseract",
   "engine.youdao": "Youdao",
   "err.no_apikey": "Engine is missing API Key",
+  "err.no_engine": "No available translation engine configured or found",
   "err.no_ocr": "No available OCR engine configured or found",
   "err.not_ready": "Service not ready",
   "err.notification_failed": "Failed to send desktop notification",
@@ -27,6 +27,7 @@
   "log.app_starting": "Kai starting (version: {{.Version}}, build time: {{.BuildTime}}, commit: {{.GitCommit}})",
   "log.data_dir": "data directory: {{.Dir}}",
   "log.global_panic": "global uncaught panic",
+  "menu.auto_start": "Launch at startup",
   "menu.check_update": "Check for Updates",
   "menu.input_translate": "Input Translation",
   "menu.prerelease": "Pre-release Updates",

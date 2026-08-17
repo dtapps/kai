@@ -6,6 +6,7 @@ package execkey
 import (
 	"log/slog"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/selection"
 	"cnb.cool/dtapp/kai/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -34,9 +35,9 @@ func NewExecKeyController(
 		selection:   sel,
 		log:         slog.Default(),
 	}
-	e.log.Info("执行键配置",
-		slog.String("复制键", cfg.ExecKeys.Copy.Key),
-		slog.Bool("启用", cfg.ExecKeys.Copy.Enabled),
+	e.log.Info(i18n.T("log.execkey_config"),
+		slog.String(i18n.T("log.field_copykey"), cfg.ExecKeys.Copy.Key),
+		slog.Bool(i18n.T("log.field_enabled"), cfg.ExecKeys.Copy.Enabled),
 	)
 	return e
 }
@@ -57,7 +58,7 @@ func (e *ExecKeyController) CopySelection() string {
 	cfg := e.settingsSvc.Get()
 	// 1. 备份原剪贴板，避免任何改动。
 	backup := e.selection.ReadClipboardText()
-	e.log.Debug("[复制键] 唤起主窗口 备份剪贴板", slog.Int("长度", len(backup)))
+	e.log.Debug(i18n.T("log.copykey_backup"), slog.Int(i18n.T("log.field_length"), len(backup)))
 
 	// 2. 清空剪贴板，避免无选区时残留旧内容被误回填。
 	_ = e.selection.WriteToClipboard("")
@@ -67,10 +68,10 @@ func (e *ExecKeyController) CopySelection() string {
 
 	// 4. 还原用户原剪贴板内容：先清空（挤掉复制残留的选区内容）再写回 backup，双保险不残留。
 	if err := e.selection.WriteToClipboard(""); err != nil {
-		e.log.Warn("[复制键] 唤起主窗口 清空剪贴板失败", slog.String("错误", err.Error()))
+		e.log.Warn(i18n.T("log.copykey_clear_clipboard_failed"), slog.String(i18n.T("log.field_error"), err.Error()))
 	}
 	if err := e.selection.WriteToClipboard(backup); err != nil {
-		e.log.Warn("[复制键] 唤起主窗口 还原剪贴板失败", slog.String("错误", err.Error()))
+		e.log.Warn(i18n.T("log.copykey_restore_clipboard_failed"), slog.String(i18n.T("log.field_error"), err.Error()))
 	}
 	return text
 }

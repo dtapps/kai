@@ -6,5 +6,7 @@
   "engine.baidu": "Baidu",
   "engine.tencent": "Tencent",
   "engine.youdao": "Youdao",
-  "engine.tesseract": "Tesseract"
+  "engine.tesseract": "Tesseract",
+  "engine.openai_prompt": "You are a translation engine. Translate the following text from %s to %s. Output only the translation, no explanation, no original text.\n\n%s",
+  "engine.openai_system": "You are a precise translation engine. Output only the translation."
 }

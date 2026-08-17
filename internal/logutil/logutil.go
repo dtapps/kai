@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"cnb.cool/dtapp/kai/internal/i18n"
 )
 
 // ParseLevel 解析等级字符串为 slog.Level，非法值回退 info。
@@ -44,7 +46,7 @@ type Rotator struct {
 // NewRotator 创建 Rotator，立即滚动一次（若当前 kai.log 非当天则归档），并打开当日日志文件。
 func NewRotator(dir string, level slog.Level, retention int, compress bool) (*Rotator, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("创建日志目录失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("err.logutil_create_dir"), err)
 	}
 	r := &Rotator{
 		dir:       dir,
@@ -111,7 +113,7 @@ func (r *Rotator) rotateIfNeeded() error {
 			// 避免同日多次启动覆盖：加序号后缀。
 			archivePath = uniquePath(archivePath)
 			if err := os.Rename(current, archivePath); err != nil {
-				return fmt.Errorf("归档旧日志失败: %w", err)
+				return fmt.Errorf("%s: %w", i18n.T("err.logutil_archive_old"), err)
 			}
 			if r.compress {
 				if err := gzipFile(archivePath, archivePath+".gz"); err == nil {
@@ -123,7 +125,7 @@ func (r *Rotator) rotateIfNeeded() error {
 
 	f, err := os.OpenFile(current, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return fmt.Errorf("打开日志文件失败: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("err.logutil_open_file"), err)
 	}
 	if r.file != nil {
 		r.file.Close()
@@ -228,7 +230,7 @@ type FrontendWriter struct {
 // NewFrontendWriter 创建前端日志写入器（按天滚动 + 过期清理，沿用主日志策略）。
 func NewFrontendWriter(dir string, level slog.Level, retention int, compress bool) (*FrontendWriter, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return nil, fmt.Errorf("创建日志目录失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("err.logutil_create_dir"), err)
 	}
 	fw := &FrontendWriter{dir: dir, level: level, rot: &Rotator{dir: dir, level: level, retention: retention, compress: compress}}
 	if err := fw.rotateIfNeeded(); err != nil {
@@ -255,7 +257,7 @@ func (fw *FrontendWriter) rotateIfNeeded() error {
 	}
 	f, err := os.OpenFile(current, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
-		return fmt.Errorf("打开前端日志失败: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("err.logutil_open_frontend"), err)
 	}
 	if fw.file != nil {
 		fw.file.Close()

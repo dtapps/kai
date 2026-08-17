@@ -36,7 +36,7 @@
         history = (await GetHistory(kw, fixedOffset, historyPageSize)) ?? [];
       }
     } catch (e) {
-      console.error('[历史] 加载历史记录失败', e);
+      console.error(t('log.historyLoadFailed'), e);
       history = [];
       await Dialogs.Error({
         Title: t('settings.historyOpErrorTitle'),
@@ -74,7 +74,7 @@
       await DeleteHistory(id);
       await loadHistory();
     } catch (e) {
-      console.error('[历史] 删除历史记录失败', e);
+      console.error(t('log.historyDeleteFailed'), e);
       await Dialogs.Error({
         Title: t('settings.historyOpErrorTitle'),
         Message: t('settings.historyDeleteError'),
@@ -92,7 +92,7 @@
         Message: t('settings.historyCleared'),
       });
     } catch (e) {
-      console.error('[历史] 清空历史记录失败', e);
+      console.error(t('log.historyClearFailed'), e);
       await Dialogs.Error({
         Title: t('settings.historyOpErrorTitle'),
         Message: t('settings.historyClearError'),

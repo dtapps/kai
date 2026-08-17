@@ -3,6 +3,5 @@
 
 export type {
     LocaleChangedPayload,
-    NotificationPayload,
     ThemeChangedPayload
 } from "./models.js";

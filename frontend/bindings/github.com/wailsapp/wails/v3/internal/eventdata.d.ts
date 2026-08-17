@@ -18,7 +18,6 @@ declare module "@wailsio/runtime" {
             "kai:hotkeys:changed": string[] | null;
             "kai:input:fill": string;
             "kai:locale:changed": events$0.LocaleChangedPayload;
-            "kai:notification": events$0.NotificationPayload;
             "kai:screenshot:ocr": model$0.ScreenshotResult;
             "kai:screenshot:recapture": {};
             "kai:theme:changed": events$0.ThemeChangedPayload;

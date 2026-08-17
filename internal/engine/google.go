@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"strings"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
@@ -50,7 +51,7 @@ func (g *googleTranslator) Name() string { return "google" }
 // Translate 调用 Google 公开端点完成翻译。
 func (g *googleTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf("empty text")
+		return nil, fmt.Errorf(i18n.T("err.empty_text"))
 	}
 	sl := googleLang(string(req.From))
 	tl := googleLang(string(req.To))
@@ -78,17 +79,17 @@ func (g *googleTranslator) Translate(ctx context.Context, req model.TranslateReq
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google translate http %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf(i18n.T("err.google_http"), resp.StatusCode, string(body), resp.StatusCode, string(body))
 	}
 
 	// 解析 Google gtx 响应：[[["dst","src",...],...], "detected_lang", ...]
 	var gresp googleResponse
 	if err := json.Unmarshal(body, &gresp); err != nil {
-		return nil, fmt.Errorf("parse google response: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.google_parse"), err, err)
 	}
 
 	if gresp.Translated == "" {
-		return nil, fmt.Errorf("google translate empty result")
+		return nil, fmt.Errorf(i18n.T("err.google_empty_result"))
 	}
 
 	return &model.TranslateResult{

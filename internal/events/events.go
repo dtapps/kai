@@ -29,10 +29,6 @@ const (
 
 	// EventScreenshotRecapture 前端「重新截图」按钮触发：后端隐藏窗口并重新走一次截图翻译流程。
 	EventScreenshotRecapture = "kai:screenshot:recapture"
-
-	// EventNotification 后端推送桌面通知（如更新可用），payload: NotificationPayload。
-	// 对齐 certflow：检查到新版本时由后端 emit，前端调系统通知 API 弹出。
-	EventNotification = "kai:notification"
 )
 
 // LocaleChangedPayload 界面语言变更事件参数。
@@ -50,13 +46,4 @@ type LocaleChangedPayload struct {
 type ThemeChangedPayload struct {
 	Mode  string `json:"mode"`  // settings: auto | light | dark
 	Theme string `json:"theme"` // settings: dark | light
-}
-
-// NotificationPayload 桌面通知事件参数（对齐 certflow）。
-type NotificationPayload struct {
-	Title    string `json:"title"`    // 通知标题
-	Subtitle string `json:"subtitle"` // 副标题（如版本号）
-	Body     string `json:"body"`     // 正文
-	Category string `json:"category"` // 分类：system / cert / deploy ...
-	Level    string `json:"level"`    // 级别：info | success | warning | error
 }

@@ -18,7 +18,7 @@
     try {
       emitEvent(EventScreenshotRecapture);
     } catch (e) {
-      console.error('[截图翻译] 重新截图失败', e);
+      console.error(t('log.screenshotRecaptureFailed'), e);
     }
   }
 
@@ -29,7 +29,7 @@
     try {
       Window.Hide();
     } catch (e) {
-      console.error('[截图翻译] 关闭窗口失败', e);
+      console.error(t('log.screenshotCloseFailed'), e);
     }
   }
 
@@ -49,14 +49,14 @@
       await Clipboard.SetText(text);
       showToast(t('common.copied'));
     } catch (e) {
-      console.error('[截图翻译] 复制失败', e);
+      console.error(t('log.screenshotCopyFailed'), e);
     }
   }
 
   const off = onEvent(EventScreenshotOCR, (data: ScreenshotResult) => {
     try {
       // 收到后端推送的原始事件（后端→前端），第一手证据：判断"后端到底推了什么"。
-      console.debug('[截图翻译] 收到 OCR 事件', {
+      console.debug(t('log.screenshotLogOcrEvent'), {
         hasImage: !!data.image,
         imagePrefix: (data.image ?? '').slice(0, 80),
         textLen: (data.text ?? '').length,
@@ -85,9 +85,9 @@
         translations: Array.from(merged.values()),
       } as ScreenshotResult;
       if (result.error) {
-        console.warn('[截图翻译] 渲染失败(错误态)', result.error);
+        console.warn(t('log.screenshotRenderError'), result.error);
       } else {
-        console.debug('[截图翻译] 渲染结果', {
+        console.debug(t('log.screenshotLogRenderResult'), {
           imageLen: (result.image ?? '').length,
           textLen: result.text.length,
           translations: result.translations.length,
@@ -95,7 +95,7 @@
         });
       }
     } catch (e) {
-      console.error('[截图翻译] 渲染 OCR 结果失败', e);
+      console.error(t('log.screenshotRenderOcrFailed'), e);
     }
   });
 
@@ -113,7 +113,7 @@
       if (!imgEl.dataset.ocrErrBound) {
         imgEl.onerror = () => {
           if (result?.error) return; // 错误态下图片可能被卸载重挂，onerror 属副作用，非真加载失败
-          console.warn('[截图翻译] 图片加载失败', {
+          console.warn(t('log.screenshotImageLoadFailed'), {
             imageLen: url.length,
             imagePrefix: url.slice(0, 80),
           });
@@ -128,13 +128,13 @@
   });
 
   onMount(() => {
-    console.debug('[截图翻译] 窗口已挂载');
+    console.debug(t('log.screenshotLogMounted'));
     // 截图翻译窗口是临时浮窗，挂载后设为置顶（AlwaysOnTop），
     // 否则显示后会被其他窗口盖住、看不到。必须在挂载后设置（webview 就绪）。
     try {
       Window.SetAlwaysOnTop(true);
     } catch (e) {
-      console.error('[截图翻译] 设置置顶失败', e);
+      console.error(t('log.screenshotSetPinFailed'), e);
     }
     return () => {
       off();

@@ -13,12 +13,13 @@ import (
 	"cnb.cool/dtapp/kai/internal/configstore"
 	"cnb.cool/dtapp/kai/internal/engine"
 	"cnb.cool/dtapp/kai/internal/hotkey"
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/network"
 	"cnb.cool/dtapp/kai/internal/settings"
 )
 
 var (
-	errEngineStoreNotReady = errors.New("引擎存储未就绪")
+	errEngineStoreNotReady = errors.New(i18n.T("err.service_engine_store_not_ready"))
 	log                    = slog.Default()
 )
 
@@ -79,7 +80,7 @@ func (w *EngineWrapper) registerEngines() {
 	defer cancel()
 	rows, err := w.configStore.LoadEngines(ctx)
 	if err != nil {
-		slog.Default().Error("加载引擎配置失败", slog.Any("error", err))
+		slog.Default().Error(i18n.T("log.service_load_engine_config_failed"), slog.Any("error", err))
 		return
 	}
 	engines := engine.EngineMap(configstore.EnginesToConfig(rows))
@@ -142,7 +143,7 @@ func (w *EngineWrapper) GetEngines() []EngineListItem {
 	ctx := context.Background()
 	dbEngs, err := w.configStore.LoadEngines(ctx)
 	if err != nil {
-		log.Error("读取引擎列表失败，回退到注册表顺序", slog.Any("error", err))
+		log.Error(i18n.T("log.service_load_engine_list_fallback"), slog.Any("error", err))
 		return registryEngineListItems(metas)
 	}
 	items := make([]EngineListItem, 0, len(dbEngs))
@@ -188,7 +189,7 @@ func (w *EngineWrapper) GetAllEngines() []AllEngineItem {
 	ctx := context.Background()
 	engs, err := w.configStore.LoadEngines(ctx)
 	if err != nil {
-		slog.Default().Error("读取引擎列表失败", slog.Any("error", err))
+		slog.Default().Error(i18n.T("log.service_load_engine_list_failed"), slog.Any("error", err))
 		return nil
 	}
 	// 注意：此处【不再】做「库空→重置默认引擎」的兜底。
@@ -259,7 +260,7 @@ func (w *EngineWrapper) GetEngineConfig(id int64) *engine.EngineConfig {
 	defer cancel()
 	cfg, err := w.configStore.GetEngineByID(ctx, id)
 	if err != nil {
-		slog.Default().Error("读取引擎配置失败", slog.Int64("id", id), slog.Any("error", err))
+		slog.Default().Error(i18n.T("log.service_read_engine_config_failed"), slog.Int64("id", id), slog.Any("error", err))
 		return nil
 	}
 	return cfg
@@ -271,7 +272,7 @@ func (w *EngineWrapper) AddEngine(cfg *engine.EngineConfig) (int64, error) {
 		return 0, errEngineStoreNotReady
 	}
 	if miss := engine.ValidateRequired(cfg); miss != nil {
-		return 0, fmt.Errorf("缺少必填项：%s", miss.LabelKey)
+		return 0, fmt.Errorf(i18n.T("err.service_missing_field"), miss.LabelKey)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -290,7 +291,7 @@ func (w *EngineWrapper) UpdateEngineConfig(cfg *engine.EngineConfig) error {
 		return errEngineStoreNotReady
 	}
 	if miss := engine.ValidateRequired(cfg); miss != nil {
-		return fmt.Errorf("缺少必填项：%s", miss.LabelKey)
+		return fmt.Errorf(i18n.T("err.service_missing_field"), miss.LabelKey)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -316,7 +317,7 @@ func (w *EngineWrapper) ToggleEngineEnabled(id int64, enabled bool) error {
 			return err
 		}
 		if miss := engine.ValidateRequired(cfg); miss != nil {
-			return fmt.Errorf("缺少必填项：%s", miss.LabelKey)
+			return fmt.Errorf(i18n.T("err.service_missing_field"), miss.LabelKey)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -370,7 +371,7 @@ func (w *EngineWrapper) RemoveEngine(id int64) error {
 	if engs, err := w.configStore.LoadEngines(ctx); err == nil {
 		for _, e := range engs {
 			if e.ID == id && builtinEngine[e.Engine] {
-				return fmt.Errorf("系统内置引擎不可删除")
+				return fmt.Errorf(i18n.T("err.service_builtin_cannot_delete"))
 			}
 		}
 	}
@@ -396,7 +397,7 @@ func (w *EngineWrapper) loadEngines() error {
 	}
 
 	if len(engs) == 0 {
-		log.Info("config.db 引擎表为空，使用默认引擎初始化")
+		log.Info(i18n.T("log.engine_table_empty_init"))
 		def := engine.DefaultEngineConfigs()
 		if err := w.configStore.InitDefaultEngines(ctx, def); err != nil {
 			return err

@@ -21,6 +21,8 @@ import (
 	"encoding/json"
 	"log/slog"
 	"unsafe"
+
+	"cnb.cool/dtapp/kai/internal/i18n"
 )
 
 // TODO(2026-08-11): selectedTextViaBridge 已禁用。它仅被 point_darwin.go 的 currentSelectionOSA
@@ -53,7 +55,7 @@ import (
 func accessibilityEnabledViaBridge(log *slog.Logger) bool {
 	enabled := C.kai_accessibility_enabled() != 0
 	if log != nil {
-		log.Info("[Kai-Bridge-Cgo] 辅助功能授权查询", slog.Bool("结果", enabled))
+		log.Info(i18n.T("log.selection_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	}
 	return enabled
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
@@ -22,7 +23,7 @@ func (s *appleTranslator) Name() string { return "apple" }
 
 // Translate 非 macOS 平台不支持系统翻译。
 func (s *appleTranslator) Translate(_ context.Context, _ model.TranslateRequest) (*model.TranslateResult, error) {
-	return nil, fmt.Errorf("系统翻译仅支持 macOS")
+	return nil, fmt.Errorf(i18n.T("err.apple_unsupported_platform"))
 }
 
 // SetLogConfig 配置引擎层日志输出。非 darwin 平台无 Swift 桥接日志系统，
@@ -30,7 +31,7 @@ func (s *appleTranslator) Translate(_ context.Context, _ model.TranslateRequest)
 func SetLogConfig(dir, level string, _ int, _ bool) {
 	if dir != "" {
 		// 非 darwin 平台暂不重定向到文件，仅记录意图，避免引入 CGO/平台特定文件锁。
-		slog.Info("[Kai-Engine] 非 macOS 平台 SetLogConfig 走标准 slog（不重定向文件）",
+		slog.Info(i18n.T("log.apple_setlog_std"),
 			"dir", dir, "level", level)
 	}
 }

@@ -130,7 +130,7 @@
     try {
       ocrLangOptions = (await GetOcrLangs()) ?? [];
     } catch (e) {
-      console.error('[引擎] 加载 OCR 语言候选项失败', e);
+      console.error(t('log.engineLoadOcrLangsFailed'), e);
       ocrLangOptions = [];
     }
   }
@@ -140,7 +140,7 @@
       engines = (await GetAllEngines()) ?? [];
       if (engines.length && selectedId === null) selectEngine(engines[0].id);
     } catch (e) {
-      console.error('[引擎] 加载引擎列表失败', e);
+      console.error(t('log.engineLoadListFailed'), e);
       engines = [];
     }
   }
@@ -158,14 +158,14 @@
       try {
         saved = await GetEngineConfig(id);
       } catch (e) {
-        console.error('[引擎] 读取引擎配置失败', e);
+        console.error(t('log.engineReadConfigFailed'), e);
         saved = null;
       }
       for (const f of schema.fields ?? []) {
         configValues[f.field] = (saved?.[f.field as keyof typeof saved] as string) ?? '';
       }
     } catch (e) {
-      console.error('[引擎] 加载引擎字段失败', e);
+      console.error(t('log.engineLoadFieldsFailed'), e);
       schema = null;
     }
     // 选中系统翻译引擎时，拉取并显示其支持的语言列表（只读）
@@ -192,7 +192,7 @@
     try {
       tesseract = await CheckTesseract();
     } catch (e) {
-      console.error('[引擎] 探测 tesseract 失败', e);
+      console.error(t('log.engineProbeTesseractFailed'), e);
       tesseract = { installed: false, path: '', version: '', os: '' };
     }
   }
@@ -205,7 +205,7 @@
       const langs = await SystemLanguages();
       systemLangs = Array.isArray(langs) ? langs : [];
     } catch (e) {
-      console.error('[引擎] 读取系统语言失败', e);
+      console.error(t('log.engineReadSystemLangsFailed'), e);
       systemLangs = [];
     } finally {
       systemLangsLoading = false;
@@ -216,10 +216,10 @@
   // 后端必填校验错误形如「缺少必填项：settings.engine_field.xxx」，其中 key 走 i18n。
   function parseErr(e: unknown): string {
     const msg = e instanceof Error ? e.message : String(e);
-    const prefix = '缺少必填项：';
+    const prefix = t('settings.engineMissing');
     if (msg.startsWith(prefix)) {
       const key = msg.slice(prefix.length);
-      return t('settings.engineMissing') + t(key);
+      return prefix + t(key);
     }
     return msg;
   }
@@ -308,7 +308,7 @@
     try {
       knownEngines = (await GetKnownEngines()) ?? [];
     } catch (e) {
-      console.error('[引擎] 加载可选引擎列表失败', e);
+      console.error(t('log.engineLogOptionalListFailed'), e);
       knownEngines = [];
     }
   }
@@ -343,7 +343,7 @@
         await loadOcrLangs();
       }
     } catch (e) {
-      console.error('[引擎] 加载新增引擎字段失败', e);
+      console.error(t('log.engineLoadAddFieldsFailed'), e);
       addSchema = [];
     }
   }

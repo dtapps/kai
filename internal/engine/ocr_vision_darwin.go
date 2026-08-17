@@ -22,6 +22,7 @@ import (
 	"log/slog"
 	"unsafe"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
@@ -88,19 +89,19 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 	outBuf := make([]byte, 1<<20) // 1MB 输出缓冲，足以容纳大图 OCR 的 region 明细
 	n := C.kai_ocr(cImg, (*C.char)(unsafe.Pointer(&outBuf[0])), C.int(len(outBuf)), boolToCInt(correct), C.int(timeoutSec))
 	if n < 0 {
-		slog.Error("[Kai-Vision-OCR] 系统 OCR 失败: 输出缓冲区不足")
-		return nil, fmt.Errorf("系统 OCR 失败: 输出缓冲区不足")
+		slog.Error(i18n.T("err.vision_ocr_buffer"))
+		return nil, fmt.Errorf(i18n.T("err.vision_ocr_buffer"))
 	}
 
 	payload := bytes.TrimRight(outBuf[:n], "\x00")
 	var resp ocrResponse
 	if err := json.Unmarshal(payload, &resp); err != nil {
-		slog.Error("[Kai-Vision-OCR] 系统 OCR 失败: 解析结果异常", "raw", string(payload), "error", err)
-		return nil, fmt.Errorf("系统 OCR 失败: %w", err)
+		slog.Error(i18n.T("err.vision_ocr_parse"), "raw", string(payload), "error", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("err.vision_ocr_parse"), err)
 	}
 	if resp.Error != "" {
-		slog.Error("[Kai-Vision-OCR] 系统 OCR 失败: 引擎返回错误", "engine_error", resp.Error)
-		return nil, fmt.Errorf("系统 OCR 失败: %s", resp.Error)
+		slog.Error(i18n.T("err.vision_ocr_engine"), "engine_error", resp.Error)
+		return nil, fmt.Errorf("%s: %s", i18n.T("err.vision_ocr_engine"), resp.Error)
 	}
 
 	regions := make([]model.OcrRegion, 0, len(resp.Regions))
@@ -113,7 +114,7 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 		regions = append(regions, model.OcrRegion{Text: r.Text, Conf: r.Conf, Box: box})
 	}
 
-	slog.Debug("[Kai-Vision-OCR] 系统 OCR 完成", "text_len", len(resp.Text), "regions", len(regions), "correct", correct, "timeout_sec", timeoutSec)
+	slog.Debug(i18n.T("log.vision_ocr_done"), "text_len", len(resp.Text), "regions", len(regions), "correct", correct, "timeout_sec", timeoutSec)
 	return &model.OcrResult{
 		Engine:  v.name,
 		Text:    resp.Text,

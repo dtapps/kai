@@ -6,5 +6,7 @@
   "engine.baidu": "百度",
   "engine.tencent": "腾讯",
   "engine.youdao": "有道",
-  "engine.tesseract": "Tesseract"
+  "engine.tesseract": "Tesseract",
+  "engine.openai_prompt": "你是一个翻译引擎。请将下面的文本从 %s 翻译成 %s。只输出翻译结果，不要解释，不要附加原文。\n\n%s",
+  "engine.openai_system": "你是一个精确的翻译引擎，只输出译文。"
 }

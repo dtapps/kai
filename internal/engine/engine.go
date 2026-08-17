@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
@@ -82,9 +83,9 @@ type EngineConfig struct {
 
 // 引擎层公共错误（唯一来源，settings/service 复用，避免 engine 反向 import settings 造成循环依赖）
 var (
-	ErrAPIKey   = fmt.Errorf("引擎缺少 API Key 配置")
-	ErrNoEngine = fmt.Errorf("未配置或未找到可用翻译引擎")
-	ErrNoOCR    = fmt.Errorf("未配置或未找到可用 OCR 引擎")
+	ErrAPIKey   = fmt.Errorf(i18n.T("err.no_apikey"))
+	ErrNoEngine = fmt.Errorf(i18n.T("err.no_engine"))
+	ErrNoOCR    = fmt.Errorf(i18n.T("err.no_ocr"))
 )
 
 // defaultEngineNames 默认内置、开箱即用的引擎（其余需用户在设置页「添加」启用）。

@@ -26,9 +26,6 @@ export const EventInputFill = 'kai:input:fill';
 // EventTranslateResult 多引擎翻译逐个返回结果，payload: TranslateResult
 export const EventTranslateResult = 'kai:translate:result';
 
-// EventNotification 后端推送桌面通知（如更新可用），payload: NotificationPayload
-export const EventNotification = 'kai:notification';
-
 // 事件 payload 类型定义（对齐 internal/events/events.go 的 Go 端结构体）
 
 // LocaleChangedPayload 语言变更事件参数。
@@ -45,13 +42,4 @@ export interface LocaleChangedPayload {
 export interface ThemeChangedPayload {
   mode: string; // ThemeMode: auto | light | dark
   theme: string; // dark | light
-}
-
-// NotificationPayload 桌面通知事件参数，对齐 internal/events.NotificationPayload
-export interface NotificationPayload {
-  title: string; // 通知标题
-  subtitle: string; // 副标题（如版本号）
-  body: string; // 正文
-  category: string; // 分类：system / cert / deploy ...
-  level: string; // 级别：info | success | warning | error
 }

@@ -12,6 +12,7 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/events"
 	"cnb.cool/dtapp/kai/internal/execkey"
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/settings"
 )
 
@@ -96,7 +97,7 @@ func (h *Manager) TriggerInput() {
 		// 若先 Focus，焦点切到 Kai，模拟的 Cmd+C 落在 Kai 窗口（无选中内容），
 		// 剪贴板仍是旧值，导致取到错误内容。
 		sel := h.execKeyCtrl.CopySelection()
-		h.log.Info("[快捷键] 复制键读取剪贴板内容", slog.String("来源", "唤起主窗口模拟复制"), slog.Int("长度", len(sel)), slog.String("内容", sel))
+		h.log.Info(i18n.T("log.hotkey_read_clipboard"), slog.String(i18n.T("log.field_source"), "唤起主窗口模拟复制"), slog.Int(i18n.T("log.field_length"), len(sel)), slog.String(i18n.T("log.field_content"), sel))
 		w.Show()
 		w.Focus()
 		if sel != "" {
@@ -135,7 +136,7 @@ func (h *Manager) TriggerScreenshot() {
 		w.Hide()
 	}
 	if err := h.screenshotTranslate(); err != nil {
-		h.log.Error("[快捷键] 截图翻译失败", slog.Any("error", err))
+		h.log.Error(i18n.T("log.hotkey_screenshot_failed"), slog.Any(i18n.T("log.field_error"), err))
 		return
 	}
 	// 流程完成会经 EventScreenshotOCR 投递结果，这里只负责把窗口拉起展示。
@@ -170,45 +171,45 @@ func (h *Manager) Register() {
 		return
 	}
 	hk := cfg.Hotkeys
-	h.log.Info("[快捷键] 开始注册快捷键",
-		slog.String("唤起主窗口", hk.Input.Key),
-		slog.Bool("唤起主窗口启用", hk.Input.Enabled),
-		slog.String("截图翻译", hk.Screenshot.Key),
-		slog.Bool("截图翻译启用", hk.Screenshot.Enabled),
+	h.log.Info(i18n.T("log.hotkey_start_register"),
+		slog.String(i18n.T("log.field_source"), hk.Input.Key),
+		slog.Bool(i18n.T("log.field_enabled"), hk.Input.Enabled),
+		slog.String(i18n.T("log.field_source"), hk.Screenshot.Key),
+		slog.Bool(i18n.T("log.field_enabled"), hk.Screenshot.Enabled),
 	)
 
 	// 唤起主窗口（输入框聚焦）
 	if hk.Input.Key != "" && hk.Input.Enabled {
 		if err := mgr.Register(hk.Input.Key, func() {
-			h.log.Info("[快捷键] 快捷键触发", slog.String("类型", "唤起主窗口"), slog.String("按键", hk.Input.Key))
+			h.log.Info(i18n.T("log.hotkey_trigger"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_main_window")), slog.String(i18n.T("log.field_key"), hk.Input.Key))
 			h.TriggerInput()
 		}); err != nil {
-			h.log.Error("[快捷键] 注册快捷键失败", slog.String("类型", "唤起主窗口"), slog.String("按键", hk.Input.Key), slog.Any("error", err))
+			h.log.Error(i18n.T("log.hotkey_register_failed"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_main_window")), slog.String(i18n.T("log.field_key"), hk.Input.Key), slog.Any(i18n.T("log.field_error"), err))
 		} else {
-			h.log.Info("[快捷键] 已注册快捷键", slog.String("类型", "唤起主窗口"), slog.String("按键", hk.Input.Key))
+			h.log.Info(i18n.T("log.hotkey_registered"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_main_window")), slog.String(i18n.T("log.field_key"), hk.Input.Key))
 		}
 	} else {
-		h.log.Info("[快捷键] 跳过快捷键", slog.String("类型", "唤起主窗口"), slog.String("原因", "未设置"))
+		h.log.Info(i18n.T("log.hotkey_skip"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_main_window")), slog.String(i18n.T("log.field_reason"), i18n.T("log.field_value_not_set")))
 
 	}
 
 	// 截图翻译：区域截图→系统 OCR→翻译→投递截图窗口并呼出
 	if hk.Screenshot.Key != "" && hk.Screenshot.Enabled {
 		if err := mgr.Register(hk.Screenshot.Key, func() {
-			h.log.Info("[快捷键] 快捷键触发", slog.String("类型", "截图翻译"), slog.String("按键", hk.Screenshot.Key))
+			h.log.Info(i18n.T("log.hotkey_trigger"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_screenshot")), slog.String(i18n.T("log.field_key"), hk.Screenshot.Key))
 			h.TriggerScreenshot()
 		}); err != nil {
-			h.log.Error("[快捷键] 注册快捷键失败", slog.String("类型", "截图翻译"), slog.String("按键", hk.Screenshot.Key), slog.Any("error", err))
+			h.log.Error(i18n.T("log.hotkey_register_failed"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_screenshot")), slog.String(i18n.T("log.field_key"), hk.Screenshot.Key), slog.Any(i18n.T("log.field_error"), err))
 		} else {
-			h.log.Info("[快捷键] 已注册快捷键", slog.String("类型", "截图翻译"), slog.String("按键", hk.Screenshot.Key))
+			h.log.Info(i18n.T("log.hotkey_registered"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_screenshot")), slog.String(i18n.T("log.field_key"), hk.Screenshot.Key))
 		}
 	} else {
-		h.log.Info("[快捷键] 跳过快捷键", slog.String("类型", "截图翻译"), slog.String("原因", "未设置"))
+		h.log.Info(i18n.T("log.hotkey_skip"), slog.String(i18n.T("log.field_type"), i18n.T("log.field_value_screenshot")), slog.String(i18n.T("log.field_reason"), i18n.T("log.field_value_not_set")))
 	}
 
 	// 汇总当前真正生效的注册清单（用于排查"清空后仍执行"）
 	active := mgr.GetAll()
-	h.log.Info("[快捷键] 快捷键重注册完成", slog.Any("当前已注册", active))
+	h.log.Info(i18n.T("log.hotkey_reregister_done"), slog.Any(i18n.T("log.field_active"), active))
 
 	// 把当前真正生效的快捷键清单推给前端实时显示。
 	h.emitHotkeysChanged(active)

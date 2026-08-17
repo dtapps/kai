@@ -11,7 +11,7 @@
       await Clipboard.SetText(text);
       onCopied?.(text ?? '');
     } catch (e) {
-      console.error('[截图翻译] 复制失败', e);
+      console.error(t('log.translateCardCopyFailed'), e);
     }
   }
 </script>

@@ -1,4 +1,5 @@
 import { FrontendLog } from '@bindings/cnb.cool/dtapp/kai/internal/logutil/frontendlogservice.ts';
+import { t } from '../i18n';
 
 // 把前端的 console 日志与 JS 错误转发到 Go，统一写入 logs/frontend.log。
 // 避免在 dev 环境之外丢失前端报错线索（正式包无 devtools）。
@@ -64,12 +65,12 @@ export function installFrontendLogging() {
   // 未捕获的同步/异步错误
   window.addEventListener('error', (e: ErrorEvent) => {
     const detail = e.error?.stack || `${e.message} @ ${e.filename}:${e.lineno}:${e.colno}`;
-    send('error', `Uncaught Error: ${detail}`);
+    send('error', t('log.uncaughtError') + detail);
   });
 
   // 未处理的 Promise 拒绝
   window.addEventListener('unhandledrejection', (e: PromiseRejectionEvent) => {
     const reason = e.reason?.stack || e.reason?.message || String(e.reason);
-    send('error', `Unhandled Rejection: ${reason}`);
+    send('error', t('log.unhandledRejection') + reason);
   });
 }

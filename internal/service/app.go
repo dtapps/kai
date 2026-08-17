@@ -135,7 +135,7 @@ func (s *AppService) ServiceStartup(_ context.Context, _ application.ServiceOpti
 
 	// 从 config.db 加载引擎配置并注册到 registry
 	if err := s.engineSvc.loadEngines(); err != nil {
-		s.log.Error("加载引擎配置失败", slog.Any("error", err))
+		s.log.Error(i18n.T("log.service_load_engine_config_failed"), slog.Any(i18n.T("log.field_error"), err))
 	}
 
 	// 注册全局快捷键（注册键逻辑集中在 HotkeyManager）
@@ -146,7 +146,7 @@ func (s *AppService) ServiceStartup(_ context.Context, _ application.ServiceOpti
 
 	// 辅助功能授权提示（darwin 下若未授权，复制键/模拟按键不会生效）
 	if !s.isAccessibilityEnabled() {
-		s.log.Warn("辅助功能未授权：复制键/模拟按键可能不生效，请在系统设置中授予本应用辅助功能权限")
+		s.log.Warn(i18n.T("log.service_accessibility_unauthorized"))
 	}
 	return nil
 }

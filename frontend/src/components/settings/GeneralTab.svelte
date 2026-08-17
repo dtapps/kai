@@ -25,7 +25,7 @@
       const cfg = (await GetConfig()) ?? ({ language: l } as any);
       await SaveConfig({ ...cfg, language: l });
     } catch (e) {
-      console.error('[通用] 保存语言设置失败', e);
+      console.error(t('log.generalSaveLangFailed'), e);
     }
   }
 

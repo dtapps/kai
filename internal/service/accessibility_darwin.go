@@ -4,6 +4,8 @@ package service
 
 import (
 	"log/slog"
+
+	"cnb.cool/dtapp/kai/internal/i18n"
 )
 
 /*
@@ -25,26 +27,26 @@ import "C"
 // isAccessibilityEnabled 检查 macOS 辅助功能是否已授权当前二进制。
 func (s *AppService) isAccessibilityEnabled() bool {
 	enabled := C.kai_accessibility_enabled() != 0
-	s.log.Info("[Kai-Bridge-Cgo] 辅助功能授权查询", slog.Bool("结果", enabled))
+	s.log.Info(i18n.T("log.accessibility_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
 }
 
 // openAccessibilitySettings 通过系统弹窗请求辅助功能授权（仅 darwin 生效）。
 func (s *AppService) openAccessibilitySettings() {
-	s.log.Info("[Kai-Bridge-Cgo] 辅助功能授权请求 弹出系统授权框")
+	s.log.Info(i18n.T("log.accessibility_request"))
 	C.kai_accessibility_request()
 }
 
 // isScreenRecordingEnabled 检查 macOS 屏幕录制是否已授权当前二进制（截图 OCR 依赖）。
 func (s *AppService) isScreenRecordingEnabled() bool {
 	enabled := C.kai_screenrecording_enabled() != 0
-	s.log.Info("[Kai-Bridge-Cgo] 屏幕录制授权查询", slog.Bool("结果", enabled))
+	s.log.Info(i18n.T("log.screenrecording_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
 }
 
 // openScreenRecordingSettings 弹系统「屏幕录制」授权框（仅 darwin 生效）。
 func (s *AppService) openScreenRecordingSettings() {
-	s.log.Info("[Kai-Bridge-Cgo] 屏幕录制授权请求 弹出系统授权框")
+	s.log.Info(i18n.T("log.screenrecording_request"))
 	C.kai_screenrecording_request()
 }
 

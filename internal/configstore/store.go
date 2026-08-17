@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"cnb.cool/dtapp/kai/internal/engine"
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/sqlite"
 )
 
@@ -29,7 +30,7 @@ type Store struct {
 func Open(path string) (*Store, error) {
 	db, err := sql.Open("sqlite3", sqlite.BuildDSN(path))
 	if err != nil {
-		return nil, fmt.Errorf("configstore: open db: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_open_db"), err, err)
 	}
 	pragmas := []string{
 		"PRAGMA journal_mode=WAL",
@@ -39,26 +40,26 @@ func Open(path string) (*Store, error) {
 	for _, p := range pragmas {
 		if _, err := db.Exec(p); err != nil {
 			db.Close()
-			return nil, fmt.Errorf("configstore: %q: %w", p, err)
+			return nil, fmt.Errorf(i18n.T("err.configstore_pragma"), p, err)
 		}
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("configstore: migrate: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_migrate"), err, err)
 	}
 	s := &Store{db: db, Queries: New(db)}
 	// 一次性迁移：把历史明文凭据加密（无前缀的旧数据），已加密（带前缀）的跳过。
 	if err := s.MigrateSecrets(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("configstore: migrate secrets: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_migrate_secrets"), err, err)
 	}
 	// 一次性迁移：引擎标识 system → apple（命名统一，与 vision 对称）。
 	// 旧库 engines 表中 engine='system' 的行需更新为 'apple'，幂等可重复调用。
 	if err := s.MigrateEngineNames(ctx); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("configstore: migrate engine names: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_migrate_engine_names"), err, err)
 	}
 	return s, nil
 }
@@ -73,7 +74,7 @@ func (s *Store) MigrateEngineNames(ctx context.Context) error {
 		Engine:   "apple",  // 新标识（SET engine = ?）
 		Engine_2: "system", // 旧标识（WHERE engine = ?）
 	}); err != nil {
-		return fmt.Errorf("configstore: rename engine system→apple: %w", err)
+		return fmt.Errorf(i18n.T("err.configstore_rename_engine"), err, err)
 	}
 	return nil
 }
@@ -135,11 +136,11 @@ func (s *Store) InsertEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 	defer cancel()
 	apiKey, err := EncryptSecret(e.APIKey)
 	if err != nil {
-		return 0, fmt.Errorf("configstore: 加密 api_key: %w", err)
+		return 0, fmt.Errorf("%s: %w", i18n.T("err.configstore_encrypt_apikey"), err)
 	}
 	secret, err := EncryptSecret(e.Secret)
 	if err != nil {
-		return 0, fmt.Errorf("configstore: 加密 secret: %w", err)
+		return 0, fmt.Errorf("%s: %w", i18n.T("err.configstore_encrypt_secret"), err)
 	}
 	id, err := s.InsertEngine(ctx, InsertEngineParams{
 		Engine:   e.Engine,
@@ -150,7 +151,7 @@ func (s *Store) InsertEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 		Endpoint: e.Endpoint,
 	})
 	if err != nil {
-		return 0, fmt.Errorf("configstore: insert %q: %w", e.Engine, err)
+		return 0, fmt.Errorf(i18n.T("err.configstore_insert_engine"), e.Engine, err, e.Engine, err)
 	}
 	e.ID = id
 	return id, nil
@@ -163,11 +164,11 @@ func (s *Store) UpdateEngineConfig(ctx context.Context, e *engine.EngineConfig) 
 	defer cancel()
 	apiKey, err := EncryptSecret(e.APIKey)
 	if err != nil {
-		return fmt.Errorf("configstore: 加密 api_key: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("err.configstore_encrypt_apikey"), err)
 	}
 	secret, err := EncryptSecret(e.Secret)
 	if err != nil {
-		return fmt.Errorf("configstore: 加密 secret: %w", err)
+		return fmt.Errorf("%s: %w", i18n.T("err.configstore_encrypt_secret"), err)
 	}
 	return s.UpdateEngineByID(ctx, UpdateEngineByIDParams{
 		Engine:   e.Engine,
@@ -206,7 +207,7 @@ func (s *Store) GetEngineByName(ctx context.Context, name string) (*engine.Engin
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("configstore: GetEngineByName: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_get_engine_name"), err, err)
 	}
 	return engineConfigFromDB(row), nil
 }
@@ -220,7 +221,7 @@ func (s *Store) GetEngineByID(ctx context.Context, id int64) (*engine.EngineConf
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, nil
 		}
-		return nil, fmt.Errorf("configstore: GetEngineByID: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.configstore_get_engine_id"), err, err)
 	}
 	return engineConfigFromDB(row), nil
 }

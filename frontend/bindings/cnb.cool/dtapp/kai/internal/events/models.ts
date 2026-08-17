@@ -20,36 +20,6 @@ export interface LocaleChangedPayload {
 }
 
 /**
- * NotificationPayload 桌面通知事件参数（对齐 certflow）。
- */
-export interface NotificationPayload {
-    /**
-     * 通知标题
-     */
-    "title": string;
-
-    /**
-     * 副标题（如版本号）
-     */
-    "subtitle": string;
-
-    /**
-     * 正文
-     */
-    "body": string;
-
-    /**
-     * 分类：system / cert / deploy ...
-     */
-    "category": string;
-
-    /**
-     * 级别：info | success | warning | error
-     */
-    "level": string;
-}
-
-/**
  * ThemeChangedPayload 主题变更事件参数。
  * Mode 为用户配置模式（取自 model 的 ThemeAuto/ThemeLight/ThemeDark：auto/light/dark）；
  * Theme 为系统真实外观（dark/light，由 Env.IsDarkMode() 派生）。

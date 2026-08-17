@@ -55,7 +55,7 @@
   // Linux 同样无需此类授权。故非 Mac 平台直接隐藏授权区块。
   // 使用统一的平台判断（Wails v3 多窗口下 _wails 可能丢失，需 UA 兜底）。
   const isMac = detectMac();
-  console.debug('[ShortcutsTab] isMac =', isMac);
+  console.debug(t('log.shortcutsTabIsMac'), isMac);
 
   // 辅助功能授权状态（macOS）：true=已授权，false=未授权，null=检测中/未知（非 darwin 始终 true）
   let accGranted = $state<boolean | null>(null);
@@ -66,7 +66,7 @@
     try {
       accGranted = await CheckAccessibility();
     } catch (e) {
-      console.error('[快捷键] 检测辅助功能授权失败', e);
+      console.error(t('log.shortcutCheckAccessibilityFailed'), e);
       accGranted = null;
     } finally {
       accLoading = false;
@@ -79,7 +79,7 @@
       // 弹窗后稍等用户操作，再刷新一次状态
       setTimeout(loadAccessibility, 800);
     } catch (e) {
-      console.error('[快捷键] 打开辅助功能设置失败', e);
+      console.error(t('log.shortcutOpenAccessibilityFailed'), e);
     }
   }
 
@@ -92,7 +92,7 @@
     try {
       srGranted = await CheckScreenRecording();
     } catch (e) {
-      console.error('[快捷键] 检测屏幕录制授权失败', e);
+      console.error(t('log.shortcutCheckScreenRecordingFailed'), e);
       srGranted = null;
     } finally {
       srLoading = false;
@@ -105,7 +105,7 @@
       // 弹窗后稍等用户操作，再刷新一次状态
       setTimeout(loadScreenRecording, 800);
     } catch (e) {
-      console.error('[快捷键] 打开屏幕录制设置失败', e);
+      console.error(t('log.shortcutOpenScreenRecordingFailed'), e);
     }
   }
 
@@ -194,7 +194,7 @@
         };
       }
     } catch (e) {
-      console.error('[快捷键] 加载快捷键配置失败', e);
+      console.error(t('log.shortcutLoadConfigFailed'), e);
     }
   }
 

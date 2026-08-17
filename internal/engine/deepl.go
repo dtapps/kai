@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"strings"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
@@ -73,7 +74,7 @@ type deeplResponse struct {
 
 func (d *deeplTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	if d.apiKey == "" {
-		return nil, fmt.Errorf("deepl error: 缺少 API Key，请在设置页配置（免费版也需注册获取，端点用 api-free.deepl.com）")
+		return nil, fmt.Errorf(i18n.T("err.deepl_missing_apikey"))
 	}
 	form := url.Values{}
 	form.Set("text", req.Text)
@@ -88,27 +89,27 @@ func (d *deeplTranslator) Translate(ctx context.Context, req model.TranslateRequ
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, d.endpoint, strings.NewReader(form.Encode()))
 	if err != nil {
-		return nil, fmt.Errorf("deepl request: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.deepl_request"), err, err)
 	}
 	httpReq.Header.Set("Authorization", "DeepL-Auth-Key "+d.apiKey)
 	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	resp, err := d.client.Do(httpReq)
 	if err != nil {
-		return nil, fmt.Errorf("deepl do: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.deepl_do"), err, err)
 	}
 	defer resp.Body.Close()
 
 	var dr deeplResponse
 	if err := json.NewDecoder(resp.Body).Decode(&dr); err != nil {
-		return nil, fmt.Errorf("deepl decode: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.deepl_decode"), err, err)
 	}
 	if resp.StatusCode != http.StatusOK || len(dr.Translations) == 0 {
 		msg := dr.Message
 		if msg == "" {
 			msg = resp.Status
 		}
-		return nil, fmt.Errorf("deepl error: %s", msg)
+		return nil, fmt.Errorf(i18n.T("err.deepl_api_error"), msg, msg)
 	}
 
 	src := dr.Translations[0].DetectedSourceLanguage

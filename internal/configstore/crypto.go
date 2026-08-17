@@ -14,6 +14,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+
+	"cnb.cool/dtapp/kai/internal/i18n"
 )
 
 // 敏感字段（api_key / secret）在落库前用 AES-GCM 加密，读取时解密。
@@ -96,7 +98,7 @@ func deviceSecret() ([]byte, error) {
 		}
 	}
 	if raw == "" {
-		return nil, errors.New("无法获取设备指纹")
+		return nil, errors.New(i18n.T("err.configstore_device_fp"))
 	}
 	return []byte(raw), nil
 }
@@ -140,7 +142,7 @@ func DecryptSecret(stored string) (string, error) {
 	}
 	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(stored, cipherPrefix))
 	if err != nil {
-		return "", fmt.Errorf("密文 base64 解码失败: %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T("err.configstore_cipher_base64"), err)
 	}
 	key, err := deriveKey()
 	if err != nil {
@@ -156,12 +158,12 @@ func DecryptSecret(stored string) (string, error) {
 	}
 	ns := gcm.NonceSize()
 	if len(raw) < ns {
-		return "", errors.New("密文长度不足")
+		return "", errors.New(i18n.T("err.configstore_cipher_too_short"))
 	}
 	nonce, ct := raw[:ns], raw[ns:]
 	plain, err := gcm.Open(nil, nonce, ct, nil)
 	if err != nil {
-		return "", fmt.Errorf("密文解密失败(可能设备指纹变更): %w", err)
+		return "", fmt.Errorf("%s: %w", i18n.T("err.configstore_cipher_decrypt"), err)
 	}
 	return string(plain), nil
 }

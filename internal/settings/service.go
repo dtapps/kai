@@ -207,7 +207,7 @@ type Service struct {
 // NewService 创建配置服务：建目录、读/写默认、监听文件变更。
 func NewService(dataDir string) (*Service, error) {
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
-		return nil, fmt.Errorf("create data dir failed: %w", err)
+		return nil, fmt.Errorf("创建数据目录失败: %w", err)
 	}
 	filePath := filepath.Join(dataDir, "settings.json")
 
@@ -227,21 +227,21 @@ func NewService(dataDir string) (*Service, error) {
 		// 首次运行：写默认配置
 		if os.IsNotExist(err) {
 			if err := s.writeConfig(); err != nil {
-				return nil, fmt.Errorf("write default config failed: %w", err)
+				return nil, fmt.Errorf("写入默认配置失败: %w", err)
 			}
 		} else {
-			return nil, fmt.Errorf("load config failed: %w", err)
+			return nil, fmt.Errorf("读取配置失败: %w", err)
 		}
 	}
 
 	if err := v.Unmarshal(s.cfg); err != nil {
-		return nil, fmt.Errorf("unmarshal config failed: %w", err)
+		return nil, fmt.Errorf("解析配置失败: %w", err)
 	}
 	s.cfg.Path = filePath
 
 	// 启动后重新保存，确保磁盘配置与内存一致（缺失的默认值补回、多余的由写盘覆盖）
 	if err := s.writeConfig(); err != nil {
-		return nil, fmt.Errorf("write config failed: %w", err)
+		return nil, fmt.Errorf("写入配置失败: %w", err)
 	}
 
 	s.startWatching()
@@ -288,7 +288,7 @@ func (s *Service) startWatching() {
 			defer s.mu.Unlock()
 
 			if err := s.v.Unmarshal(s.cfg); err != nil {
-				slog.Default().Error("配置热重载失败", slog.Any("error", err))
+				slog.Default().Error("设置热重载失败", slog.Any("error", err))
 				return
 			}
 			s.cfg.Path = s.filePath

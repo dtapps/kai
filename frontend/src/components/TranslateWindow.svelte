@@ -171,7 +171,7 @@
       // 窗口整体高度 = 固定区 + 结果区 + 标题栏补偿 + webview 内布局间距补偿。
       // 只让结果区参与伸缩；LAYOUT_EXTRA 补 main 的 p-4(32)+gap-4(16)，否则窗口矮 48px 出滚动条。
       const targetH = fixedH + resultH + TITLE_BAR_H + LAYOUT_EXTRA;
-      console.debug('[KAI-HEIGHT] 设置窗口高度', {
+      console.debug(t('log.heightLogSetWindowHeight'), {
         窗口宽度: winW,
         固定区: fixedH,
         结果区: resultH,
@@ -182,7 +182,7 @@
       try {
         await Window.SetSize(winW, targetH);
       } catch (e) {
-        console.error('[KAI-HEIGHT] 调整窗口高度失败', e);
+        console.error(t('log.heightLogAdjustFailed'), e);
       }
     } finally {
       adjusting = false;
@@ -221,14 +221,14 @@
       try {
         await Window.SetAlwaysOnTop($pinnedStore);
       } catch (e) {
-        console.error('[输入翻译] 恢复置顶状态失败', e);
+        console.error(t('log.restorePinFailed'), e);
       }
       try {
         const size = await Window.Size();
         winW = size.width;
-        console.debug('[KAI-HEIGHT] 初始化窗口宽度 =', winW);
+        console.debug(t('log.heightLogInitWidth'), winW);
       } catch (e) {
-        console.error('[输入翻译] 读取窗口尺寸失败', e);
+        console.error(t('log.inputLogReadSizeFailed'), e);
       }
       // 必须先等引擎/语言/默认值加载完（影响结果区占位卡片数量），否则首屏测量时
       // activeEngines 为空会走 RESULT_MIN 算出一个过矮的窗口，之后不一定能纠正。
@@ -236,7 +236,7 @@
       // 首屏主动计算一次高度：等引擎列表渲染进结果区后，用真实测量得到准确窗口高。
       tick().then(async () => {
         await tick();
-        console.debug('[KAI-HEIGHT] 首屏主动调整');
+        console.debug(t('log.heightLogFirstAdjust'));
         adjustWindowHeight();
       });
       // 字体异步加载（如自定义字体）会改变文本实际高度，加载完成后再补一次，
@@ -259,7 +259,7 @@
       if (cfg?.default_from) fromLang = cfg.default_from as TranslateLang;
       if (cfg?.default_to) toLang = cfg.default_to as TranslateLang;
     } catch (e) {
-      console.error('[输入翻译] 读取默认语言失败', e);
+      console.error(t('log.readDefaultLangFailed'), e);
     }
   }
 
@@ -269,7 +269,7 @@
       const cfg = (await GetConfig()) ?? ({} as any);
       await SaveConfig({ ...cfg, default_from: fromLang, default_to: toLang });
     } catch (e) {
-      console.error('[输入翻译] 持久化语言偏好失败', e);
+      console.error(t('log.persistLangPrefFailed'), e);
     }
   }
 
@@ -285,7 +285,7 @@
       const list = await GetEngines();
       engines = list ?? [];
     } catch (e) {
-      console.error('[输入翻译] 加载引擎列表失败', e);
+      console.error(t('log.loadEngineListFailed'), e);
       engines = [];
     }
   }
@@ -295,7 +295,7 @@
       const list = await GetLanguages(curLang);
       languages = list?.length ? list : fallbackLanguages;
     } catch (e) {
-      console.error('[输入翻译] 加载语言列表失败', e);
+      console.error(t('log.loadLangListFailed'), e);
       languages = fallbackLanguages;
     }
   }
@@ -327,7 +327,7 @@
       });
       // 结果通过 EventTranslateResult 逐个异步到达，loading 在收到首个结果时由模板判断解除。
     } catch (e) {
-      console.error('[输入翻译] 翻译请求失败', e);
+      console.error(t('log.translateRequestFailed'), e);
     } finally {
       // 兜底：若所有引擎都失败/无响应（后端不发送结果事件），最长 15s 后强制解除 loading。
       setTimeout(() => {

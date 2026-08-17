@@ -10,6 +10,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/settings"
 )
 
@@ -41,7 +42,7 @@ func (s *Service) WriteToClipboard(text string) error {
 		return nil
 	}
 	if !s.app.Clipboard.SetText(text) {
-		return fmt.Errorf("写入剪贴板失败")
+		return fmt.Errorf(i18n.T("err.selection_write_clipboard"))
 	}
 	return nil
 }

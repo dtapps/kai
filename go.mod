@@ -12,7 +12,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.49
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/spf13/viper v1.21.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.8
+	github.com/wailsapp/wails/v3 v3.0.0-beta.9
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0
@@ -20,6 +20,7 @@ require (
 )
 
 require (
+	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
 	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/basgys/goxml2json v1.1.0 // indirect
 	github.com/coder/websocket v1.8.15 // indirect
@@ -57,9 +58,9 @@ require (
 	github.com/vcaesar/tt v0.30.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
-	golang.org/x/exp v0.0.0-20260812173653-3d80eb74bc5b // indirect
+	golang.org/x/exp v0.0.0-20260813180055-c1d0aacb2297 // indirect
 	golang.org/x/image v0.45.0 // indirect
-	golang.org/x/mod v0.39.0 // indirect
+	golang.org/x/mod v0.40.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
 	modernc.org/libc v1.75.3 // indirect
 	modernc.org/mathutil v1.7.1 // indirect

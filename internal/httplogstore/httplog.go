@@ -27,6 +27,7 @@ import (
 	"time"
 	"unicode/utf16"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/sqlite"
 	"cnb.cool/dtapp/kai/internal/useragent"
 	"go.dtapp.net/library/contrib/http_log"
@@ -116,23 +117,23 @@ func Init(dataDir string, httpLogEnabled bool) error {
 		}
 		connDSN = filepath.Join(dataDir, "httplog.db")
 		if err := os.MkdirAll(dataDir, 0755); err != nil {
-			initErr = fmt.Errorf("httplog: create db dir: %w", err)
+			initErr = fmt.Errorf(i18n.T("err.httplog_create_dir"), err, err)
 			return
 		}
 		c, err := sql.Open("sqlite3", sqlite.BuildDSN(connDSN))
 		if err != nil {
-			initErr = fmt.Errorf("httplog: open db: %w", err)
+			initErr = fmt.Errorf(i18n.T("err.httplog_open_db"), err, err)
 			return
 		}
 		if _, err := c.Exec("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL"); err != nil {
 			c.Close()
-			initErr = fmt.Errorf("httplog: pragma: %w", err)
+			initErr = fmt.Errorf(i18n.T("err.httplog_pragma"), err, err)
 			return
 		}
 		// 执行建表 DDL
 		if _, err := c.ExecContext(context.Background(), schemaSQL); err != nil {
 			c.Close()
-			initErr = fmt.Errorf("httplog: create schema: %w", err)
+			initErr = fmt.Errorf(i18n.T("err.httplog_create_schema"), err, err)
 			return
 		}
 		// 执行迁移脚本
@@ -144,7 +145,7 @@ func Init(dataDir string, httpLogEnabled bool) error {
 			if _, err := c.Exec(stmt); err != nil {
 				if !strings.Contains(err.Error(), "duplicate column") {
 					c.Close()
-					initErr = fmt.Errorf("httplog: migrate: %w", err)
+					initErr = fmt.Errorf(i18n.T("err.httplog_migrate"), err, err)
 					return
 				}
 			}
@@ -267,7 +268,7 @@ func (s *entLogSaver) HandleLog(ctx context.Context, data *http_log.LogData) err
 	}
 
 	if err := New(c).InsertHttpLog(ctx, params); err != nil {
-		return fmt.Errorf("httplog: insert: %w", err)
+		return fmt.Errorf(i18n.T("err.httplog_insert"), err, err)
 	}
 	return nil
 }
@@ -311,13 +312,13 @@ func Cleanup(retentionDays int) (int, error) {
 	}
 	cleanupDB, err := sql.Open("sqlite3", sqlite.BuildDSN(dsn))
 	if err != nil {
-		return 0, fmt.Errorf("httplog: cleanup open: %w", err)
+		return 0, fmt.Errorf(i18n.T("err.httplog_cleanup_open"), err, err)
 	}
 	defer cleanupDB.Close()
 	cutoff := time.Now().AddDate(0, 0, -retentionDays)
 	n, err := New(cleanupDB).DeleteOldHttpLog(context.Background(), cutoff)
 	if err != nil {
-		return 0, fmt.Errorf("httplog: cleanup: %w", err)
+		return 0, fmt.Errorf(i18n.T("err.httplog_cleanup"), err, err)
 	}
 	return int(n), nil
 }
@@ -349,9 +350,9 @@ func StartCleanup(retentionDays int, logger *slog.Logger) {
 			case <-ticker.C:
 				n, err := Cleanup(retentionDays)
 				if err != nil {
-					logger.Error("httplog cleanup failed", slog.Any("error", err))
+					logger.Error(i18n.T("log.httplog_cleanup_failed"), slog.Any("error", err))
 				} else if n > 0 {
-					logger.Info("httplog cleaned old logs", slog.Int("count", n))
+					logger.Info(i18n.T("log.httplog_cleaned"), slog.Int("count", n))
 				}
 			case <-cleanupDone:
 				return

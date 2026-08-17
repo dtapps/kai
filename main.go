@@ -12,6 +12,7 @@ import (
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 
 	"cnb.cool/dtapp/kai/internal/buildinfo"
@@ -77,7 +78,6 @@ func resolveUpdaterTheme(theme string, app *application.App) string {
 func init() {
 	// 注册自定义事件类型，供后端 emit / 前端监听（对齐 certflow 的 RegisterEvent 模式）。
 	// 必须 emit 的数据类型与注册类型严格一致，否则 Wails3 validateCustomEvent 会 panic。
-	application.RegisterEvent[kevents.NotificationPayload](kevents.EventNotification)
 	application.RegisterEvent[kevents.LocaleChangedPayload](kevents.EventLocaleChanged)
 	application.RegisterEvent[kevents.ThemeChangedPayload](kevents.EventThemeChanged)
 	application.RegisterEvent[string](kevents.EventWindowShow)
@@ -103,7 +103,7 @@ func formatBuildTime(raw string) string {
 }
 
 func main() {
-	// 确定数据目录。
+	// ── 阶段一：创建数据目录（最早执行，此时尚不知用户语言，失败文案直接写中文）──
 	// 开发构建（buildinfo.IsDev() 为 true，即 `wails3 dev` / 未注入 VERSION）使用独立的
 	// .kai.dev 目录，与正式版 .kai 隔离，避免开发调试污染正式数据（对齐 certflow）。
 	homeDir, err := os.UserHomeDir()
@@ -118,10 +118,10 @@ func main() {
 	// 即 ~/.kai/data/（或 dev 的 ~/.kai.dev/data/）。目录规则由 buildinfo.DBDir 提供。
 	dbDir := buildinfo.DBDir(homeDir)
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {
-		log.Fatalf("创建 db 目录失败: %v", err)
+		log.Fatalf("创建数据库目录失败: %v", err)
 	}
 
-	// 初始化设置服务（尽早加载，日志/i18n 依赖它）
+	// ── 阶段二：获取设置（日志/i18n 依赖它，必须在数据库初始化之前）──
 	settingsService, err := settings.NewService(dataDir)
 	if err != nil {
 		log.Fatalf("加载设置失败: %v", err)
@@ -155,18 +155,19 @@ func main() {
 	// 初始等级/保留天数/压缩同样取自 settings.json 的 log 段；后续由 applyLogConfig 实时同步。
 	frontendLogFW, err := logutil.NewFrontendWriter(buildinfo.LogDir(homeDir), logutil.ParseLevel(logCfg.Level), logCfg.RetentionDays, logCfg.Compress)
 	if err != nil {
-		log.Printf("初始化前端日志失败，跳过: %v", err)
+		log.Printf(i18n.T("log.frontend_log_init_failed"), err)
 	}
 	frontendLogSvc := logutil.NewFrontendLogService(frontendLogFW)
 
+	// ── 阶段三：数据库初始化（必须在阶段二「获取设置」之后，日志/i18n 已就绪）──
 	// 初始化 HTTP 请求日志存储：必须在引擎注册（BuildHTTPClient→WrapTransport）
 	// 之前点火，否则 httplog 未启用、日志层不被包裹，翻译请求不会入库。
 	httpLogCfg := settingsService.Get().HttpLog
-	slog.Info("HTTP 日志开关状态", "enabled", httpLogCfg.Enabled, "retention_days", httpLogCfg.RetentionDays, "dbDir", dbDir)
+	slog.Info(i18n.T("log.http_log_status"), "enabled", httpLogCfg.Enabled, "retention_days", httpLogCfg.RetentionDays, "dbDir", dbDir)
 	if err := httplogstore.Init(dbDir, httpLogCfg.Enabled); err != nil {
-		slog.Warn("初始化 HTTP 日志失败", "error", err)
+		slog.Warn(i18n.T("log.http_log_init_failed"), "error", err)
 	} else {
-		slog.Info("HTTP 日志存储已初始化", "enabled", httpLogCfg.Enabled, "db", dbDir+"/httplog.db")
+		slog.Info(i18n.T("log.http_log_initialized"), "enabled", httpLogCfg.Enabled, "db", dbDir+"/httplog.db")
 	}
 	// 启动过期日志定时清理：仅在 enabled 时 Init 已就绪 connDSN，
 	// retention_days<=0 时 StartCleanup 内部直接 return，安全。
@@ -197,13 +198,14 @@ func main() {
 	// 领域包与薄 Wrapper 的显式依赖注入（取代旧 ServiceContext 大容器）。
 	// 构造时 app 尚未创建，先传 nil 占位，待 application.New 之后由 AppService.SetApp 统一注入。
 	reg := engine.NewRegistry()
+	// 历史库 / 引擎配置库（阶段三：数据库）
 	histDB, err := historystore.Open(filepath.Join(dbDir, "history.db"))
 	if err != nil {
-		log.Fatalf("打开历史数据库失败: %v", err)
+		log.Fatalf(i18n.T("log.open_history_db_failed"), err)
 	}
 	cfgDB, err := configstore.Open(filepath.Join(dbDir, "config.db"))
 	if err != nil {
-		log.Fatalf("打开引擎配置数据库失败: %v", err)
+		log.Fatalf(i18n.T("log.open_config_db_failed"), err)
 	}
 
 	trSvc := translate.NewService(reg, histDB, settingsService, nil, slog.Default())
@@ -213,6 +215,8 @@ func main() {
 	// 顶层服务引用（闭包延迟解析，运行时已赋值）
 	var appSvc *service.AppService
 	var windowSvc *service.WindowWrapper
+	// 通知服务：封装授权检查与安全发送，复用 Wails 已注册的单例。
+	var notifySvc *service.NotificationService
 
 	// 执行键：复制键触发后把选区回填主窗口
 	ekCtrl := execkey.NewExecKeyController(settingsService, nil, selSvc)
@@ -239,6 +243,7 @@ func main() {
 	historySvc := service.NewHistoryWrapper(histDB, cfgDB)
 	translateSvc := service.NewTranslateWrapper(trSvc)
 	appSvc = service.NewAppService(settingsService, trSvc, ekCtrl, hm, reg, histDB, cfgDB, nil)
+	notifySvc = service.NewNotificationService(notifications.NotificationService_)
 
 	app = application.New(application.Options{
 		Name:        "Kai",
@@ -254,6 +259,9 @@ func main() {
 			application.NewService(windowSvc),
 			// 前端日志桥接：接收前端 console / JS 错误，写入 logs/frontend.log
 			application.NewService(frontendLogSvc),
+			// 原生桌面通知（Wails notifications service，macOS 走 UNUserNotificationCenter，
+			// 不再经前端 Web Notification 转发）
+			application.NewService(notifications.NotificationService_),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
@@ -300,7 +308,7 @@ func main() {
 		}
 		go func() {
 			if _, err := trSvc.ScreenshotTranslate(); err != nil {
-				slog.Error("[Kai-截图翻译] 重新截图失败", slog.Any("error", err))
+				slog.Error(i18n.T("log.screenshot_retake_failed"), slog.Any("error", err))
 			}
 		}()
 	})
@@ -459,7 +467,7 @@ func main() {
 	updOpts.AssetMatcher = kupdater.NewUpdaterAssetMatcher()
 	updaterProvider, err = kupdater.NewMirrorProvider(&updOpts)
 	if err != nil {
-		slog.Error(kupdater.T("updater_init_failed"), "error", err)
+		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else {
 		// 自带更新窗口（BYO）：由库（wails-updater-providers）自创建并管理窗口，
 		// 在 OpenUpdaterWindow 内监听 wails:updater:resize（HTML 侧 ResizeObserver
@@ -473,16 +481,16 @@ func main() {
 			Providers:      []updater.Provider{updaterProvider},
 			Window:         winOpt,
 		}); err != nil {
-			slog.Error(kupdater.T("updater_init_failed"), "error", err)
+			slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 		} else {
 			// 更新就绪：打印日志，由用户在托盘菜单选择重启安装。
 			// 运行时回调，语言跟随库全局（已随切换更新），不用构造期快照。
 			app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
-				slog.Info(kupdater.T("updater_ready"))
+				slog.Info(i18n.T("log.updater_ready"))
 			})
 			// 启动时静默检查（dev 构建跳过，避免噪音）。
 			if !buildinfo.IsDev() {
-				checkUpdateOnStart(app)
+				checkUpdateOnStart(app, notifySvc)
 			}
 		}
 	}
@@ -590,11 +598,11 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 		trayMenu.AddCheckbox(i18n.T("menu.auto_start"), enabled).OnClick(func(ctx *application.Context) {
 			if ctx.IsChecked() {
 				if e := app.Autostart.Enable(); e != nil {
-					slog.Warn("启用开机自启失败", slog.String("error", e.Error()))
+					slog.Warn(i18n.T("log.autostart_enable_failed"), slog.String("error", e.Error()))
 				}
 			} else {
 				if e := app.Autostart.Disable(); e != nil {
-					slog.Warn("禁用开机自启失败", slog.String("error", e.Error()))
+					slog.Warn(i18n.T("log.autostart_disable_failed"), slog.String("error", e.Error()))
 				}
 			}
 		})
@@ -620,7 +628,7 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 	trayMenu.AddCheckbox(i18n.T("menu.prerelease"), ss.Get().Updater.Prerelease).OnClick(func(ctx *application.Context) {
 		ss.Get().Updater.Prerelease = ctx.IsChecked()
 		if err := ss.Save(); err != nil {
-			slog.Error("保存预发布开关失败", slog.String("error", err.Error()))
+			slog.Error(i18n.T("log.save_prerelease_failed"), slog.String("error", err.Error()))
 		}
 	})
 	// 分隔符隔开
@@ -641,12 +649,12 @@ func rebuildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *servic
 }
 
 // checkUpdateOnStart 启动后异步检查更新，有更新时发通知（对齐 certflow）。
-func checkUpdateOnStart(app *application.App) {
+func checkUpdateOnStart(app *application.App, notifySvc *service.NotificationService) {
 	go func() {
 		// 兜底：同点击检查更新，避免 Updater 原生层 panic 拖死主进程。
 		defer func() {
 			if r := recover(); r != nil {
-				slog.Error("启动检查更新异常", "panic", r)
+				slog.Error(i18n.T("log.check_update_panic"), "panic", r)
 			}
 		}()
 		// 生成 1 到 3 分钟之间的随机延迟，对齐 certflow（math/rand 足够）。
@@ -656,21 +664,19 @@ func checkUpdateOnStart(app *application.App) {
 		time.Sleep(randomDuration)
 		rel, err := app.Updater.Check(context.Background())
 		if err != nil {
-			slog.Warn("启动检查更新失败", "error", err)
+			slog.Warn(i18n.T("log.check_update_failed"), "error", err)
 			return
 		}
 		if rel == nil {
 			return // 没有更新
 		}
-		// 发送桌面通知
-		if ok := app.Event.Emit(kevents.EventNotification, kevents.NotificationPayload{
+		// 发送原生桌面通知（Wails notifications service，不经前端转发）。
+		// 授权检查与降级逻辑统一收敛到 service.NotificationService，调用处只关心发什么。
+		notifySvc.Notify(notifications.NotificationOptions{
+			ID:       "kai-update-available",
 			Title:    i18n.T("notification.update_available_title"),
 			Subtitle: i18n.T("notification.update_available_subtitle", "version", rel.Version),
-			Category: "system",
-			Level:    "info",
-		}); !ok {
-			slog.Warn("发送更新通知失败")
-		}
+		})
 	}()
 }
 
@@ -696,11 +702,11 @@ func initLogging(homeDir string, logCfg settings.LogConfig) *logutil.Rotator {
 	if err != nil {
 		// 目录/文件不可用：降级为仅 stderr，保证应用仍能启动并记录关键日志。
 		slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: logLevel})))
-		log.Printf("初始化滚动日志失败，仅使用 stderr: %v", err)
+		log.Printf(i18n.T("log.rotate_log_init_failed"), err)
 		return rotator
 	}
 	slog.SetDefault(slog.New(rotator.Handler()))
-	log.Printf("日志已初始化，写入: %s", filepath.Join(logDir, "kai.log"))
+	log.Printf(i18n.T("log.log_initialized"), filepath.Join(logDir, "kai.log"))
 	return rotator
 }
 
@@ -720,5 +726,5 @@ func applyLogConfig(r *logutil.Rotator, fl *logutil.FrontendLogService, cfg sett
 	}
 	// 同步给 Swift 桥接层（kai-bridge.log），等级同样来自设置文件。
 	engine.SetLogConfig(buildinfo.LogDir(homeDir), cfg.Level, cfg.RetentionDays, cfg.Compress)
-	slog.Info("日志配置已应用", "level", level.String(), "retention_days", cfg.RetentionDays, "compress", cfg.Compress)
+	slog.Info(i18n.T("log.log_config_applied"), "level", level.String(), "retention_days", cfg.RetentionDays, "compress", cfg.Compress)
 }

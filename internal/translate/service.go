@@ -16,6 +16,7 @@ import (
 	"cnb.cool/dtapp/kai/internal/engine"
 	"cnb.cool/dtapp/kai/internal/events"
 	"cnb.cool/dtapp/kai/internal/historystore"
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 	"cnb.cool/dtapp/kai/internal/settings"
 )
@@ -52,7 +53,7 @@ func (s *Service) Translate(req model.TranslateRequest) (*model.TranslateResult,
 	engineName := req.EngineName
 	reg, ok := s.registry.GetTranslator(engineName)
 	if !ok {
-		return nil, fmt.Errorf("引擎未注册: %s", engineName)
+		return nil, fmt.Errorf("%s: %s", i18n.T("err.translate_engine_not_registered"), engineName)
 	}
 	res, err := s.translateWithEngine(reg, engineName, req)
 	if err != nil {
@@ -92,9 +93,9 @@ func (s *Service) translateWithEngine(reg engine.Translator, engineName string, 
 	case res := <-resCh:
 		return res, nil
 	case err := <-errCh:
-		return nil, fmt.Errorf("翻译失败(%s): %w", engineName, err)
+		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.translate_failed"), engineName, err)
 	case <-ctx.Done():
-		return nil, fmt.Errorf("翻译超时(%s): %w", engineName, ctx.Err())
+		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.translate_timeout"), engineName, ctx.Err())
 	}
 }
 
@@ -118,7 +119,7 @@ func (s *Service) TranslateMulti(req model.TranslateRequest) (*model.TranslateMu
 		go func(reg engine.Translator, name string) {
 			res, err := s.translateWithEngine(reg, name, req)
 			if err != nil {
-				s.log.Error("多引擎翻译失败", slog.String("engine", name), slog.Any("error", err))
+				s.log.Error(i18n.T("log.translate_multi_engine_failed"), slog.String("engine", name), slog.Any("error", err))
 				return
 			}
 			s.saveHistory(res)
@@ -133,11 +134,11 @@ func (s *Service) TranslateMulti(req model.TranslateRequest) (*model.TranslateMu
 // Ocr 图片 OCR：直接对传入的图片数据执行 OCR（图片已由调用方截好/选好）。
 func (s *Service) Ocr(req model.OcrRequest) (*model.OcrResult, error) {
 	if len(req.ImageData) == 0 {
-		return nil, fmt.Errorf("图片数据为空")
+		return nil, fmt.Errorf(i18n.T("err.ocr_empty_image"))
 	}
 	ocr, ok := s.registry.GetOcr(req.Engine)
 	if !ok {
-		return nil, fmt.Errorf("OCR 引擎未注册: %s", req.Engine)
+		return nil, fmt.Errorf("%s: %s", i18n.T("err.ocr_engine_not_registered"), req.Engine)
 	}
 	return s.ocrWithEngine(ocr, req)
 }
@@ -146,7 +147,7 @@ func (s *Service) Ocr(req model.OcrRequest) (*model.OcrResult, error) {
 func (s *Service) ScreenshotOCR(engineName string) (*model.OcrResult, error) {
 	img, err := engine.CaptureScreenshot()
 	if err != nil {
-		return nil, fmt.Errorf("截图失败: %w", err)
+		return nil, fmt.Errorf("%s: %w", i18n.T("err.screenshot_failed"), err)
 	}
 	return s.TriggerOcr(engineName, img)
 }
@@ -162,13 +163,13 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	s.log.Debug("[Kai-截图翻译] 开始", slog.String("step", "capture_region"))
+	s.log.Debug(i18n.T("log.screenshot_start"), slog.String("step", "capture_region"))
 	img, err := engine.CaptureRegion(ctx)
 	if err != nil {
-		s.log.Error("[Kai-截图翻译] 区域截图失败", slog.Any("error", err))
-		return nil, fmt.Errorf("区域截图失败: %w", err)
+		s.log.Error(i18n.T("log.screenshot_capture_region_failed"), slog.Any("error", err))
+		return nil, fmt.Errorf("%s: %w", i18n.T("err.ocr_region_capture_failed"), err)
 	}
-	s.log.Debug("[Kai-截图翻译] 区域截图完成", slog.Int("image_bytes", len(img)))
+	s.log.Debug(i18n.T("log.screenshot_capture_region_done"), slog.Int("image_bytes", len(img)))
 
 	// 截图一完成（用户框选松手）立即把图片推给前端并呼出窗口，
 	// 让用户第一时间看到截图，不必等 OCR 与翻译。
@@ -181,17 +182,17 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 			To:           model.ZH,
 		})
 	}
-	s.log.Debug("[Kai-截图翻译] 已推送截图至前端", slog.String("step", "image_pushed"), slog.Int("image_len", len(imageURL)))
+	s.log.Debug(i18n.T("log.screenshot_pushed_image"), slog.String("step", "image_pushed"), slog.Int("image_len", len(imageURL)))
 
 	ocrName := s.registry.DefaultOCREngineName()
 	if ocrName == "" {
-		s.log.Error("[Kai-截图翻译] 未注册任何 OCR 引擎")
-		return nil, fmt.Errorf("未注册任何 OCR 引擎")
+		s.log.Error(i18n.T("log.screenshot_no_ocr_engine"))
+		return nil, fmt.Errorf(i18n.T("err.no_ocr"))
 	}
-	s.log.Debug("[Kai-截图翻译] 开始 OCR 识别", slog.String("ocr_engine", ocrName))
+	s.log.Debug(i18n.T("log.screenshot_ocr_start"), slog.String("ocr_engine", ocrName))
 	ocrRes, err := s.TriggerOcr(ocrName, img)
 	if err != nil {
-		s.log.Error("[Kai-截图翻译] OCR 失败", slog.String("ocr_engine", ocrName), slog.Any("error", err))
+		s.log.Error(i18n.T("log.screenshot_ocr_failed"), slog.String("ocr_engine", ocrName), slog.Any("error", err))
 		// OCR 失败（含超时）必须把错误投递前端，否则页面会一直停在"正在识别文字…"转圈。
 		if s.app != nil {
 			s.app.Event.Emit(events.EventScreenshotOCR, model.ScreenshotResult{
@@ -205,10 +206,10 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 		return nil, err
 	}
 	text := ocrRes.Text
-	s.log.Debug("[Kai-截图翻译] OCR 完成", slog.Int("text_len", len(text)))
+	s.log.Debug(i18n.T("log.screenshot_ocr_done"), slog.Int("text_len", len(text)))
 	if text == "" {
-		s.log.Warn("[Kai-截图翻译] OCR 未识别到文字")
-		return nil, fmt.Errorf("OCR 未识别到文字")
+		s.log.Warn(i18n.T("log.screenshot_ocr_empty"))
+		return nil, fmt.Errorf(i18n.T("err.ocr_no_text"))
 	}
 
 	to := model.ZH
@@ -226,7 +227,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	}
 
 	req := model.TranslateRequest{Text: text, From: from, To: to}
-	s.log.Debug("[Kai-截图翻译] 开始翻译", slog.String("target", string(to)), slog.Int("text_len", len(text)))
+	s.log.Debug(i18n.T("log.screenshot_translate_start"), slog.String("target", string(to)), slog.Int("text_len", len(text)))
 	translations := s.translateAllStream(req, imageURL, to)
 
 	result := model.ScreenshotResult{
@@ -235,7 +236,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 		Translations: translations,
 		To:           to,
 	}
-	s.log.Debug("[Kai-截图翻译] 结果组装完成", slog.Int("image_len", len(result.Image)), slog.Int("text_len", len(result.Text)), slog.Int("translations", len(result.Translations)))
+	s.log.Debug(i18n.T("log.screenshot_assemble_done"), slog.Int("image_len", len(result.Image)), slog.Int("text_len", len(result.Text)), slog.Int("translations", len(result.Translations)))
 	return &result, nil
 }
 
@@ -252,11 +253,11 @@ func (s *Service) translateAllStream(req model.TranslateRequest, imageURL string
 		if !ok {
 			continue
 		}
-		s.log.Debug("[Kai-截图翻译] 翻译引擎开始", slog.String("engine", meta.Name))
+		s.log.Debug(i18n.T("log.screenshot_engine_start"), slog.String("engine", meta.Name))
 		res, err := s.translateWithEngine(reg, meta.Name, req)
 		if err != nil {
-			s.log.Warn("[Kai-截图翻译] 翻译引擎失败", slog.String("engine", meta.Name), slog.Any("error", err))
-			s.log.Warn("截图翻译引擎失败", slog.String("engine", meta.Name), slog.Any("error", err))
+			s.log.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
+			s.log.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
 			// 失败也追加占位卡片，让用户看到哪个引擎没翻出来。
 			out = append(out, model.TranslateResult{
 				Engine: meta.Name,
@@ -289,7 +290,7 @@ func (s *Service) translateAllStream(req model.TranslateRequest, imageURL string
 func (s *Service) TriggerOcr(engineName string, img []byte) (*model.OcrResult, error) {
 	ocr, ok := s.registry.GetOcr(engineName)
 	if !ok {
-		return nil, fmt.Errorf("OCR 引擎未注册: %s", engineName)
+		return nil, fmt.Errorf("%s: %s", i18n.T("err.ocr_engine_not_registered"), engineName)
 	}
 	res, err := s.ocrWithEngine(ocr, model.OcrRequest{ImageData: img, Engine: engineName})
 	if err != nil {
@@ -325,10 +326,10 @@ func (s *Service) ocrWithEngine(ocr engine.OcrEngine, req model.OcrRequest) (*mo
 	case res := <-resCh:
 		return res, nil
 	case err := <-errCh:
-		return nil, fmt.Errorf("OCR 失败(%s): %w", req.Engine, err)
+		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.ocr_failed"), req.Engine, err)
 	case <-ctx.Done():
-		s.log.Error("[Kai-截图翻译] OCR 超时", slog.String("ocr_engine", req.Engine), slog.Any("error", ctx.Err()))
-		return nil, fmt.Errorf("OCR 超时(%s): %w", req.Engine, ctx.Err())
+		s.log.Error(i18n.T("log.screenshot_ocr_timeout"), slog.String("ocr_engine", req.Engine), slog.Any("error", ctx.Err()))
+		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.ocr_timeout"), req.Engine, ctx.Err())
 	}
 }
 
@@ -345,7 +346,7 @@ func (s *Service) saveHistory(res *model.TranslateResult) {
 	defer cancel()
 	engineRow, err := s.configStore.GetEngineByName(ctx, res.Engine)
 	if err != nil {
-		s.log.Warn("查询引擎 ID 失败", slog.String("engine", res.Engine), slog.Any("error", err))
+		s.log.Warn(i18n.T("log.engine_query_id_failed"), slog.String("engine", res.Engine), slog.Any("error", err))
 	}
 	engineID := int64(0)
 	if engineRow != nil {
@@ -364,7 +365,7 @@ func (s *Service) saveHistory(res *model.TranslateResult) {
 		FromOcr:   fromOCR,
 		CreatedAt: time.Now().UnixMilli(),
 	}); err != nil {
-		s.log.Error("保存历史记录失败", slog.Any("error", err))
+		s.log.Error(i18n.T("log.translate_save_history_failed"), slog.Any("error", err))
 	}
 }
 

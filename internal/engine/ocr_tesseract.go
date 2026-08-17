@@ -11,16 +11,17 @@ import (
 	"strings"
 	"time"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 )
 
 var (
 	// ErrEmptyImage 图片数据为空
-	ErrEmptyImage = errors.New("OCR 图片数据为空")
+	ErrEmptyImage = errors.New(i18n.T("err.ocr_empty_image"))
 	// ErrNoScreenshot 当前平台不支持系统截图
-	ErrNoScreenshot = errors.New("当前平台暂不支持系统截图")
+	ErrNoScreenshot = errors.New(i18n.T("err.ocr_screenshot_unsupported"))
 	// ErrTesseractNotFound 本机未找到 tesseract 可执行文件
-	ErrTesseractNotFound = errors.New("未找到 tesseract：请先安装（mac: brew install tesseract；linux: apt install tesseract-ocr）")
+	ErrTesseractNotFound = errors.New(i18n.T("err.ocr_tesseract_not_found"))
 )
 
 // tesseractCandidates GUI 应用（如打包后的 Kai.app）从 launchd 启动不继承 shell 的 PATH，
@@ -175,7 +176,7 @@ func (t *TesseractOCR) Recognize(ctx context.Context, req model.OcrRequest) (*mo
 		if t.bin == "" {
 			msg = ErrTesseractNotFound.Error()
 		} else {
-			msg = fmt.Sprintf("tesseract 执行失败(%v): %s", err, stderr.String())
+			msg = fmt.Sprintf("%s(%v): %s", i18n.T("err.ocr_tesseract_exec_failed"), err, stderr.String())
 		}
 		return nil, &OcrError{Msg: msg}
 	}
@@ -220,11 +221,11 @@ func CaptureRegion(ctx context.Context) ([]byte, error) {
 		cmd := exec.CommandContext(ctx, "screencapture", "-i", "-x", path)
 		if err := cmd.Run(); err != nil {
 			// 用户按 ESC 取消框选时 screencapture 退出码非 0；视为取消，不视为系统错误。
-			return nil, fmt.Errorf("区域截图失败(可能已取消): %w", err)
+			return nil, fmt.Errorf("%s: %w", i18n.T("err.ocr_region_capture_failed"), err)
 		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil, fmt.Errorf("读取区域截图失败: %w", err)
+			return nil, fmt.Errorf("%s: %w", i18n.T("err.ocr_read_region_failed"), err)
 		}
 		if len(data) == 0 {
 			// screencapture 退出码 0 但产出空文件（如框选面积为 0），返回明确错误避免下游 OCR 误报。

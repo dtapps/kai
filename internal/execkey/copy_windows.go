@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"github.com/aiwaki/makc"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"golang.org/x/sys/windows"
@@ -48,12 +49,12 @@ func parseHotkey(s string) ([]makc.Key, error) {
 		}
 		k, err := makc.ParseKey(name)
 		if err != nil {
-			return nil, fmt.Errorf("未知按键 %q: %w", name, err)
+			return nil, fmt.Errorf("%s: %w", i18n.T("err.execkey_unknown_key"), name, err)
 		}
 		keys = append(keys, k)
 	}
 	if len(keys) == 0 {
-		return nil, fmt.Errorf("热键 %q 未解析出任何有效按键", s)
+		return nil, fmt.Errorf(i18n.T("err.execkey_no_valid_key"), s)
 	}
 	return keys, nil
 }
@@ -88,8 +89,8 @@ func attachToForeground(log *slog.Logger) (restore func()) {
 	r, _, err := attachProc.Call(uintptr(selfThread), uintptr(fgThread), 1)
 	if r == 0 {
 		// 附着失败（例如已被占用），放弃，不破坏后续流程。
-		log.Debug("[复制键] AttachThreadInput 失败，跳过附着",
-			slog.String("错误", errNoop(err)))
+		log.Debug(i18n.T("log.copykey_attach_failed"),
+			slog.String(i18n.T("log.field_error"), errNoop(err)))
 		return noOp
 	}
 	return func() {
@@ -119,8 +120,8 @@ func (e *ExecKeyController) copySelection(fallback bool) string {
 
 	// 回退：自定义键没拿到内容，改用系统默认复制键（Ctrl+C）再试一次。
 	if fallback && text == "" {
-		e.log.Warn("[复制键] 自定义复制键未生效，回退使用默认复制键",
-			slog.String("自定义键", hotkey),
+		e.log.Warn(i18n.T("log.copykey_fallback_default"),
+			slog.String(i18n.T("log.field_customkey"), hotkey),
 		)
 		text = e.copyDefaultKey()
 	}
@@ -133,7 +134,7 @@ func (e *ExecKeyController) copySelection(fallback bool) string {
 func (e *ExecKeyController) copyDefaultKey() string {
 	client, err := getCopyClient()
 	if err != nil {
-		e.log.Error("[复制键] 初始化 makc 失败", slog.String("错误", err.Error()))
+		e.log.Error(i18n.T("err.execkey_init_makc"), slog.String(i18n.T("log.field_error"), err.Error()))
 		return ""
 	}
 
@@ -150,17 +151,17 @@ func (e *ExecKeyController) copyDefaultKey() string {
 		return client.Keyboard.Combo(ctx, makc.KeyControl, makc.KeyC)
 	})
 	if comboErr != nil {
-		e.log.Error("[复制键] 默认复制键(Ctrl+C)发送失败",
-			slog.String("错误", comboErr.Error()),
+		e.log.Error(i18n.T("log.copykey_default_send_failed"),
+			slog.String(i18n.T("log.field_error"), comboErr.Error()),
 		)
 		return ""
 	}
-	e.log.Debug("[复制键] 执行默认复制键完成（makc Ctrl+C）")
+	e.log.Debug(i18n.T("log.copykey_exec_makc_default_done"))
 
 	time.Sleep(120 * time.Millisecond)
 	text := e.selection.ReadClipboardText()
 	if text == "" {
-		e.log.Warn("[复制键] 默认复制键发送成功但剪贴板为空（目标 app 可能未响应复制）")
+		e.log.Warn(i18n.T("log.copykey_default_empty"))
 	}
 	return text
 }
@@ -174,14 +175,14 @@ func (e *ExecKeyController) copyWithHotkey(hotkey string) string {
 
 	keys, err := parseHotkey(hotkey)
 	if err != nil {
-		e.log.Warn("[复制键] 解析热键失败，跳过模拟",
-			slog.String("按键", hotkey), slog.String("错误", err.Error()))
+		e.log.Warn(i18n.T("log.copykey_parse_hotkey_failed"),
+			slog.String(i18n.T("log.field_key"), hotkey), slog.String(i18n.T("log.field_error"), err.Error()))
 		return ""
 	}
 
 	client, err := getCopyClient()
 	if err != nil {
-		e.log.Error("[复制键] 初始化 makc 失败", slog.String("错误", err.Error()))
+		e.log.Error(i18n.T("err.execkey_init_makc"), slog.String(i18n.T("log.field_error"), err.Error()))
 		return ""
 	}
 
@@ -191,8 +192,8 @@ func (e *ExecKeyController) copyWithHotkey(hotkey string) string {
 		parentCtx = e.app.Context()
 	}
 
-	e.log.Debug("[复制键] 解析热键 InvokeSync 内",
-		slog.String("按键", hotkey),
+	e.log.Debug(i18n.T("log.copykey_invoke_parse"),
+		slog.String(i18n.T("log.field_key"), hotkey),
 		slog.Any("keys", keys),
 	)
 	// 在主线程执行
@@ -204,20 +205,20 @@ func (e *ExecKeyController) copyWithHotkey(hotkey string) string {
 		return client.Keyboard.Combo(ctx, keys...)
 	})
 	if comboErr != nil {
-		e.log.Error("[复制键] 发送组合键失败",
-			slog.String("按键", hotkey),
-			slog.String("错误", comboErr.Error()),
+		e.log.Error(i18n.T("log.copykey_send_combo_failed"),
+			slog.String(i18n.T("log.field_key"), hotkey),
+			slog.String(i18n.T("log.field_error"), comboErr.Error()),
 		)
 		return ""
 	}
 
-	e.log.Debug("[复制键] 执行快捷键完成（makc 注入组合键）", slog.String("按键", hotkey))
+	e.log.Debug(i18n.T("log.copykey_exec_makc_done"), slog.String(i18n.T("log.field_key"), hotkey))
 
 	time.Sleep(120 * time.Millisecond)
 	text := e.selection.ReadClipboardText()
 	if text == "" {
-		e.log.Warn("[复制键] 组合键发送成功但剪贴板为空（目标 app 可能未响应复制）",
-			slog.String("按键", hotkey))
+		e.log.Warn(i18n.T("log.copykey_send_combo_empty"),
+			slog.String(i18n.T("log.field_key"), hotkey))
 	}
 	return text
 }

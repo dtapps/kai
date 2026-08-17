@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/sqlite"
 )
 
@@ -35,18 +36,18 @@ func Open(path string) (*Store, error) {
 	}
 	db, err := sql.Open("sqlite3", sqlite.BuildDSN(path))
 	if err != nil {
-		return nil, fmt.Errorf("historystore: open db: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.historystore_open_db"), err, err)
 	}
 	db.SetMaxOpenConns(1) // SQLite 单写者
 	if err := db.Ping(); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("historystore: ping: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.historystore_ping"), err, err)
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if _, err := db.ExecContext(ctx, schemaSQL); err != nil {
 		db.Close()
-		return nil, fmt.Errorf("historystore: migrate: %w", err)
+		return nil, fmt.Errorf(i18n.T("err.historystore_migrate"), err, err)
 	}
 	// 增量迁移：对已存在但缺列的旧库执行 migration.sql 中的 ALTER。
 	// SQLite 不支持 ADD COLUMN IF NOT EXISTS，重复的 ALTER 会报 "duplicate column"，
@@ -59,7 +60,7 @@ func Open(path string) (*Store, error) {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			if !strings.Contains(err.Error(), "duplicate column") {
 				db.Close()
-				return nil, fmt.Errorf("historystore: migrate: %w", err)
+				return nil, fmt.Errorf(i18n.T("err.historystore_migrate"), err, err)
 			}
 		}
 	}

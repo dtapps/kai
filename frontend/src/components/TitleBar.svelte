@@ -9,7 +9,7 @@
 
   // 平台判断统一走 runtime/platform（Wails v3 多窗口下 _wails 可能丢失，需 UA 兜底）。
   const isMacPlatform = isMac();
-  console.debug('[TitleBar] isMac =', isMacPlatform);
+  console.debug(t('log.titleBarIsMac'), isMacPlatform);
 
   function minimize() {
     Window.Minimise();

@@ -123,7 +123,7 @@
   "log.accessibility_query": "[桥接] 辅助功能授权查询",
   "log.accessibility_request": "[桥接] 辅助功能授权请求 弹出系统授权框",
   "log.app_started": "应用已启动",
-  "log.app_starting": "应用启动中",
+  "log.app_starting": "Kai 启动中... 版本={{.Version}} 打包时间={{.BuildTime}} 提交={{.GitCommit}}",
   "log.apple_query_langs": "[桥接] 查询系统可用语言列表",
   "log.apple_query_langs_done": "[桥接] 查询系统可用语言列表完成",
   "log.apple_setlog_std": "[引擎] 非 macOS 平台 SetLogConfig 走标准 slog（不重定向文件）",

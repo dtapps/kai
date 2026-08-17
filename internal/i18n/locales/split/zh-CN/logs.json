@@ -1,5 +1,5 @@
 {
-  "log.app_starting": "应用启动中",
+  "log.app_starting": "Kai 启动中... 版本={{.Version}} 打包时间={{.BuildTime}} 提交={{.GitCommit}}",
   "log.app_started": "应用已启动",
   "log.tray_ready": "托盘菜单已就绪",
   "log.update_check": "检查更新",

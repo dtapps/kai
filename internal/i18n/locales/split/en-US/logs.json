@@ -1,5 +1,5 @@
 {
-  "log.app_starting": "App starting",
+  "log.app_starting": "Kai starting... version={{.Version}} built={{.BuildTime}} commit={{.GitCommit}}",
   "log.app_started": "App started",
   "log.tray_ready": "Tray menu ready",
   "log.update_check": "Checking for updates",

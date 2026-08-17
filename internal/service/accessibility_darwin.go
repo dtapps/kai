@@ -18,6 +18,7 @@ int kai_accessibility_enabled(void);
 void kai_accessibility_request(void);
 int kai_screenrecording_enabled(void);
 void kai_screenrecording_request(void);
+void kai_set_locale(const char* locale);
 // TODO: 输入监控相关（kai_input_monitoring_enabled/kai_input_monitoring_request）当前未使用，已注释。如需 robotgo 模拟复制键再恢复。
 // int kai_input_monitoring_enabled(void);
 // void kai_input_monitoring_request(void);
@@ -54,7 +55,7 @@ func (s *AppService) openScreenRecordingSettings() {
 // // isInputMonitoringEnabled 检查 macOS「输入监控」是否已授权当前二进制。
 // func (s *AppService) isInputMonitoringEnabled() bool {
 // 	enabled := C.kai_input_monitoring_enabled() != 0
-// 	s.log.Info("[Kai-Bridge-Cgo] 输入监控授权查询", slog.Bool("结果", enabled))
+// 	s.log.Info(i18n.T("log.input_monitoring_query"), slog.Bool("结果", enabled))
 // 	return enabled
 // }
 //

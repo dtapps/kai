@@ -1,0 +1,913 @@
+//go:build ignore
+
+// kai_bridge.swift
+// Swift 桥接层：把 Apple Translation.framework 与 macOS 辅助功能授权暴露为 C 接口，供 cgo 链接。
+//
+// 编译（见 build.sh，部署目标由 SDK 版本自动决定，最低 26.0）：
+//   swiftc -c -parse-as-library -o kai_bridge.o kai_bridge.swift \
+//     -framework Translation -framework ApplicationServices -target arm64-apple-macosx$(SDK_MIN)
+//   ar rcs libkai_translate.a kai_bridge.o
+//
+// 暴露的 C 接口：
+//   int kai_translate(const char* src, const char* dst, const char* text,
+//                     char* out, int out_cap);
+//   int kai_available_languages(char* out, int out_cap);
+//   void kai_set_log_config(const char* dir, const char* level, int retention_days, bool compress);
+//       // 由 Go 在启动时传入日志目录与 LogConfig（等级/保留天数/压缩），桥接层日志统一受其控制
+//   int kai_accessibility_enabled(void);     // 辅助功能已授权返回 1，否则 0
+//   void kai_accessibility_request(void);    // 弹系统辅助功能授权框（仅首次）+ 打开系统辅助功能设置面板
+//   int kai_input_monitoring_enabled(void);  // 输入监控已授权返回 1，否则 0
+//   void kai_input_monitoring_request(void); // 打开系统输入监控设置面板
+//   int kai_selected_text(char* out, int out_cap);  // 通过辅助功能读取前台 app 当前选区文本
+//   int kai_selection_point(char* out, int out_cap); // 取前台 app 窗口锚点，返回 JSON {x,y}
+//   int kai_screen_size(char* out, int out_cap);      // 主屏分辨率，返回 JSON {w,h}
+//
+// 约定：out 由调用方（Go）分配，out_cap 为容量；返回写入字节数（不含结尾\0），
+//       失败返回负数。结果均为 JSON 字符串。
+//
+// 文件日志：所有桥接日志通过 bridgeFileLog 追加写入 dataDir/logs/kai-bridge.log，不带前缀；
+// 未设置日志目录（kai_set_log_config 未调用）则不写任何日志。日志等级、保留天数、压缩
+// 开关均由 Go 侧 LogConfig 经 kai_set_log_config 传入，与主应用日志（kai.log）保持一致策略。
+
+import AppKit
+import ApplicationServices
+import CoreGraphics
+import Foundation
+import NaturalLanguage
+import Translation
+import Vision
+
+// 日志等级数值映射（数值越大越严重，仅当 level >= bridgeLogLevel 才落盘）。
+let BRIDGE_LOG_DEBUG: Int = 0
+let BRIDGE_LOG_INFO: Int = 1
+let BRIDGE_LOG_WARN: Int = 2
+let BRIDGE_LOG_ERROR: Int = 3
+
+// Swift 桥接层自定义错误码（与 Go 侧 bridgeErr* 常量字面量保持一致）。
+// 规则：每个 code 必须在 Go internal/i18n 的 err.apple_<code> key 有对应文案，
+// 新增错误时务必同步三处，缺一不可：
+//   ① 本 BRIDGE_ERR_* 常量（Swift）
+//   ② Go 侧 bridgeErr* 常量（internal/engine/apple_darwin.go）
+//   ③ i18n zh/en 的 err.apple_<code> key（internal/i18n/locales/split/）
+let BRIDGE_ERR_EMPTY_TEXT: String = "empty_text"
+let BRIDGE_ERR_TARGET_REQUIRED: String = "target_required"
+let BRIDGE_ERR_NULL_IMAGE: String = "null_image"
+let BRIDGE_ERR_DECODE_FAILED: String = "decode_failed"
+let BRIDGE_ERR_EMPTY_IMAGE: String = "empty_image"
+let BRIDGE_ERR_BITMAP_CTX_FAILED: String = "bitmap_ctx_failed"
+let BRIDGE_ERR_BITMAP_REDRAW_FAILED: String = "bitmap_redraw_failed"
+let BRIDGE_ERR_OCR_TIMEOUT: String = "ocr_timeout"
+let BRIDGE_ERR_NO_SOURCE_LANG: String = "no_source_lang"
+// ② Apple 系统级翻译/识别错误（如 Translation.framework 抛出的本地化错误）。
+// detail 携带系统 localizedDescription，非可翻译文案，仅作技术细节。
+let BRIDGE_ERR_APPLE_TRANSLATE: String = "apple_translate"
+let BRIDGE_ERR_APPLE_OCR: String = "apple_ocr"
+
+// MARK: - 桥接层返回 JSON 的 Codable 模型
+// 所有对外（cgo）返回的 JSON 统一用 Codable struct + JSONEncoder 编码，
+// 字段名必须与 Go 端对应 struct 的 json tag 完全一致（见各 engine/selection 文件）。
+// 注意：cgo 边界只能传 C 类型，故 Swift 内部用 struct 组织，再编码成 String 写回 out 缓冲区。
+
+/// 错误返回：{"code":"...","detail":"..."}（detail 为非可翻译的技术细节）。
+struct BridgeError: Codable {
+  let code: String
+  let detail: String
+}
+
+/// 翻译成功：{"result":"...","from":"..."}
+struct TranslateSuccess: Codable {
+  let result: String
+  let from: String
+}
+
+/// 可用语言列表：{"langs":["...","..."]}
+struct AvailableLanguages: Codable {
+  let langs: [String]
+}
+
+/// 选区锚点：{"x":0,"y":0}
+struct SelectionPoint: Codable {
+  let x: Double
+  let y: Double
+}
+
+/// 主屏分辨率：{"w":0,"h":0}
+struct ScreenSize: Codable {
+  let w: Double
+  let h: Double
+}
+
+/// OCR 单区域：{"text":"...","conf":0,"box":[x1,y1,x2,y2]}
+struct OCRRegion: Codable {
+  let text: String
+  let conf: Double
+  let box: [Int]
+}
+
+/// OCR 成功：{"text":"...","regions":[...]}
+struct OCRSuccess: Codable {
+  let text: String
+  let regions: [OCRRegion]
+}
+
+/// 把任意 Codable 编码为紧凑 JSON 字符串；失败回退空对象 "{}"（Go 端会按默认错误文案处理）。
+func bridgeEncode<T: Codable>(_ value: T) -> String {
+  guard let data = try? JSONEncoder().encode(value),
+    let str = String(data: data, encoding: .utf8)
+  else {
+    return "{}"
+  }
+  return str
+}
+
+/// 便捷构造错误 JSON 字符串。
+func bridgeErrorJSON(code: String, detail: String) -> String {
+  bridgeEncode(BridgeError(code: code, detail: detail))
+}
+
+// 日志目录由 Go 在启动时通过 kai_set_log_config 设置（指向 dataDir/logs）；
+// 未设置则为 nil，bridgeFileLog 直接返回。等级/保留天数/压缩同步来自 LogConfig。
+var bridgeLogDir: URL? = nil
+var bridgeLogLevel: Int = BRIDGE_LOG_INFO
+var bridgeRetentionDays: Int = 30
+var bridgeCompress: Bool = true
+
+// 当前日志语言：由 Go 经 kai_set_locale 设置；"zh" 输出中文日志，"en" 输出英文日志，默认 zh。
+var bridgeLogLocale: String = "zh"
+
+// kai_set_log_config 由 Go 在启动时及配置热更新时调用，统一设置桥接层日志目录与策略。
+// dir：日志目录（dataDir/logs）；level：debug/info/warn/error（非法回退 info）；
+// retention_days：保留天数（<=0 表示仅按天滚动、不清理）；compress：过期归档是否压缩为 .gz。
+@_cdecl("kai_set_log_config")
+public func kai_set_log_config(
+  _ dir: UnsafePointer<CChar>?,
+  _ level: UnsafePointer<CChar>?,
+  _ retention_days: Int32,
+  _ compress: Bool
+) {
+  if let dir = dir {
+    let path = String(cString: dir)
+    let url = URL(fileURLWithPath: path, isDirectory: true)
+    try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    bridgeLogDir = url
+  }
+  if let level = level {
+    switch String(cString: level).lowercased() {
+    case "debug": bridgeLogLevel = BRIDGE_LOG_DEBUG
+    case "warn", "warning": bridgeLogLevel = BRIDGE_LOG_WARN
+    case "error": bridgeLogLevel = BRIDGE_LOG_ERROR
+    default: bridgeLogLevel = BRIDGE_LOG_INFO
+    }
+  }
+  bridgeRetentionDays = Int(retention_days)
+  bridgeCompress = compress
+  bridgeFileLog(
+    bridgeLogText(
+      "log.config_applied", bridgeLogDir?.path ?? "", bridgeLogLevel, bridgeRetentionDays,
+      String(bridgeCompress)), level: BRIDGE_LOG_INFO)
+}
+
+// kai_set_locale 由 Go 在启动时及语言切换时调用，设置桥接层日志输出语言。
+// locale：形如 "zh-CN" / "en-US" 的语言码；以 "en" 开头视为英文，其余按中文处理。
+@_cdecl("kai_set_locale")
+public func kai_set_locale(_ locale: UnsafePointer<CChar>?) {
+  guard let locale = locale else { return }
+  let l = String(cString: locale).lowercased()
+  bridgeLogLocale = l.hasPrefix("en") ? "en" : "zh"
+}
+
+// bridgeLogText 按当前 bridgeLogLocale 返回中/英日志文案。
+// key 为稳定英文标识（与 Go i18n 表解耦）；Swift 仅维护这一张轻量小表。
+// 文案中的 %@ / %d 占位符与 String(format:) 对应。
+private func bridgeLogText(_ key: String, _ args: CVarArg...) -> String {
+  let zh: [String: String] = [
+    "log.config_applied": "日志配置已应用 dir=%@ level=%d retention_days=%d compress=%@",
+    "translate.call": "系统翻译调用 src=%@ dst=%@ 文本长度=%d",
+    "translate.empty": "系统翻译失败: 文本为空",
+    "translate.no_target": "系统翻译失败: 缺少目标语言",
+    "translate.detect_src": "系统翻译自动检测源语言=%@ dst=%@",
+    "translate.detect_fail": "系统翻译自动检测失败且无已安装语言回退 dst=%@",
+    "translate.fail": "系统翻译失败: %@",
+    "translate.done": "系统翻译完成 from=%@ dst=%@ 译文长度=%d",
+    "lang.query_done": "系统已安装语言列表查询完成 总数=%d 已安装=%d",
+    "a11y.query": "辅助功能授权查询 结果=%@",
+    "a11y.request": "辅助功能授权请求 弹出系统授权框并尝试打开设置面板",
+    "a11y.request_done": "辅助功能授权请求 已打开系统设置面板",
+    "screen.query": "屏幕录制授权查询 结果=%@",
+    "screen.request": "屏幕录制授权请求 打开系统设置面板",
+    "screen.request_done": "屏幕录制授权请求 已打开系统设置面板",
+    "selection.point_done": "选区坐标读取完成 x=%@ y=%@",
+    "ocr.base64_fail": "系统 OCR 失败: base64 解码失败",
+    "ocr.image_fail": "系统 OCR 失败: 图片解码失败",
+    "ocr.empty_size": "系统 OCR 失败: 图片尺寸为空",
+    "ocr.bitmap_fail": "系统 OCR 失败: 位图上下文创建失败",
+    "ocr.redraw_fail": "系统 OCR 失败: 位图重绘失败",
+    "ocr.redraw_info": "系统 OCR 重绘前 raw bpp=%d alpha=%d cs=%@ | 重绘后 bpp=%d alpha=%d w=%d h=%d",
+    "ocr.fail": "系统 OCR 失败: %@",
+    "ocr.done": "系统 OCR 完成 行数=%d 首行长度=%d",
+    "ocr.config": "系统 OCR 配置 correction=%@ level=%d",
+    "ocr.perform_cost": "系统 OCR perform 实际耗时=%@s",
+    "ocr.timeout": "系统 OCR 超时: perform 超过 %d s 未完成",
+    "selection.fail_app": "选区读取 无法获取前台应用 axErr=%d",
+    "selection.empty": "选区读取结果为空 axErr=%d",
+    "selection.done": "选区读取完成 长度=%d",
+    "input.tap_fail": "输入监控检测 创建 EventTap 失败（未授权或被策略拒绝）",
+    "input.tap_enabled": "输入监控检测 tapIsEnabled=%@",
+    "input.settings": "输入监控 打开系统设置面板",
+  ]
+  let en: [String: String] = [
+    "log.config_applied": "log config applied dir=%@ level=%d retention_days=%d compress=%@",
+    "translate.call": "system translate call src=%@ dst=%@ text_len=%d",
+    "translate.empty": "translate failed: empty text",
+    "translate.no_target": "translate failed: missing target language",
+    "translate.detect_src": "system translate auto-detected source=%@ dst=%@",
+    "translate.detect_fail":
+      "system translate auto-detect failed and no installed language fallback dst=%@",
+    "translate.fail": "translate failed: %@",
+    "translate.done": "system translate done from=%@ dst=%@ result_len=%d",
+    "lang.query_done": "installed language list query done total=%d installed=%d",
+    "a11y.query": "accessibility authorization query result=%@",
+    "a11y.request":
+      "accessibility authorization request: popup system dialog and try opening settings panel",
+    "a11y.request_done": "accessibility authorization request: settings panel opened",
+    "screen.query": "screen recording authorization query result=%@",
+    "screen.request": "screen recording authorization request: open settings panel",
+    "screen.request_done": "screen recording authorization request: settings panel opened",
+    "selection.point_done": "selection point read done x=%@ y=%@",
+    "ocr.base64_fail": "system OCR failed: base64 decode failed",
+    "ocr.image_fail": "system OCR failed: image decode failed",
+    "ocr.empty_size": "system OCR failed: image size empty",
+    "ocr.bitmap_fail": "system OCR failed: bitmap context creation failed",
+    "ocr.redraw_fail": "system OCR failed: bitmap redraw failed",
+    "ocr.redraw_info":
+      "system OCR before redraw raw bpp=%d alpha=%d cs=%@ | after redraw bpp=%d alpha=%d w=%d h=%d",
+    "ocr.fail": "system OCR failed: %@",
+    "ocr.done": "system OCR done lines=%d first_len=%d",
+    "ocr.config": "system OCR config correction=%@ level=%d",
+    "ocr.perform_cost": "system OCR perform actual cost=%@s",
+    "ocr.timeout": "system OCR timeout: perform exceeded %d s",
+    "selection.fail_app": "selection read failed: cannot get front app axErr=%d",
+    "selection.empty": "selection read result empty axErr=%d",
+    "selection.done": "selection read done length=%d",
+    "input.tap_fail":
+      "input monitoring check: create EventTap failed (not authorized or blocked by policy)",
+    "input.tap_enabled": "input monitoring tapIsEnabled=%@",
+    "input.settings": "input monitoring: open system settings panel",
+  ]
+  guard let tmpl = (bridgeLogLocale == "en" ? en : zh)[key] else {
+    // 缺翻译时直接透传 key，便于发现遗漏
+    return key
+  }
+  return String(format: tmpl, arguments: args)
+}
+
+// bridgeDayString 返回日期的 2006-01-02 形式，用于按天滚动的归档文件名。
+private func bridgeDayString(_ d: Date) -> String {
+  let f = DateFormatter()
+  f.timeZone = TimeZone.current
+  f.dateFormat = "yyyy-MM-dd"
+  return f.string(from: d)
+}
+
+// bridgeGzip 调用系统 gzip 压缩文件，成功则删除原文件；失败静默返回（保留原文件）。
+private func bridgeGzip(_ path: String) {
+  let proc = Process()
+  proc.executableURL = URL(fileURLWithPath: "/usr/bin/gzip")
+  proc.arguments = [path]
+  do {
+    try proc.run()
+    proc.waitUntilExit()
+  } catch {
+    return
+  }
+}
+
+// 追加一行到 kai-bridge.log（ISO8601 时间戳，本地时区，无前缀）。
+// level 决定等级过滤：默认 info；低于当前 bridgeLogLevel 的日志直接丢弃。
+// 写入前按天滚动：若 kai-bridge.log 的 mtime 非今天，则归档为 kai-bridge-YYYY-MM-DD.log
+// （bridgeCompress 为真时压缩为 .gz），归档文件名沿用 kai- 前缀，由 Go 侧统一清理策略覆盖。
+func bridgeFileLog(_ message: String, level: Int = BRIDGE_LOG_INFO) {
+  guard level >= bridgeLogLevel else { return }
+  guard let dir = bridgeLogDir else { return }
+  let url = dir.appendingPathComponent("kai-bridge.log")
+
+  // 按天滚动：当前文件 mtime 非今天则归档（先压缩再保留，供 Go cleanup 删除过期）。
+  if let attrs = try? FileManager.default.attributesOfItem(atPath: url.path),
+    let mtime = attrs[.modificationDate] as? Date,
+    !Calendar.current.isDateInToday(mtime)
+  {
+    let archiveName = "kai-bridge-\(bridgeDayString(mtime)).log"
+    let archivePath = dir.appendingPathComponent(archiveName).path
+    let uniqueArchive = uniqueBridgePath(archivePath)
+    if (try? FileManager.default.moveItem(atPath: url.path, toPath: uniqueArchive)) != nil {
+      if bridgeCompress {
+        bridgeGzip(uniqueArchive)
+      }
+    }
+  }
+
+  let fmt = ISO8601DateFormatter()
+  fmt.timeZone = TimeZone.current
+  let ts = fmt.string(from: Date())
+  let line = "\(ts) \(message)\n"
+  if let data = line.data(using: .utf8) {
+    let fd = open(url.path, O_WRONLY | O_CREAT | O_APPEND, 0o644)
+    if fd >= 0 {
+      _ = data.withUnsafeBytes { write(fd, $0.baseAddress, $0.count) }
+      close(fd)
+    }
+  }
+}
+
+// uniqueBridgePath 若 path 已存在则在中段插入 .N 避免覆盖。
+private func uniqueBridgePath(_ path: String) -> String {
+  if !FileManager.default.fileExists(atPath: path) { return path }
+  let url = URL(fileURLWithPath: path)
+  let ext = url.pathExtension
+  let base = url.deletingPathExtension().path
+  var i = 1
+  while true {
+    let cand = "\(base).\(i).\(ext)"
+    if !FileManager.default.fileExists(atPath: cand) { return cand }
+    i += 1
+  }
+}
+
+// 把 Swift String 写入调用方提供的 C 缓冲区（含结尾\0）。
+// 返回实际写入长度（不含\0），超容量则返回 -1。
+private func writeCString(_ str: String, into buf: UnsafeMutablePointer<CChar>?, cap: Int32)
+  -> Int32
+{
+  guard let buf = buf else { return -1 }
+  let capInt = Int(cap)
+  guard capInt > 1 else { return -1 }
+  let bytes = Array(str.utf8)  // 不含 \0，长度 = 实际内容字节数
+  let maxLen = min(bytes.count, capInt - 1)
+  for i in 0..<maxLen {
+    buf[i] = CChar(bitPattern: bytes[i])
+  }
+  buf[maxLen] = 0
+  return Int32(maxLen)
+}
+
+// detectSourceLanguage：用 NaturalLanguage 的 LanguageRecognizer 自动识别文本主导语言，
+// 并在本机已安装语言列表中求交集，保证返回的源语言一定是已下载、可直接用于 TranslationSession 的。
+// installed：本机已安装语言码集合（小写形式用于匹配）。
+// detectedLang：输出参数，返回 NaturalLanguage 识别到的原始主导语言码（无论是否已安装），用于错误提示。
+// 返回已安装的匹配源语言码；若识别失败或识别出的语言未安装，则回退到 installed 中的首选（通常第一个，如 en），
+// 若 installed 为空则返回 nil。
+func detectSourceLanguage(_ text: String, installed: [String], detectedLang: inout String?)
+  -> String?
+{
+  let recognizer = NLLanguageRecognizer()
+  recognizer.processString(text)
+  guard let detected = recognizer.dominantLanguage?.rawValue else {
+    detectedLang = nil
+    return installed.first
+  }
+  detectedLang = detected
+  let detectedLower = detected.lowercased()
+  if let exact = installed.first(where: { $0.lowercased() == detectedLower }) { return exact }
+  if let prefix = installed.first(where: { $0.lowercased().hasPrefix(detectedLower) }) {
+    return prefix
+  }
+  if let rev = installed.first(where: { detectedLower.hasPrefix($0.lowercased()) }) { return rev }
+  return installed.first
+}
+
+// kai_translate：同步执行一次系统翻译。
+// src/dst 为 BCP-47 语言码（如 "en" / "zh-Hans"）；src 可为空字符串表示自动检测。
+// out 接收 JSON：{"result":"...","from":"..."}（TranslateSuccess）；失败 out 写入 {"code":"...","detail":"..."}（BridgeError）。
+@_cdecl("kai_translate")
+public func kai_translate(
+  _ src: UnsafePointer<CChar>?,
+  _ dst: UnsafePointer<CChar>?,
+  _ text: UnsafePointer<CChar>?,
+  _ out: UnsafeMutablePointer<CChar>?,
+  _ out_cap: Int32
+) -> Int32 {
+  let sourceCode = src.flatMap { String(cString: $0) } ?? ""
+  let targetCode = dst.flatMap { String(cString: $0) } ?? ""
+  let inputText = text.flatMap { String(cString: $0) } ?? ""
+
+  bridgeFileLog(bridgeLogText("translate.call", sourceCode, targetCode, inputText.utf8.count))
+
+  guard !inputText.isEmpty else {
+    bridgeFileLog(bridgeLogText("translate.empty"), level: BRIDGE_LOG_WARN)
+    // detail: 入参文本长度（已 trim 前），便于 Go 侧排查空传。
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_EMPTY_TEXT,
+        detail: "input text is empty (len=0)"), into: out, cap: out_cap)
+  }
+  guard !targetCode.isEmpty else {
+    bridgeFileLog(bridgeLogText("translate.no_target"), level: BRIDGE_LOG_WARN)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_TARGET_REQUIRED,
+        detail: "target language code is empty"), into: out, cap: out_cap)
+  }
+
+  let targetLang = Locale.Language(identifier: targetCode)
+
+  let sema = DispatchSemaphore(value: 0)
+  var resultJSON = "{}"
+
+  Task {
+    let availability = LanguageAvailability()
+    let installedAll = await availability.supportedLanguages
+    var installed: [String] = []
+    for lang in installedAll {
+      if await availability.status(from: lang, to: nil) == .installed {
+        installed.append(lang.maximalIdentifier)
+      }
+    }
+
+    var effectiveSource = sourceCode
+    var detectedLang: String? = nil
+    if sourceCode.isEmpty {
+      if let detected = detectSourceLanguage(
+        inputText, installed: installed, detectedLang: &detectedLang)
+      {
+        effectiveSource = detected
+        bridgeFileLog(bridgeLogText("translate.detect_src", effectiveSource, targetCode))
+      } else {
+        bridgeFileLog(bridgeLogText("translate.detect_fail", targetCode), level: BRIDGE_LOG_ERROR)
+      }
+    }
+    guard !effectiveSource.isEmpty else {
+      let installedDesc =
+        installed.isEmpty
+        ? "no installed language pack" : "installed: \(installed.joined(separator: ", "))"
+      let detectedDesc = detectedLang.map { "detected source: \($0)" } ?? ""
+      let detail =
+        "no installed source language for auto-detect\(detectedDesc). \(installedDesc). download the language pack in system settings > general > language & region > translate."
+      bridgeFileLog(bridgeLogText("translate.fail", detail), level: BRIDGE_LOG_ERROR)
+      // 返回结构化错误码，由 Go 侧 err.apple_no_source_lang 渲染用户可见文案；
+      // detail 仅作技术细节附在后面（含 Apple 语言标识符，非可翻译文案）。
+      resultJSON = bridgeErrorJSON(code: BRIDGE_ERR_NO_SOURCE_LANG, detail: detail)
+      sema.signal()
+      return
+    }
+    let sourceLang = Locale.Language(identifier: effectiveSource)
+    let session = TranslationSession(installedSource: sourceLang, target: targetLang)
+    do {
+      try await session.prepareTranslation()
+      let resp = try await session.translate(inputText)
+      let from = resp.sourceLanguage.languageCode?.identifier ?? sourceCode
+      resultJSON = bridgeEncode(TranslateSuccess(result: resp.targetText, from: from))
+      bridgeFileLog(bridgeLogText("translate.done", from, targetCode, resp.targetText.utf8.count))
+    } catch {
+      // Apple 系统级翻译错误：统一为 {"code":"apple_translate","detail":...} 结构，
+      // 由 Go 侧 err.apple_translate_engine 渲染，detail 携带系统 localizedDescription。
+      let detail = error.localizedDescription
+      resultJSON = bridgeErrorJSON(code: BRIDGE_ERR_APPLE_TRANSLATE, detail: detail)
+      bridgeFileLog(bridgeLogText("translate.fail", detail), level: BRIDGE_LOG_ERROR)
+    }
+    sema.signal()
+  }
+
+  _ = sema.wait(timeout: .now() + 20)
+  return writeCString(resultJSON, into: out, cap: out_cap)
+}
+
+// kai_available_languages：通过 LanguageAvailability 查询本机已下载（已安装、可离线翻译）的语言，
+// 返回 {"langs":[...]}。
+@_cdecl("kai_available_languages")
+public func kai_available_languages(
+  _ out: UnsafeMutablePointer<CChar>?,
+  _ out_cap: Int32
+) -> Int32 {
+  let sema = DispatchSemaphore(value: 0)
+  var resultJSON = "{\"langs\":[]}"
+
+  Task {
+    let availability = LanguageAvailability()
+    let all = await availability.supportedLanguages
+    var installed: [String] = []
+    for lang in all {
+      let status = await availability.status(from: lang, to: nil)
+      if status == .installed {
+        installed.append(lang.maximalIdentifier)
+      }
+    }
+    resultJSON = bridgeEncode(AvailableLanguages(langs: installed))
+    bridgeFileLog(
+      bridgeLogText("lang.query_done", all.count, installed.count), level: BRIDGE_LOG_DEBUG)
+    sema.signal()
+  }
+
+  _ = sema.wait(timeout: .now() + 30)
+  return writeCString(resultJSON, into: out, cap: out_cap)
+}
+
+// kai_accessibility_enabled 查询当前二进制是否已获得辅助功能授权。
+@_cdecl("kai_accessibility_enabled")
+public func kai_accessibility_enabled() -> Int32 {
+  let trusted = AXIsProcessTrusted()
+  let a11yStatus =
+    trusted
+    ? (bridgeLogLocale == "en" ? "granted" : "已授权") : (bridgeLogLocale == "en" ? "denied" : "未授权")
+  bridgeFileLog(bridgeLogText("a11y.query", a11yStatus), level: BRIDGE_LOG_DEBUG)
+  return trusted ? 1 : 0
+}
+
+// kai_accessibility_request 请求辅助功能授权。
+//
+// 实现策略：先尝试一次系统弹窗（AXIsProcessTrustedWithOptions 带 prompt，仅首次会真正弹框，
+// 之后系统不再弹，调用无害），随后立即打开系统「辅助功能」设置面板，让用户去勾选当前 app。
+// 之所以打开设置面板：AX 弹窗只在从未决定过时弹一次，若用户此前已拒绝/忽略，再点按钮只会静默
+// 无反应；而系统设置面板始终可打开，能保证"点击授权按钮必有所反馈"。
+@_cdecl("kai_accessibility_request")
+public func kai_accessibility_request() {
+  bridgeFileLog(bridgeLogText("a11y.request"))
+  // 首次调用才会真正弹系统授权框；已决定过则无副作用。
+  let opts = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
+  _ = AXIsProcessTrustedWithOptions(opts)
+  // 始终打开系统设置面板，确保点击后有明确反馈。
+  if let url = URL(
+    string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")
+  {
+    NSWorkspace.shared.open(url)
+    bridgeFileLog(bridgeLogText("a11y.request_done"))
+  }
+}
+
+// kai_screenrecording_enabled 查询当前二进制是否已获得「屏幕录制」授权（截图 OCR 依赖）。
+// 使用 ScreenCaptureKit 时代的 TCC 查询 API：CGPreflightScreenCaptureAccess。
+@_cdecl("kai_screenrecording_enabled")
+public func kai_screenrecording_enabled() -> Int32 {
+  // CGPreflightScreenCaptureAccess 在 macOS 11+ 可用，返回是否已授权。
+  let granted = CGPreflightScreenCaptureAccess()
+  let screenStatus =
+    granted
+    ? (bridgeLogLocale == "en" ? "granted" : "已授权") : (bridgeLogLocale == "en" ? "denied" : "未授权")
+  bridgeFileLog(bridgeLogText("screen.query", screenStatus), level: BRIDGE_LOG_DEBUG)
+  return granted ? 1 : 0
+}
+
+// kai_screenrecording_request 打开系统「屏幕录制」设置面板，让用户勾选当前 app。
+//
+// 注意：此前用的 CGRequestScreenCaptureAccess() 只在应用首次请求、且用户尚未决定时弹一次系统
+// 授权框；若用户此前已拒绝/忽略，再调用只会静默返回 false，点击授权按钮毫无反馈。
+// 正确做法是打开系统设置面板（x-apple.systempreferences URL scheme 的 Privacy_ScreenCapture 锚点），
+// 这样无论授权状态如何，点击按钮都能把用户带到「隐私与安全性 > 屏幕录制」页去勾选/确认。
+@_cdecl("kai_screenrecording_request")
+public func kai_screenrecording_request() {
+  bridgeFileLog(bridgeLogText("screen.request"))
+  if let url = URL(
+    string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture")
+  {
+    NSWorkspace.shared.open(url)
+    bridgeFileLog(bridgeLogText("screen.request_done"))
+  }
+}
+
+// TODO(2026-08-11): kai_selected_text 及其私有实现 readSelectedText 已禁用。
+// 原因：用户反馈启用该 Swift 取词路径后电脑偶发奇奇怪怪的问题（与 AX 后台线程查询/焦点切换相关）。
+// Go 侧 bridge_darwin.go 的 selectedTextViaBridge 与 point_darwin.go 的 currentSelectionOSA
+// 已同步注释/改为返回空串；cgo 声明与导出符号一并移除，故此处注释后 libkai_bridge.a 不再提供该符号，
+// 链接不会缺失。若日后定位根因需恢复：取消下方整段注释 + 恢复 Go 侧三处即可。
+//
+// kai_selected_text 通过 macOS 辅助功能（AXUIElement）读取当前前台应用的选区文本。
+// 不依赖 AppleScript，授权失败或无选区时返回空串（写入 out 为空字符串）。
+// out 接收 UTF-8 选区文本；返回写入字节数（不含\0），失败返回负数。
+//
+// 注意：不在此处用 AXIsProcessTrusted() 做前置拦截。原因：ad-hoc（临时自签名）打包的 app
+// 在 macOS 上 AXIsProcessTrusted() 恒返回 false（TCC 授权查询绑定签名身份，ad-hoc 无 Team ID），
+// 若前置拦截会导致真实选区读取被误杀、功能完全不可用。AX API 本身在未授权时会返回错误码，
+// readSelectedText 已据此安全返回空串，无需主动 guard。
+// @_cdecl("kai_selected_text")
+// public func kai_selected_text(
+//     _ out: UnsafeMutablePointer<CChar>?,
+//     _ out_cap: Int32
+// ) -> Int32 {
+//     // AX 调用必须在主线程（run loop）执行。Wails 全局快捷键回调在后台 goroutine，
+//     // 直接调用 AXUIElementCopyAttributeValue 会偶发 kAXErrorCannotComplete(-25212)，
+//     // 故整体派发到主队列同步执行。
+//     var result: Int32 = 0
+//     if Thread.isMainThread {
+//         result = readSelectedText(out: out, cap: out_cap)
+//     } else {
+//         DispatchQueue.main.sync {
+//             result = readSelectedText(out: out, cap: out_cap)
+//         }
+//     }
+//     return result
+// }
+//
+// readSelectedText 实际取词逻辑（须在主线程调用）。
+// private func readSelectedText(
+//     out: UnsafeMutablePointer<CChar>?,
+//     cap out_cap: Int32
+// ) -> Int32 {
+//     let systemWide = AXUIElementCreateSystemWide()
+//
+//     // 读取目标：前台应用的聚焦元素（能拿选区）。systemWide 本身不支持 kAXSelectedTextAttribute
+//     // （调用会返回 -25205 kAXErrorAttributeUnsupported），因此不回退读 systemWide。
+//     // 取不到前台 app 的聚焦元素时直接返回空，交由调用方（快捷键延迟后重试）处理。
+//     var focusedApp: CFTypeRef?
+//     let errApp = AXUIElementCopyAttributeValue(systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp)
+//     guard errApp == .success, let app = focusedApp else {
+//         bridgeFileLog(bridgeLogText("selection.fail_app", errApp.rawValue))
+//         return writeCString("", into: out, cap: out_cap)
+//     }
+//
+//     var target: AXUIElement = app as! AXUIElement
+//     var focusedElem: CFTypeRef?
+//     let errElem = AXUIElementCopyAttributeValue(target, kAXFocusedUIElementAttribute as CFString, &focusedElem)
+//     if errElem == .success, let elem = focusedElem {
+//         target = elem as! AXUIElement
+//     }
+//
+//     var selVal: CFTypeRef?
+//     let errSel = AXUIElementCopyAttributeValue(target, kAXSelectedTextAttribute as CFString, &selVal)
+//     guard errSel == .success, let strRef = selVal else {
+//         bridgeFileLog(bridgeLogText("selection.empty", errSel.rawValue))
+//         return writeCString("", into: out, cap: out_cap)
+//     }
+//
+//     let text = (strRef as! String) as NSString
+//     bridgeFileLog(bridgeLogText("selection.done", text.length))
+//     return writeCString(text as String, into: out, cap: out_cap)
+// }
+
+// kai_selection_point 通过 AX 读取前台 app 窗口坐标与尺寸，返回 JSON：
+// {"x":<屏幕中心x>, "y":<窗口底y>}，用于浮窗定位。未授权或无窗口返回 {"x":0,"y":0}。
+//
+// 不做 AXIsProcessTrusted() 前置拦截（原因见 kai_selected_text 注释），避免 ad-hoc 下误杀。
+@_cdecl("kai_selection_point")
+public func kai_selection_point(
+  _ out: UnsafeMutablePointer<CChar>?,
+  _ out_cap: Int32
+) -> Int32 {
+  let systemWide = AXUIElementCreateSystemWide()
+  var focusedApp: CFTypeRef?
+  guard
+    AXUIElementCopyAttributeValue(
+      systemWide, kAXFocusedApplicationAttribute as CFString, &focusedApp) == .success,
+    let app = focusedApp
+  else {
+    return writeCString(bridgeEncode(SelectionPoint(x: 0, y: 0)), into: out, cap: out_cap)
+  }
+
+  var posVal: CFTypeRef?
+  var sizeVal: CFTypeRef?
+  _ = AXUIElementCopyAttributeValue(app as! AXUIElement, kAXPositionAttribute as CFString, &posVal)
+  _ = AXUIElementCopyAttributeValue(app as! AXUIElement, kAXSizeAttribute as CFString, &sizeVal)
+
+  var x: CGFloat = 0
+  var y: CGFloat = 0
+  var w: CGFloat = 0
+  var h: CGFloat = 0
+  if let pos = posVal {
+    var cgPoint = CGPoint.zero
+    AXValueGetValue(pos as! AXValue, .cgPoint, &cgPoint)
+    x = cgPoint.x
+    y = cgPoint.y
+  }
+  if let size = sizeVal {
+    var cgSize = CGSize.zero
+    AXValueGetValue(size as! AXValue, .cgSize, &cgSize)
+    w = cgSize.width
+    h = cgSize.height
+  }
+  let anchorX = x + w / 2
+  let anchorY = y + h
+  let result = bridgeEncode(SelectionPoint(x: Double(anchorX), y: Double(anchorY)))
+  bridgeFileLog(
+    bridgeLogText(
+      "selection.point_done", String(format: "%.1f", anchorX), String(format: "%.1f", anchorY)),
+    level: BRIDGE_LOG_DEBUG)
+  return writeCString(result, into: out, cap: out_cap)
+}
+
+// kai_ocr：用 Vision.framework 的 VNRecognizeTextRequest 对传入图片做离线 OCR，
+// 返回 JSON：{"text":"全部文字(按行\\n连接)","regions":[{"text":"...","conf":0.98,"box":[x,y,w,h]}]}。
+// img 为 PNG/JPEG 图片的 base64 字符串（由 Go 侧把截图字节 base64 后传入）；
+// regions.box 采用 [x, y, w, h]（左上原点，单位像素，与图片像素尺寸一致）。
+// 失败 out 写入 {"code":"...","detail":"..."}（BridgeError）。Vision 文本识别为异步 API，内部用信号量同步。
+@_cdecl("kai_ocr")
+public func kai_ocr(
+  _ img: UnsafePointer<CChar>?,
+  _ out: UnsafeMutablePointer<CChar>?,
+  _ out_cap: Int32,
+  _ correct: Int32,
+  _ timeout_sec: Int32
+) -> Int32 {
+  guard let img = img else {
+    return writeCString(
+      bridgeErrorJSON(code: BRIDGE_ERR_NULL_IMAGE, detail: "image base64 pointer is null"),
+      into: out, cap: out_cap)
+  }
+  let b64 = String(cString: img)
+  guard let data = Data(base64Encoded: b64) else {
+    bridgeFileLog(bridgeLogText("ocr.base64_fail"), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_DECODE_FAILED, detail: "base64 decode failed (len=\(b64.utf8.count))"),
+      into: out, cap: out_cap)
+  }
+  // 用 CGImageSource 直接从 PNG/JPEG 字节解码为 CGImage，避免 NSImage 的分辨率/方向适配层
+  // 在 Vision 下偶发触发 CRImageReaderError error 1（区域截图更常见）。
+  guard let src = CGImageSourceCreateWithData(data as CFData, nil),
+    let rawImage = CGImageSourceCreateImageAtIndex(src, 0, nil)
+  else {
+    bridgeFileLog(bridgeLogText("ocr.image_fail"), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_DECODE_FAILED,
+        detail: "CGImageSourceCreateImageAtIndex failed (not a valid PNG/JPEG)"), into: out,
+      cap: out_cap)
+  }
+  // 把原始 cgImage 重绘到一个「标准格式」位图上下文（RGBA8、无 Alpha、sRGB 色彩空间），
+  // 再用重绘后的 cgImage 喂给 Vision。区域截图偶发的
+  // TextRecognition.CRImageReaderError error 1 是 Vision 内部 CRImageReader 对
+  // 特殊像素格式/Alpha 通道/色彩空间拒绝解码所致；强制重绘为标准格式可彻底规避
+  // （Vision 的 VNImageRequestHandler 内部仍会用 CRImageReader 重新解码，无法靠外层
+  // CGImageSource 解码绕过，必须在喂入前把像素格式归一化）。
+  let w = rawImage.width
+  let h = rawImage.height
+  guard w > 0, h > 0 else {
+    bridgeFileLog(bridgeLogText("ocr.empty_size"), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(code: BRIDGE_ERR_EMPTY_IMAGE, detail: "decoded image size is 0x0"), into: out,
+      cap: out_cap)
+  }
+  let colorSpace = CGColorSpaceCreateDeviceRGB()
+  let bytesPerRow = w * 4  // 显式计算每行字节数（RGBA8），避免系统自动对齐在某些尺寸下触发 CRImageReader
+  guard
+    let ctx = CGContext(
+      data: nil,
+      width: w,
+      height: h,
+      bitsPerComponent: 8,
+      bytesPerRow: bytesPerRow,
+      space: colorSpace,
+      bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+  else {
+    bridgeFileLog(bridgeLogText("ocr.bitmap_fail"), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_BITMAP_CTX_FAILED,
+        detail: "CGContext(width=\(w),height=\(h)) creation failed"), into: out, cap: out_cap)
+  }
+  ctx.draw(rawImage, in: CGRect(x: 0, y: 0, width: w, height: h))
+  guard let cgImage = ctx.makeImage() else {
+    bridgeFileLog(bridgeLogText("ocr.redraw_fail"), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_BITMAP_REDRAW_FAILED,
+        detail: "CGContext.makeImage() returned nil (w=\(w),h=\(h))"), into: out, cap: out_cap)
+  }
+  // 诊断：打印原始图与重绘图的格式，确认 CRImageReaderError 是否因格式未归一化导致。
+  let rawBPP = rawImage.bitsPerPixel
+  let rawAlpha = rawImage.alphaInfo.rawValue
+  let rawCS = rawImage.colorSpace?.name.map({ $0 as String }) ?? "nil"
+  let outBPP = cgImage.bitsPerPixel
+  let outAlpha = cgImage.alphaInfo.rawValue
+  bridgeFileLog(
+    bridgeLogText("ocr.redraw_info", rawBPP, rawAlpha, rawCS, outBPP, outAlpha, w, h),
+    level: BRIDGE_LOG_DEBUG)
+
+  // 初始占位：正常同步完成后必被识别结果覆盖；若 perform 抛错会被改写为错误 JSON。
+  var resultJSON = bridgeEncode(OCRSuccess(text: "", regions: []))
+  let imgW = CGFloat(cgImage.width)
+  let imgH = CGFloat(cgImage.height)
+
+  // Vision 的 perform 是同步阻塞调用，若不设超时，遇到异常图片会一直卡在 cgo 线程上，
+  // 导致 Go 侧 30s 超时之后 Swift 仍在后台跑（实测可达 69s），既浪费线程又让用户干等。
+  // 因此改为：perform 放到后台队列异步执行，cgo 线程用信号量带超时等待其完成；
+  // 超时则立即返回 ocr timeout，后台 perform 晚到的结果只写入局部变量，不再拖住 Go 侧。
+  // 超时阈值由调用方传入（默认 60s），保证 Go 侧 ctx.Done() 不会提前假触发。
+  let ocrTimeout: TimeInterval = timeout_sec > 0 ? TimeInterval(timeout_sec) : 60
+  let request = VNRecognizeTextRequest { req, err in
+    if let err = err {
+      // Vision 请求回调系统错误：统一为 {"code":"apple_ocr","detail":...}。
+      resultJSON = bridgeErrorJSON(code: BRIDGE_ERR_APPLE_OCR, detail: err.localizedDescription)
+      bridgeFileLog(bridgeLogText("ocr.fail", err.localizedDescription), level: BRIDGE_LOG_ERROR)
+      return
+    }
+    guard let observations = req.results as? [VNRecognizedTextObservation] else {
+      resultJSON = bridgeEncode(OCRSuccess(text: "", regions: []))
+      return
+    }
+    var lines: [String] = []
+    var regions: [OCRRegion] = []
+    for obs in observations {
+      guard let candidate = obs.topCandidates(1).first else { continue }
+      let text = candidate.string
+      let conf = candidate.confidence
+      // Vision 的 boundingBox 以左下原点、归一化 [0,1]；转成左上原点像素 [x,y,w,h]。
+      let b = obs.boundingBox
+      let x = b.origin.x * imgW
+      let y = (1 - b.origin.y - b.size.height) * imgH
+      let w = b.size.width * imgW
+      let h = b.size.height * imgH
+      lines.append(text)
+      regions.append(
+        OCRRegion(
+          text: text,
+          conf: Double(conf),
+          box: [Int(x), Int(y), Int(w), Int(h)]))
+    }
+    resultJSON = bridgeEncode(OCRSuccess(text: lines.joined(separator: "\n"), regions: regions))
+    bridgeFileLog(
+      bridgeLogText("ocr.done", lines.count, lines.first?.utf8.count ?? 0), level: BRIDGE_LOG_INFO)
+  }
+  request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en"]
+  // usesLanguageCorrection=true 会让 Vision 对每个候选做语言模型校正打分，
+  // 在特定像素/文字密度下显著放大 perform 内部耗时，是偶发 60s+ 卡死的主因。
+  // 截图翻译多为中英文短句。校正开关由调用方传入（correct=1 开启 / 0 关闭）：
+  // 开启（默认）更准确，关闭更快、偶发卡死概率更低。
+  request.usesLanguageCorrection = correct != 0
+  // 显式用 .fast 模式（默认 .accurate 更重），配合关闭校正，正常图仍是秒回。
+  request.recognitionLevel = .fast
+  bridgeFileLog(
+    bridgeLogText(
+      "ocr.config", String(request.usesLanguageCorrection), request.recognitionLevel.rawValue),
+    level: BRIDGE_LOG_DEBUG)
+
+  let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+
+  let sig = DispatchSemaphore(value: 0)
+  let performStart = Date()
+  // 后台队列异步执行同步 perform，避免阻塞 cgo 调用线程；完成（或失败）时释放信号量。
+  DispatchQueue.global(qos: .userInitiated).async {
+    do {
+      try handler.perform([request])  // 同步：perform 返回即表示识别已完成（completion 已触发）
+    } catch {
+      // Vision perform 抛出的系统错误：统一为 {"code":"apple_ocr","detail":...}。
+      resultJSON = bridgeErrorJSON(code: BRIDGE_ERR_APPLE_OCR, detail: error.localizedDescription)
+      bridgeFileLog(bridgeLogText("ocr.fail", error.localizedDescription), level: BRIDGE_LOG_ERROR)
+    }
+    let elapsed = Date().timeIntervalSince(performStart)
+    bridgeFileLog(
+      bridgeLogText("ocr.perform_cost", String(format: "%.2f", elapsed)), level: BRIDGE_LOG_DEBUG)
+    sig.signal()
+  }
+  // 带超时等待：ocrTimeout 内未完成则视为 OCR 超时，立即返回，不拖住 Go 侧 30s 超时逻辑。
+  let waitResult = sig.wait(timeout: .now() + ocrTimeout)
+  if waitResult == .timedOut {
+    bridgeFileLog(bridgeLogText("ocr.timeout", Int(ocrTimeout)), level: BRIDGE_LOG_ERROR)
+    return writeCString(
+      bridgeErrorJSON(
+        code: BRIDGE_ERR_OCR_TIMEOUT,
+        detail: "Vision perform exceeded \(Int(ocrTimeout))s"), into: out, cap: out_cap)
+  }
+  return writeCString(resultJSON, into: out, cap: out_cap)
+}
+
+// kai_screen_size 返回主屏幕分辨率（逻辑像素），返回 JSON：{"w":<宽>, "h":<高>}。
+@_cdecl("kai_screen_size")
+public func kai_screen_size(
+  _ out: UnsafeMutablePointer<CChar>?,
+  _ out_cap: Int32
+) -> Int32 {
+  let screen = NSScreen.main
+  let frame = screen?.visibleFrame ?? CGRect.zero
+  let result = bridgeEncode(ScreenSize(w: Double(frame.width), h: Double(frame.height)))
+  return writeCString(result, into: out, cap: out_cap)
+}
+
+// TODO: 输入监控相关（kai_input_monitoring_enabled / kai_input_monitoring_request 两个 @_cdecl 接口）当前未使用，已注释。需 robotgo 模拟复制键时恢复（注意保留 ARC 自动释放、回调原样回传，避免全局键盘失控）。
+// // kai_input_monitoring_enabled 检测 macOS「输入监控」授权状态。
+// // 输入监控（TCC kTCCServiceListenEvent）没有公开的直接查询 API，常规做法是尝试在
+// // kCGHIDEventTap 上创建 CGEventTap：创建失败或被策略禁用即未授权。复制键（robotgo
+// // 模拟 Cmd+C，底层 CGEventPost）依赖此授权，未授权时按键事件被系统静默丢弃。
+// //
+// // 注意：本函数只用于“探测授权”，创建 tap 后必须立即释放，且回调不得吞事件——
+// // 否则会在全局键盘事件流最前留下一个常驻 tap，导致所有 app 的按键被拦截/吞掉/乱序，
+// // 表现为“鼠标或键盘偶尔不受控制”。
+// @_cdecl("kai_input_monitoring_enabled")
+// public func kai_input_monitoring_enabled() -> Int32 {
+//     let tap = CGEvent.tapCreate(
+//         tap: .cghidEventTap,
+//         place: .headInsertEventTap,
+//         options: .defaultTap,
+//         eventsOfInterest: CGEventMask(1 << CGEventType.keyDown.rawValue),
+//         callback: { _, _, event, _ in return Unmanaged.passRetained(event) },  // 重要：原样回传，绝不吞事件
+//         userInfo: nil
+//     )
+//     guard let t = tap else {
+//         bridgeFileLog(bridgeLogText("input.tap_fail"))
+//         return 0
+//     }
+//     // 创建成功但被策略禁用（CGEventTapIsEnabled == false）也视为未授权。
+//     let enabled = CGEvent.tapIsEnabled(tap: t)
+//     bridgeFileLog(bridgeLogText("input.tap_enabled", String(enabled)))
+//     // t 为 CFMachPort，受 Swift ARC 管理；函数返回后自动释放，内核 event tap 随之失效，
+//     // 不会留下常驻全局键盘拦截器（之前手动 CFRelease 在 ARC 下不可用，且旧代码从不释放才导致失控）。
+//     return enabled ? 1 : 0
+// }
+//
+// // kai_input_monitoring_request 打开系统「安全性与隐私 > 输入监控」设置面板。
+// // 输入监控没有类似辅助功能的系统弹窗请求 API（AXIsProcessTrustedWithOptions），
+// // 只能通过打开设置面板让用户手动勾选当前 app。
+// @_cdecl("kai_input_monitoring_request")
+// public func kai_input_monitoring_request() {
+//     if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_ListenEvent") {
+//         NSWorkspace.shared.open(url)
+//         bridgeFileLog(bridgeLogText("input.settings"))
+//     }
+// }

@@ -29,12 +29,11 @@ type Service struct {
 	configStore *configstore.Store
 	settings    *settings.Service
 	app         *application.App
-	log         *slog.Logger
 }
 
 // NewService 构造翻译编排服务。app 允许在构造后通过 SetApp 注入（启动编排期 app 才就绪）。
-func NewService(reg *engine.Registry, hist *historystore.Store, st *settings.Service, app *application.App, log *slog.Logger) *Service {
-	return &Service{registry: reg, history: hist, settings: st, app: app, log: log}
+func NewService(reg *engine.Registry, hist *historystore.Store, st *settings.Service, app *application.App) *Service {
+	return &Service{registry: reg, history: hist, settings: st, app: app}
 }
 
 // SetApp 在 app 就绪后注入（启动编排阶段）。
@@ -119,7 +118,7 @@ func (s *Service) TranslateMulti(req model.TranslateRequest) (*model.TranslateMu
 		go func(reg engine.Translator, name string) {
 			res, err := s.translateWithEngine(reg, name, req)
 			if err != nil {
-				s.log.Error(i18n.T("log.translate_multi_engine_failed"), slog.String("engine", name), slog.Any("error", err))
+				slog.Error(i18n.T("log.translate_multi_engine_failed"), slog.String("engine", name), slog.Any("error", err))
 				return
 			}
 			s.saveHistory(res)
@@ -163,13 +162,13 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	s.log.Debug(i18n.T("log.screenshot_start"), slog.String("step", "capture_region"))
+	slog.Debug(i18n.T("log.screenshot_start"), slog.String("step", "capture_region"))
 	img, err := engine.CaptureRegion(ctx)
 	if err != nil {
-		s.log.Error(i18n.T("log.screenshot_capture_region_failed"), slog.Any("error", err))
+		slog.Error(i18n.T("log.screenshot_capture_region_failed"), slog.Any("error", err))
 		return nil, fmt.Errorf("%s: %w", i18n.T("err.ocr_region_capture_failed"), err)
 	}
-	s.log.Debug(i18n.T("log.screenshot_capture_region_done"), slog.Int("image_bytes", len(img)))
+	slog.Debug(i18n.T("log.screenshot_capture_region_done"), slog.Int("image_bytes", len(img)))
 
 	// 截图一完成（用户框选松手）立即把图片推给前端并呼出窗口，
 	// 让用户第一时间看到截图，不必等 OCR 与翻译。
@@ -182,17 +181,17 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 			To:           model.ZH,
 		})
 	}
-	s.log.Debug(i18n.T("log.screenshot_pushed_image"), slog.String("step", "image_pushed"), slog.Int("image_len", len(imageURL)))
+	slog.Debug(i18n.T("log.screenshot_pushed_image"), slog.String("step", "image_pushed"), slog.Int("image_len", len(imageURL)))
 
 	ocrName := s.registry.DefaultOCREngineName()
 	if ocrName == "" {
-		s.log.Error(i18n.T("log.screenshot_no_ocr_engine"))
+		slog.Error(i18n.T("log.screenshot_no_ocr_engine"))
 		return nil, fmt.Errorf(i18n.T("err.no_ocr"))
 	}
-	s.log.Debug(i18n.T("log.screenshot_ocr_start"), slog.String("ocr_engine", ocrName))
+	slog.Debug(i18n.T("log.screenshot_ocr_start"), slog.String("ocr_engine", ocrName))
 	ocrRes, err := s.TriggerOcr(ocrName, img)
 	if err != nil {
-		s.log.Error(i18n.T("log.screenshot_ocr_failed"), slog.String("ocr_engine", ocrName), slog.Any("error", err))
+		slog.Error(i18n.T("log.screenshot_ocr_failed"), slog.String("ocr_engine", ocrName), slog.Any("error", err))
 		// OCR 失败（含超时）必须把错误投递前端，否则页面会一直停在"正在识别文字…"转圈。
 		if s.app != nil {
 			s.app.Event.Emit(events.EventScreenshotOCR, model.ScreenshotResult{
@@ -206,9 +205,9 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 		return nil, err
 	}
 	text := ocrRes.Text
-	s.log.Debug(i18n.T("log.screenshot_ocr_done"), slog.Int("text_len", len(text)))
+	slog.Debug(i18n.T("log.screenshot_ocr_done"), slog.Int("text_len", len(text)))
 	if text == "" {
-		s.log.Warn(i18n.T("log.screenshot_ocr_empty"))
+		slog.Warn(i18n.T("log.screenshot_ocr_empty"))
 		return nil, fmt.Errorf(i18n.T("err.ocr_no_text"))
 	}
 
@@ -227,7 +226,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 	}
 
 	req := model.TranslateRequest{Text: text, From: from, To: to}
-	s.log.Debug(i18n.T("log.screenshot_translate_start"), slog.String("target", string(to)), slog.Int("text_len", len(text)))
+	slog.Debug(i18n.T("log.screenshot_translate_start"), slog.String("target", string(to)), slog.Int("text_len", len(text)))
 	translations := s.translateAllStream(req, imageURL, to)
 
 	result := model.ScreenshotResult{
@@ -236,7 +235,7 @@ func (s *Service) ScreenshotTranslate() (*model.ScreenshotResult, error) {
 		Translations: translations,
 		To:           to,
 	}
-	s.log.Debug(i18n.T("log.screenshot_assemble_done"), slog.Int("image_len", len(result.Image)), slog.Int("text_len", len(result.Text)), slog.Int("translations", len(result.Translations)))
+	slog.Debug(i18n.T("log.screenshot_assemble_done"), slog.Int("image_len", len(result.Image)), slog.Int("text_len", len(result.Text)), slog.Int("translations", len(result.Translations)))
 	return &result, nil
 }
 
@@ -253,11 +252,11 @@ func (s *Service) translateAllStream(req model.TranslateRequest, imageURL string
 		if !ok {
 			continue
 		}
-		s.log.Debug(i18n.T("log.screenshot_engine_start"), slog.String("engine", meta.Name))
+		slog.Debug(i18n.T("log.screenshot_engine_start"), slog.String("engine", meta.Name))
 		res, err := s.translateWithEngine(reg, meta.Name, req)
 		if err != nil {
-			s.log.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
-			s.log.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
+			slog.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
+			slog.Warn(i18n.T("log.translate_screenshot_engine_failed"), slog.String("engine", meta.Name), slog.Any("error", err))
 			// 失败也追加占位卡片，让用户看到哪个引擎没翻出来。
 			out = append(out, model.TranslateResult{
 				Engine: meta.Name,
@@ -328,7 +327,7 @@ func (s *Service) ocrWithEngine(ocr engine.OcrEngine, req model.OcrRequest) (*mo
 	case err := <-errCh:
 		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.ocr_failed"), req.Engine, err)
 	case <-ctx.Done():
-		s.log.Error(i18n.T("log.screenshot_ocr_timeout"), slog.String("ocr_engine", req.Engine), slog.Any("error", ctx.Err()))
+		slog.Error(i18n.T("log.screenshot_ocr_timeout"), slog.String("ocr_engine", req.Engine), slog.Any("error", ctx.Err()))
 		return nil, fmt.Errorf("%s(%s): %w", i18n.T("err.ocr_timeout"), req.Engine, ctx.Err())
 	}
 }
@@ -346,7 +345,7 @@ func (s *Service) saveHistory(res *model.TranslateResult) {
 	defer cancel()
 	engineRow, err := s.configStore.GetEngineByName(ctx, res.Engine)
 	if err != nil {
-		s.log.Warn(i18n.T("log.engine_query_id_failed"), slog.String("engine", res.Engine), slog.Any("error", err))
+		slog.Warn(i18n.T("log.engine_query_id_failed"), slog.String("engine", res.Engine), slog.Any("error", err))
 	}
 	engineID := int64(0)
 	if engineRow != nil {
@@ -365,7 +364,7 @@ func (s *Service) saveHistory(res *model.TranslateResult) {
 		FromOcr:   fromOCR,
 		CreatedAt: time.Now().UnixMilli(),
 	}); err != nil {
-		s.log.Error(i18n.T("log.translate_save_history_failed"), slog.Any("error", err))
+		slog.Error(i18n.T("log.translate_save_history_failed"), slog.Any("error", err))
 	}
 }
 

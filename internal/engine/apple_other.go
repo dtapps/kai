@@ -35,3 +35,6 @@ func SetLogConfig(dir, level string, _ int, _ bool) {
 			"dir", dir, "level", level)
 	}
 }
+
+// SetBridgeLocale 非 darwin 平台无 Swift 桥接层，无需同步语言，空实现以保持签名一致。
+func SetBridgeLocale(_ string) {}

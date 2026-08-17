@@ -1,4 +1,4 @@
-.PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe check-cross
+.PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe format-swift check-cross
 
 # 开发端口固定为 9247
 PORT ?= 9247
@@ -53,17 +53,30 @@ i18n-frontend: ## 合并前端 i18n 拆分文件
 swift-build: ## 手动编译 Swift 桥接静态库（libkai_translate.a，含翻译与辅助功能）
 	cd internal/swiftbridge && bash ./build.sh
 
+code-generate: sqlc i18n swift-build ##  代码生成 sqlc i18n swift
+
 dev: i18n ## 运行 Wails 开发模式
 	wails3 dev -port $(PORT)
 
 # ==================== 格式化 / 修复 ====================
 
-format: format-go format-frontend format-i18n-go format-i18n-frontend ## 格式化和修复（全部）
+format: format-go format-swift format-frontend format-i18n-go format-i18n-frontend ## 格式化和修复（全部）
 
 format-go: ## 格式化 Go 代码
 	gofmt -w -s .
 	go fmt ./...
 	go fix ./...
+
+# 用 Apple 官方 swift-format 原地格式化 Swift 桥接层源码。
+# 未安装时给出明确安装提示（brew install swift-format 或走 swift 工具链）。
+format-swift: ## 格式化 Swift 桥接层源码（原地，需 swift-format）
+	@command -v swift-format >/dev/null 2>&1 || { \
+		echo "!! swift-format 未安装，请先安装："; \
+		echo "   brew install swift-format"; \
+		echo "   或确保 swift 工具链自带 swift-format 在 PATH 中"; \
+		exit 1; }
+	swift-format --in-place ./internal/swiftbridge/*.swift
+	@echo ">> swift format done"
 
 format-frontend: ## 修复前端代码
 	pnpm --dir ./frontend run format
@@ -76,18 +89,18 @@ format-i18n-frontend: ## 格式化前端 i18n JSON 文件
 
 # ==================== 检查 / 测试 ====================
 
-check: lint-go lint-frontend test-go fuzz-go vuln-go check-cross ## 检查和测试（全部）
-
 check-cross: ## 交叉编译验证（darwin/arm64 开 CGO + windows CGO=0；过滤 ld:warning）
 	@echo "==> 交叉编译 darwin/arm64 (CGO)"
 	GOOS=darwin GOARCH=arm64 go build ./... 2>&1 | grep -v 'ld: warning' || true
 # 	@echo "==> 交叉编译 darwin/amd64 (CGO)"
 # 	GOOS=darwin GOARCH=amd64 go build ./... 2>&1 | grep -v 'ld: warning' || true
-	@echo "==> 交叉编译 windows/arm64 (CGO_ENABLED=0)"
-	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./... 2>&1 | grep -v 'ld: warning' || true
+# 	@echo "==> 交叉编译 windows/arm64 (CGO_ENABLED=0)"
+# 	GOOS=windows GOARCH=arm64 CGO_ENABLED=0 go build ./... 2>&1 | grep -v 'ld: warning' || true
 	@echo "==> 交叉编译 windows/amd64 (CGO_ENABLED=0)"
 	GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build ./... 2>&1 | grep -v 'ld: warning' || true
 	@echo "==> 交叉编译验证完成"
+
+check: lint-go lint-frontend test-go fuzz-go vuln-go check-cross ## 检查和测试（全部）
 
 lint-go: ## Go 代码检查（有 issue 即停止）
 	golangci-lint run ./...

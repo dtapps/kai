@@ -11,7 +11,7 @@ func currentSelectionPoint() *application.Point {
 	if !isAccessibilityEnabled() {
 		return nil
 	}
-	x, y := selectionPointViaBridge(nil)
+	x, y := selectionPointViaBridge()
 	if x == 0 && y == 0 {
 		return nil
 	}
@@ -20,7 +20,7 @@ func currentSelectionPoint() *application.Point {
 
 // primaryScreenSize 返回主屏幕分辨率（经 Swift 桥接）。
 func primaryScreenSize() (float64, float64) {
-	return screenSizeViaBridge(nil)
+	return screenSizeViaBridge()
 }
 
 // TODO(2026-08-11): currentSelectionOSA 已禁用 Swift 取词。原实现 selectedTextViaBridge →

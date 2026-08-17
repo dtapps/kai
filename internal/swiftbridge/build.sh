@@ -27,13 +27,15 @@ esac
 OUT="libkai_bridge.a"
 
 # 先清理旧产物，确保每次都重新编译（避免源码已改但链接到带 bug 的旧 .a）。
-rm -f "$OUT" kai_bridge.o
+rm -f "$OUT" *.o
 
 echo ">> building $OUT for $TARGET"
-# 单一 swift 源文件（kai_bridge.swift 内已含翻译 + 辅助功能 + 共享日志），-c 只产目标文件；
-# -parse-as-library 让 swiftc 以库模式处理（不注入默认 _main 入口），避免与 Go 的 main 符号冲突。
-# 再用 ar 打包成静态库供 cgo 链接。
-swiftc -c -parse-as-library -o kai_bridge.o kai_bridge.swift \
+# 桥接层源码已拆分为多个 Swift 文件（bridge_errors / bridge_common / bridge_log /
+# apple_translate / apple_accessibility / apple_ocr），均以 *.swift 通配一次性喂给 swiftc
+# （Swift 单编译单元，不支持逐文件编译再 ar）。-c 模式会为每个源文件产出同名 .o，
+# 再由 ar 全部打包成静态库供 cgo 链接。-parse-as-library 让 swiftc 以库模式处理
+# （不注入默认 _main 入口），避免与 Go 的 main 符号冲突。
+swiftc -c -parse-as-library *.swift \
     -framework Translation \
     -framework ApplicationServices \
     -framework AppKit \
@@ -42,6 +44,6 @@ swiftc -c -parse-as-library -o kai_bridge.o kai_bridge.swift \
     -target "$TARGET" \
     -O
 
-ar rcs "$OUT" kai_bridge.o
-rm -f kai_bridge.o
+ar rcs "$OUT" *.o
+rm -f *.o
 echo ">> done: $DIR/$OUT"

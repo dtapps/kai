@@ -71,7 +71,7 @@ func parseHotkey(s string) ([]makc.Key, error) {
 // 系统级卡顿。若无可附着的前景窗口（如桌面）或调用失败，返回 no-op 的 restore。
 //
 // golang.org/x/sys/windows 未导出 AttachThreadInput，这里用 LazyProc 直调 user32。
-func attachToForeground(log *slog.Logger) (restore func()) {
+func attachToForeground() (restore func()) {
 	noOp := func() {}
 	fg := windows.GetForegroundWindow()
 	if fg == 0 {
@@ -89,7 +89,7 @@ func attachToForeground(log *slog.Logger) (restore func()) {
 	r, _, err := attachProc.Call(uintptr(selfThread), uintptr(fgThread), 1)
 	if r == 0 {
 		// 附着失败（例如已被占用），放弃，不破坏后续流程。
-		log.Debug(i18n.T("log.copykey_attach_failed"),
+		slog.Debug(i18n.T("log.copykey_attach_failed"),
 			slog.String(i18n.T("log.field_error"), errNoop(err)))
 		return noOp
 	}
@@ -145,7 +145,7 @@ func (e *ExecKeyController) copyDefaultKey() string {
 
 	comboErr := application.InvokeSyncWithError(func() error {
 		// 注入前把 Kai 线程附着到前台目标线程，规避 foreground lock 导致的偶发失效。
-		defer attachToForeground(e.log)()
+		defer attachToForeground()()
 		ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
 		defer cancel()
 		return client.Keyboard.Combo(ctx, makc.KeyControl, makc.KeyC)
@@ -199,7 +199,7 @@ func (e *ExecKeyController) copyWithHotkey(hotkey string) string {
 	// 在主线程执行
 	comboErr := application.InvokeSyncWithError(func() error {
 		// 注入前把 Kai 线程附着到前台目标线程，规避 foreground lock 导致的偶发失效。
-		defer attachToForeground(e.log)()
+		defer attachToForeground()()
 		ctx, cancel := context.WithTimeout(parentCtx, 2*time.Second)
 		defer cancel()
 		return client.Keyboard.Combo(ctx, keys...)

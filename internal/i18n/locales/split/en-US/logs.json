@@ -77,6 +77,7 @@
   "log.hotkey_start_register": "[Hotkey] Start registering hotkeys",
   "log.selection_query": "[bridge] Accessibility authorization query",
   "log.selection_read": "Selection read",
+  "log.input_monitoring_query": "Input monitoring authorization query",
   "log.httplog_cleanup_failed": "Failed to clean up old logs",
   "log.httplog_cleaned": "Cleaned old logs",
   "log.frontend_log_init_failed": "Failed to init frontend log, skipped: %v",

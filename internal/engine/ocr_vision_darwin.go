@@ -10,6 +10,7 @@ package engine
 // 由 swiftbridge/libkai_bridge.a 提供的 C 接口（Swift @_cdecl 暴露）。
 // correct: 1=开启语言校正(usesLanguageCorrection)，0=关闭；timeout_sec: OCR 超时秒数(<=0 用 Swift 默认)。
 int kai_ocr(const char* img, char* out, int out_cap, int correct, int timeout_sec);
+void kai_set_locale(const char* locale);
 */
 import "C"
 
@@ -24,6 +25,7 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
+	"cnb.cool/dtapp/kai/internal/swiftbridge"
 )
 
 // VisionOCR 调用 macOS 系统 Vision.framework 做离线 OCR（零安装、无需本机 tesseract）。
@@ -63,17 +65,6 @@ func (v *VisionOCR) ocrOptions(req model.OcrRequest) (correct bool, timeoutSec i
 	return
 }
 
-// ocrResponse 对应 Swift 端 kai_ocr 返回的 JSON 结构。
-type ocrResponse struct {
-	Text    string `json:"text"`
-	Regions []struct {
-		Text string  `json:"text"`
-		Conf float64 `json:"conf"`
-		Box  []int   `json:"box"`
-	} `json:"regions"`
-	Error string `json:"error"`
-}
-
 // Recognize 对图片字节做 Vision OCR。
 func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model.OcrResult, error) {
 	if len(req.ImageData) == 0 {
@@ -94,14 +85,39 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 	}
 
 	payload := bytes.TrimRight(outBuf[:n], "\x00")
-	var resp ocrResponse
+	var resp swiftbridge.OCRSuccess
 	if err := json.Unmarshal(payload, &resp); err != nil {
 		slog.Error(i18n.T("err.vision_ocr_parse"), "raw", string(payload), "error", err)
 		return nil, fmt.Errorf("%s: %w", i18n.T("err.vision_ocr_parse"), err)
 	}
-	if resp.Error != "" {
-		slog.Error(i18n.T("err.vision_ocr_engine"), "engine_error", resp.Error)
-		return nil, fmt.Errorf("%s: %s", i18n.T("err.vision_ocr_engine"), resp.Error)
+	if resp.Code != "" {
+		// Swift 自定义错误：按错误码走 Go 侧 i18n 渲染用户可见文案，detail 作技术细节。
+		// 已知错误码映射到 err.apple_<code>；未知 code 回退到通用 OCR 引擎错误文案。
+		var msg string
+		switch resp.Code {
+		case swiftbridge.BridgeErrNullImage:
+			msg = i18n.T("err.apple_null_image")
+		case swiftbridge.BridgeErrDecodeFailed:
+			msg = i18n.T("err.apple_decode_failed")
+		case swiftbridge.BridgeErrEmptyImage:
+			msg = i18n.T("err.apple_empty_image")
+		case swiftbridge.BridgeErrBitmapCtxFailed:
+			msg = i18n.T("err.apple_bitmap_ctx_failed")
+		case swiftbridge.BridgeErrBitmapRedrawFailed:
+			msg = i18n.T("err.apple_bitmap_redraw_failed")
+		case swiftbridge.BridgeErrOcrTimeout:
+			msg = i18n.T("err.apple_ocr_timeout")
+		case swiftbridge.BridgeErrAppleOcr:
+			slog.Error(i18n.T("err.vision_ocr_engine"), "detail", resp.Detail)
+			msg = i18n.T("err.vision_ocr_engine")
+		default:
+			slog.Error(i18n.T("err.vision_ocr_engine"), "code", resp.Code, "detail", resp.Detail)
+			msg = i18n.T("err.vision_ocr_engine")
+		}
+		if resp.Detail != "" {
+			msg = msg + " (" + resp.Detail + ")"
+		}
+		return nil, fmt.Errorf("%s", msg)
 	}
 
 	regions := make([]model.OcrRegion, 0, len(resp.Regions))

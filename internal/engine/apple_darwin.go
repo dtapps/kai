@@ -12,6 +12,7 @@ int kai_translate(const char* src, const char* dst, const char* text,
                   char* out, int out_cap);
 int kai_available_languages(char* out, int out_cap);
 void kai_set_log_config(const char* dir, const char* level, int retention_days, int compress);
+void kai_set_locale(const char* locale);
 */
 import "C"
 
@@ -26,6 +27,7 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
+	"cnb.cool/dtapp/kai/internal/swiftbridge"
 )
 
 // appleTranslator 调用 macOS 系统自带翻译（Translation.framework）。
@@ -63,16 +65,21 @@ func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 	C.kai_set_log_config(cDir, cLevel, C.int(retentionDays), C.int(boolToInt(compress)))
 }
 
+// SetBridgeLocale 将当前界面语言同步给 Swift 桥接层，使其 kai-bridge.log 调试日志
+// 随系统语言切换中/英文。locale 形如 "zh-CN" / "en-US"，以 "en" 开头视为英文。
+// 空串则跳过（保持 Swift 侧默认 zh）。
+func SetBridgeLocale(locale string) {
+	if locale == "" {
+		return
+	}
+	cLocale := C.CString(locale)
+	defer C.free(unsafe.Pointer(cLocale))
+	C.kai_set_locale(cLocale)
+}
+
 // SupportsAutoSource 系统翻译（Translation.framework）支持自动检测源语言：
 // from=auto 时 Go 传空串给 Swift，Swift 侧用 NaturalLanguage 自动识别并约束到已安装列表。
 func (s *appleTranslator) SupportsAutoSource() bool { return true }
-
-// translateResult 对应 Swift 端返回的 JSON 结构。
-type translateResult struct {
-	Result string `json:"result"`
-	From   string `json:"from"`
-	Error  string `json:"error"`
-}
 
 // Translate 通过 Translation.framework 完成翻译。
 // src 为 "auto"（或空）时，由 Swift 侧用 NaturalLanguage 自动检测源语言并约束到本机已安装列表；
@@ -107,14 +114,35 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 
 	// 裁剪 Swift 写入时可能附带的一个结尾 \0（C 字符串习惯），避免 JSON 解析报 \x00 错误。
 	payload := bytes.TrimRight(outBuf[:n], "\x00")
-	var tr translateResult
+	var tr swiftbridge.TranslateSuccess
 	if err := json.Unmarshal(payload, &tr); err != nil {
 		slog.Error(i18n.T("err.apple_translate_parse"), "from", sl, "to", tl, "raw", string(payload), "error", err)
 		return nil, fmt.Errorf("%s: %w", i18n.T("err.apple_translate_parse"), err)
 	}
-	if tr.Error != "" {
-		slog.Error(i18n.T("err.apple_translate_engine"), "from", sl, "to", tl, "engine_error", tr.Error)
-		return nil, fmt.Errorf("%s: %s", i18n.T("err.apple_translate_engine"), tr.Error)
+	if tr.Code != "" {
+		// Swift 自定义错误：按错误码走 Go 侧 i18n 渲染用户可见文案，detail 作技术细节。
+		// 已知错误码映射到 err.apple_<code>；未知 code 回退到通用引擎错误文案，
+		// 避免向用户暴露原始 key 字符串。
+		var msg string
+		switch tr.Code {
+		case swiftbridge.BridgeErrEmptyText:
+			msg = i18n.T("err.apple_empty_text")
+		case swiftbridge.BridgeErrTargetRequired:
+			msg = i18n.T("err.apple_target_required")
+		case swiftbridge.BridgeErrNoSourceLang:
+			slog.Error(i18n.T("err.apple_no_source_lang"), "from", sl, "to", tl, "detail", tr.Detail)
+			msg = i18n.T("err.apple_no_source_lang")
+		case swiftbridge.BridgeErrAppleTranslate:
+			slog.Error(i18n.T("err.apple_translate_engine"), "from", sl, "to", tl, "detail", tr.Detail)
+			msg = i18n.T("err.apple_translate_engine")
+		default:
+			slog.Error(i18n.T("err.apple_translate_engine"), "from", sl, "to", tl, "code", tr.Code, "detail", tr.Detail)
+			msg = i18n.T("err.apple_translate_engine")
+		}
+		if tr.Detail != "" {
+			msg = msg + " (" + tr.Detail + ")"
+		}
+		return nil, fmt.Errorf("%s", msg)
 	}
 	if tr.Result == "" {
 		slog.Error(i18n.T("err.apple_translate_empty"), "from", sl, "to", tl)
@@ -143,9 +171,7 @@ func AvailableLanguages() ([]string, error) {
 	// 裁剪 Swift 写入时可能附带的一个结尾 \0（C 字符串习惯），避免 JSON 解析报 \x00 错误。
 	payload := bytes.TrimRight(outBuf[:n], "\x00")
 	// Swift 返回 {"langs":[...]}，langs 为本机已安装（已下载、可离线翻译）的语言标识符。
-	var resp struct {
-		Langs []string `json:"langs"`
-	}
+	var resp swiftbridge.AvailableLanguages
 	if err := json.Unmarshal(payload, &resp); err != nil {
 		slog.Error(i18n.T("err.apple_lang_parse"), "raw", string(payload), "error", err)
 		return nil, fmt.Errorf("%s: %w", i18n.T("err.apple_lang_parse"), err)

@@ -209,9 +209,9 @@ func main() {
 		log.Fatalf(i18n.T("log.open_config_db_failed"), err)
 	}
 
-	trSvc := translate.NewService(reg, histDB, settingsService, nil, slog.Default())
+	trSvc := translate.NewService(reg, histDB, settingsService, nil)
 	trSvc.SetConfigStore(cfgDB)
-	selSvc := selection.NewService(nil, settingsService, slog.Default())
+	selSvc := selection.NewService(nil, settingsService)
 
 	// 顶层服务引用（闭包延迟解析，运行时已赋值）
 	var appSvc *service.AppService
@@ -430,6 +430,8 @@ func main() {
 				kupdater.SetLocale(kupdater.Locale(resolveUpdaterLocale(settingsService.Get().Language)))
 				// 同步刷新内置更新窗口（库内原地重建窗口以应用最新语言文案）。
 				kupdater.SetUpdaterLocaleTheme(app)
+				// 同步当前界面语言给 Swift 桥接层，使 kai-bridge.log 调试日志跟随切换。
+				engine.SetBridgeLocale(i18n.GetLocale())
 			}
 		}
 		rebuildTrayMenu(app, hm, configSvc, settingsService)
@@ -731,5 +733,7 @@ func applyLogConfig(r *logutil.Rotator, fl *logutil.FrontendLogService, cfg sett
 	}
 	// 同步给 Swift 桥接层（kai-bridge.log），等级同样来自设置文件。
 	engine.SetLogConfig(buildinfo.LogDir(homeDir), cfg.Level, cfg.RetentionDays, cfg.Compress)
+	// 同步当前界面语言，使桥接层调试日志随系统语言切换中/英文。
+	engine.SetBridgeLocale(i18n.GetLocale())
 	slog.Info(i18n.T("log.log_config_applied"), "level", level.String(), "retention_days", cfg.RetentionDays, "compress", cfg.Compress)
 }

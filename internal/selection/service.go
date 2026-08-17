@@ -6,7 +6,6 @@ package selection
 
 import (
 	"fmt"
-	"log/slog"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -18,12 +17,11 @@ import (
 type Service struct {
 	app         *application.App
 	settingsSvc *settings.Service
-	log         *slog.Logger
 }
 
 // NewService 构造选区服务。app 用于剪贴板读写，settingsSvc 用于平台相关配置。
-func NewService(app *application.App, st *settings.Service, log *slog.Logger) *Service {
-	return &Service{app: app, settingsSvc: st, log: log}
+func NewService(app *application.App, st *settings.Service) *Service {
+	return &Service{app: app, settingsSvc: st}
 }
 
 // SetApp 在 app 就绪后注入（启动编排阶段）。

@@ -588,16 +588,16 @@ jobs:
           # 文件名 GIT_COMMIT / BUILD_TIME 与 updater provider 默认 gitCommitFile / buildTimeFile 对齐。
           printf '%s\n' "${{ needs.prepare.outputs.build_time }}" > BUILD_TIME
           printf '%s\n' "${{ needs.prepare.outputs.git_commit }}" > GIT_COMMIT
-          # 再一次性生成 SHA256SUMS（不含自身，先删旧文件避免自包含）。
+          # 再生成 SHA256SUMS：用 GLOBIGNORE 排除自身及这两个随资产发布但不纳入校验的文件，
+          # 输出裸文件名（无 "./" 前缀），与 updater 解析逻辑匹配。
           rm -f SHA256SUMS
-          # EXCLUDE_FILES 为排除清单：这些文件随 release 资产发布但不纳入校验和清单。
-          EXCLUDE_FILES=(SHA256SUMS BUILD_TIME GIT_COMMIT)
-          mapfile -t FILES < <(find . -maxdepth 1 -type f ${EXCLUDE_FILES[@]/#/! -name })
+          GLOBIGNORE='SHA256SUMS:BUILD_TIME:GIT_COMMIT'
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${FILES[@]}" > SHA256SUMS
+            sha256sum * > SHA256SUMS
           else
-            shasum -a 256 "${FILES[@]}" > SHA256SUMS
+            shasum -a 256 * > SHA256SUMS
           fi
+          unset GLOBIGNORE
           echo "SHA256SUMS："
           cat SHA256SUMS
           echo "BUILD_TIME 文件内容：${{ needs.prepare.outputs.build_time }}"

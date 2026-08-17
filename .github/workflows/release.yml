@@ -571,16 +571,15 @@ jobs:
         shell: bash
         run: |
           cd release
-          # 先排除旧的 SHA256SUMS 自身，避免自包含
+          # 用 GLOBIGNORE 排除自身，避免自包含；输出裸文件名（无 "./" 前缀），与 updater 解析匹配。
           rm -f SHA256SUMS
-          # EXCLUDE_FILES 为排除清单：这些文件随 release 资产发布但不纳入校验和清单。
-          EXCLUDE_FILES=(SHA256SUMS)
-          mapfile -t FILES < <(find . -maxdepth 1 -type f ${EXCLUDE_FILES[@]/#/! -name })
+          GLOBIGNORE='SHA256SUMS'
           if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum "${FILES[@]}" > SHA256SUMS
+            sha256sum * > SHA256SUMS
           else
-            shasum -a 256 "${FILES[@]}" > SHA256SUMS
+            shasum -a 256 * > SHA256SUMS
           fi
+          unset GLOBIGNORE
           echo "SHA256SUMS："
           cat SHA256SUMS
 

@@ -1,3 +1,5 @@
+//go:build darwin
+
 // Package swiftbridge 是 Kai 的 Swift 桥接层（纯 Go 动态加载器 + 双端契约类型）。
 //
 // 通过 github.com/ebitengine/purego 在运行时 Dlopen 加载 libkai_bridge.dylib，
@@ -13,6 +15,10 @@
 //   - C 的 char*（输出缓冲区）   -> Go 的 unsafe.Pointer（调用方用 unsafe.Pointer(&buf[0])）
 //   - C 的 int / Int32           -> Go 的 int32（macOS LP64 下 C int 为 32 位）
 //   - C 的 Bool                  -> Go 的 bool（1 字节 _Bool）
+//
+// 本文件仅 macOS 编译（purego.Dlopen/RTLD_* 为 Unix 专有）。非 macOS 平台由 load_other.go
+// 提供同签名空实现（Init 直接返回 nil，函数指针保持 nil，调用方均在 darwin 下、非 darwin
+// 不触发；main.go 无条件调用的 Init 在非 darwin 下为空操作）。
 package swiftbridge
 
 import (

@@ -10,9 +10,13 @@ build/ios/xcode/gen/
 build/android/overlay.json
 build/android/gen/
 
-# Swift 桥接静态库（cgo 系统翻译的编译产物）
-internal/swiftbridge/libkai_bridge.a
-internal/swiftbridge/kai_bridge.o
+# Swift 桥接编译产物（pkg/swiftbridge/scripts/build.sh 产出，均不进 git）
+# 动态库供纯 Go 端 purego 运行时 Dlopen 加载，静态库一并产出备用；kai_bridge.o 为编译中间文件。
+pkg/swiftbridge/libkai_bridge.dylib
+pkg/swiftbridge/libkai_bridge.a
+pkg/swiftbridge/internal/swift/kai_bridge.o
+pkg/swiftbridge/internal/swift/libkai_bridge.a
+pkg/swiftbridge/internal/swift/libkai_bridge.dylib
 
 .codebuddy/
 .mimocode/

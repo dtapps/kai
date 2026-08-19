@@ -20,6 +20,7 @@ declare module "@wailsio/runtime" {
             "kai:locale:changed": events$0.LocaleChangedPayload;
             "kai:screenshot:ocr": model$0.ScreenshotResult;
             "kai:screenshot:recapture": {};
+            "kai:screenshot:retranslate": events$0.ScreenshotRetranslatePayload;
             "kai:theme:changed": events$0.ThemeChangedPayload;
             "kai:translate:result": model$0.TranslateResult;
             "kai:window:screenshot": {};

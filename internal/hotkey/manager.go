@@ -130,6 +130,8 @@ func (h *Manager) TriggerInput() {
 
 // TriggerScreenshot 等效于按下「截图翻译」快捷键：隐藏截图窗口→区域截图→OCR→翻译→
 // 呼起截图窗口展示。供托盘菜单点击复用，使菜单点击与真实快捷键行为完全一致。
+// 窗口呼出由 ScreenshotTranslate 在「截图一拿到图片」时即触发（截图完立刻显示窗口），
+// 不需等 OCR/翻译；本函数只负责隐藏旧窗口 + 启动截图流程。
 func (h *Manager) TriggerScreenshot() {
 	// 先隐藏自身窗口，避免遮挡用户选区（screencapture 交互选区需要干净的屏幕）。
 	if w := h.screenshotWindow(); w != nil {
@@ -138,16 +140,6 @@ func (h *Manager) TriggerScreenshot() {
 	if err := h.screenshotTranslate(); err != nil {
 		h.log.Error(i18n.T("log.hotkey_screenshot_failed"), slog.Any(i18n.T("log.field_error"), err))
 		return
-	}
-	// 流程完成会经 EventScreenshotOCR 投递结果，这里只负责把窗口拉起展示。
-	// 注意：screenshot 窗口也是 Hidden 创建的复用浮窗，必须像 showAndFocus 那样
-	// 连点两次 Show()——首次 Show 仅触发 Run() 创建 webview impl（不会真正 show），
-	// 第二次才能真正 show+聚焦；否则窗口首帧未就绪，用户首次点击标题栏按钮（红绿灯/关闭）
-	// 会被尚未就绪的窗口吞掉、需点第二次才有反应。
-	if w := h.screenshotWindow(); w != nil {
-		w.Show()
-		w.Show()
-		w.Focus()
 	}
 }
 

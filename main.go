@@ -32,6 +32,7 @@ import (
 	"cnb.cool/dtapp/kai/internal/service"
 	"cnb.cool/dtapp/kai/internal/settings"
 	"cnb.cool/dtapp/kai/internal/translate"
+	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 	kupdater "cnb.cool/dtapp/kai/pkg/wails-updater-providers"
 )
 
@@ -88,6 +89,7 @@ func init() {
 	application.RegisterEvent[model.ScreenshotResult](kevents.EventScreenshotOCR)
 	application.RegisterEvent[struct{}](kevents.EventWindowScreenshot)
 	application.RegisterEvent[struct{}](kevents.EventScreenshotRecapture)
+	application.RegisterEvent[kevents.ScreenshotRetranslatePayload](kevents.EventScreenshotRetranslate)
 }
 
 // formatBuildTime 将构建注入的 UTC RFC3339 时间（如 2006-01-02T15:04:05Z）
@@ -120,6 +122,16 @@ func main() {
 	dbDir := buildinfo.DBDir(homeDir)
 	if err := os.MkdirAll(dbDir, 0o755); err != nil {
 		log.Fatalf("创建数据库目录失败: %v", err)
+	}
+
+	// ── 阶段一·五：动态加载 Swift 桥接层（purego 运行时 Dlopen）──
+	// 必须在任何 kai_* 调用（SetLogConfig/SetBridgeLocale/OCR/Translate 等）之前完成。
+	// Init("") 默认加载与本源文件同目录的 libkai_bridge.dylib（开发态位于
+	// pkg/swiftbridge/）；打包进 app bundle 时由 build 脚本拷入并传绝对路径。
+	// 加载失败不致命（仅记录），缺失符号的函数变量保持 nil，调用时在对应包内报错，
+	// 保证非 macOS 或 dylib 缺失环境仍能编译/启动其余功能。
+	if err := swiftbridge.Init(""); err != nil {
+		log.Printf("WARN: Swift 桥接层动态加载失败（部分 macOS 专属功能不可用）: %v", err)
 	}
 
 	// ── 阶段二：获取设置（日志/i18n 依赖它，必须在数据库初始化之前）──
@@ -227,7 +239,7 @@ func main() {
 		func() application.Window { return mainWindow },
 		func() error { _, err := trSvc.ScreenshotOCR(reg.DefaultOCREngineName()); return err },
 		func() error {
-			_, err := trSvc.ScreenshotTranslate()
+			_, err := trSvc.ScreenshotTranslate(kevents.ScreenshotSessionScreenshot)
 			return err
 		},
 		func() application.Window { return screenshotWindow },
@@ -300,20 +312,28 @@ func main() {
 		}
 	})
 
-	// 截图翻译结果投递：后端完成 区域截图→OCR→翻译 后，这里仅负责把窗口拉起到前台展示。
-	// 结果数据经 EventScreenshotOCR 在前端截图窗口内接收并渲染（左图右译）。
-	app.Event.On(kevents.EventScreenshotOCR, func(e *application.CustomEvent) {
-		showScreenshotWindow()
-	})
-
 	// 前端「重新截图」按钮：隐藏窗口后重新走一次区域截图→OCR→翻译流程。
 	app.Event.On(kevents.EventScreenshotRecapture, func(e *application.CustomEvent) {
 		if screenshotWindow != nil {
 			screenshotWindow.Hide()
 		}
 		go func() {
-			if _, err := trSvc.ScreenshotTranslate(); err != nil {
+			if _, err := trSvc.ScreenshotTranslate(kevents.ScreenshotSessionScreenshot); err != nil {
 				slog.Error(i18n.T("log.screenshot_retake_failed"), slog.Any("error", err))
+			}
+		}()
+	})
+
+	// 前端改语言后触发：复用最近一次 OCR 原文，跳过截图/OCR 直接用新语言重新翻译并增量推送。
+	app.Event.On(kevents.EventScreenshotRetranslate, func(e *application.CustomEvent) {
+		p, ok := e.Data.(kevents.ScreenshotRetranslatePayload)
+		if !ok {
+			slog.Error(i18n.T("log.screenshot_retranslate_failed"), slog.String("reason", "invalid payload"))
+			return
+		}
+		go func() {
+			if err := trSvc.ScreenshotRetranslate(p.Session, p.From, p.To); err != nil {
+				slog.Error(i18n.T("log.screenshot_retranslate_failed"), slog.Any("error", err))
 			}
 		}()
 	})
@@ -323,7 +343,7 @@ func main() {
 	// 让 macOS 拖拽生效（frameless+透明下前端 -webkit-app-region 不接收拖拽事件），
 	// 与前端 TitleBar 组件（h-9=36px, -webkit-app-region:drag）精确对齐。
 	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           "translate",
+		Name:           model.WindowTranslate,
 		Title:          i18n.T("window.translate_title"),
 		Width:          420,
 		Height:         560,
@@ -358,7 +378,7 @@ func main() {
 
 	// 设置窗口（与 translate 一致：frameless + 透明标题栏 + 自定义 TitleBar 组件，InvisibleTitleBarHeight=36 启用拖拽）
 	settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           "settings",
+		Name:           model.WindowSettings,
 		Title:          i18n.T("window.settings_title"),
 		Width:          1280,
 		Height:         800,
@@ -374,7 +394,7 @@ func main() {
 			},
 		},
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true,
+			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
 	})
 	_ = settingsWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
@@ -382,18 +402,29 @@ func main() {
 		settingsWindow.Hide()
 	})
 
-	// 截图翻译窗口：左图右译。默认隐藏，由截图快捷键/EventScreenshotOCR 呼出。
+	// 截图翻译窗口：左图右译。由截图快捷键/EventScreenshotOCR 呼出。
 	// frameless + 透明标题栏 + 自定义 TitleBar（InvisibleTitleBarHeight=36 启用拖拽）。
+	//
+	// 关键（2026-08-18 终极定位，推翻前几轮误判）：
+	// 曾用 `Hidden: true` 创建，但 beta.9 对 Hidden 窗口的 impl.run() 走 else 分支——
+	// 只注册 WindowDidBecomeKey 监听、从不主动 orderFront；该监听还要等 WebViewDidFinishNavigation
+	// 才注册，且回调里调的是 w.parent.Show()（App 级 [NSApp unhide]，非窗口级 orderFront）。
+	// 整个 Hidden 状态机对「截图窗口要可靠显示」是 hostile 的：预建/截图时无论单次还是双次 Show，
+	// 窗口都停在不显示态（日志 IsVisible=false 实证，且 IsVisible 读的是 AppKit occlusionState
+	// 可见位，对 accessory+透明+曾 orderOut 的窗口刷新不可靠，本就是误诊判据）。
+	// 正解：不用 Hidden 创建，改为创建后立刻 Hide()——走 !options.Hidden 分支立即真实初始化
+	// （app show + setShadow + setAlwaysOnTop + WebView 加载），再 orderOut 隐藏。等价于 mainWindow
+	// 经 Center() 完成的「真实 show 初始化」，彻底脱离 Hidden 半成品态。截图时 Show() 走已正常初始化
+	// 窗口的 makeKeyAndOrderFront，稳定上屏。窗口为 Frameless+Transparent，创建即 Hide 在同一事件循环内，
+	// 启动无可见闪现。
 	screenshotWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           "screenshot",
+		Name:           model.WindowScreenshot,
 		Title:          i18n.T("window.screenshot_title"),
 		Width:          900,
 		Height:         600,
 		MinWidth:       600,
 		MinHeight:      400,
 		URL:            "/screenshot.html",
-		Hidden:         true,
-		AlwaysOnTop:    true,
 		Frameless:      true,
 		BackgroundType: application.BackgroundTypeTransparent,
 		Mac: application.MacWindow{
@@ -404,14 +435,16 @@ func main() {
 			},
 		},
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true,
+			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
 	})
+	// 创建即 Hide：完成真实初始化（建 impl + 加载 WebView + 设 Shadow/AlwaysOnTop）后隐藏，
+	// 等效于预建。之后截图路径 Show() 走轻量 orderFront，不再卡 Hidden 状态机。
+	screenshotWindow.Hide()
 	_ = screenshotWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
 		screenshotWindow.Hide()
 	})
-
 	registerTray(app, hm, configSvc, settingsService, mainWindow, settingsWindow)
 
 	// 语言变更后，用最新语言重建托盘菜单文案（托盘为原生，只能后端重建）。
@@ -546,15 +579,17 @@ var (
 )
 
 // showScreenshotWindow 呼出截图翻译窗口并置于前台（红 X 仅隐藏，不销毁）。
-// 与 ShowTranslateWindow 一致：Wails v3 对 Hidden 窗口首次 Show() 只触发 Run() 创建
-// webview 而不真正显示，需连续两次 Show()（第一次建 impl，第二次真正 show）才能稳定出现，
-// 否则第一次快捷键呼出时窗口不显示、需再触发一次。最后 Focus() 拉到最前。
+// 与 ShowTranslateWindow 机制一致（service.showAndFocus）：连续两次 Show() 建 impl+真正 show，再 Focus()。
+// 整个序列包在 InvokeAsync 主线程闭包内执行，避免后台 goroutine 直调 Wails 原生窗口方法触发线程问题。
 func showScreenshotWindow() {
-	if screenshotWindow != nil {
+	if screenshotWindow == nil {
+		return
+	}
+	application.InvokeAsync(func() {
 		screenshotWindow.Show()
 		screenshotWindow.Show()
 		screenshotWindow.Focus()
-	}
+	})
 }
 
 func registerTray(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {

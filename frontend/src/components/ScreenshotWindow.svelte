@@ -3,16 +3,92 @@
   import { t, langName, engineName } from '../i18n';
   import { onEvent, emitEvent, Window } from '../runtime';
   import { Clipboard } from '@wailsio/runtime';
-  import { EventScreenshotOCR, EventScreenshotRecapture } from '../utils/events';
+  import {
+    EventScreenshotOCR,
+    EventScreenshotRecapture,
+    EventScreenshotRetranslate,
+    ScreenshotSessionScreenshot,
+  } from '../utils/events';
   import TitleBar from './TitleBar.svelte';
   import TranslateCard from './TranslateCard.svelte';
+  import {
+    TRANSLATE_LANG,
+    ALL_TRANSLATE_LANGS,
+    TARGET_TRANSLATE_LANGS,
+    type TranslateLang,
+  } from '../constants/lang';
   import type {
     ScreenshotResult,
     TranslateResult,
   } from '@bindings/cnb.cool/dtapp/kai/internal/model/models.ts';
+  import type { ScreenshotRetranslatePayload } from '../utils/events';
+  import { GetConfig } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
+  import { persisted, pinKey } from '../stores/persisted';
+
+  // 置顶状态持久化到 localStorage，与输入翻译窗口（pinKey('translate')）相互独立的记忆。
+  const pinnedStore = persisted<boolean>(pinKey('screenshot'), false);
+  let pinned = $derived($pinnedStore);
+  async function togglePin() {
+    const next = !pinned;
+    pinnedStore.set(next);
+    // 仅在用户主动 pin 时调用 SetAlwaysOnTop(true)。注意：不可在 next=false 时调用
+    // SetAlwaysOnTop(false)——那会把创建时的 floating 层级压回 NSNormal，重新引入遮挡。
+    // 窗口层级（floating）由 main.go 的 AlwaysOnTop:true 保证，pin 仅记忆用户偏好。
+    if (next) {
+      try {
+        await Window.SetAlwaysOnTop(true);
+      } catch (e) {
+        console.error(t('log.screenshotSetPinFailed'), e);
+      }
+    }
+  }
 
   let result = $state<ScreenshotResult | null>(null);
   let imgEl: HTMLImageElement | undefined = $state();
+
+  // 截图翻译的语言条：展示源/目标语言，用户可直接选择。
+  // 改语言后前端带防抖 emit EventScreenshotRetranslate，后端复用上次 OCR 原文直接重翻（跳过截图/OCR）。
+  let fromLang = $state<TranslateLang>(TRANSLATE_LANG.Auto);
+  let toLang = $state<TranslateLang>(TRANSLATE_LANG.EN);
+
+  // 从设置读取默认源/目标语言，作为语言条初始展示值。
+  async function loadDefaults() {
+    try {
+      const cfg = await GetConfig();
+      if (cfg?.default_from) fromLang = cfg.default_from as TranslateLang;
+      if (cfg?.default_to) toLang = cfg.default_to as TranslateLang;
+    } catch (e) {
+      console.error(t('log.readDefaultLangFailed'), e);
+    }
+  }
+
+  // retranslateTimer 防抖：改语言后 300ms 再触发重翻，避免连选时频繁请求。
+  let retranslateTimer: ReturnType<typeof setTimeout> | null = null;
+  let langReady = false; // 首次渲染（loadDefaults）期间不触发重翻，仅用户改动后才发。
+  // 语言条变化即自动重翻（防抖）。监听两侧语言，任一侧变化都触发。
+  $effect(() => {
+    const f = fromLang;
+    const t = toLang;
+    if (!langReady) return; // 跳过初始值设定
+    if (retranslateTimer) clearTimeout(retranslateTimer);
+    retranslateTimer = setTimeout(() => {
+      try {
+        emitEvent(EventScreenshotRetranslate, {
+          session: ScreenshotSessionScreenshot,
+          from: f,
+          to: t,
+        } as ScreenshotRetranslatePayload);
+        console.debug(t('log.screenshot_retranslate_emit'), { from: f, to: t });
+      } catch (e) {
+        console.error(t('log.screenshot_retranslate_failed'), e);
+      }
+    }, 300);
+  });
+  // 默认仅展开前两个「翻译成功」的卡片，其余（含失败的）全部收起。
+  const successEngines = $derived(
+    (result?.translations ?? []).filter((t) => t?.result).map((t) => t.engine),
+  );
+  const expandedEngines = $derived(new Set(successEngines.slice(0, 2)));
 
   function recapture() {
     try {
@@ -22,12 +98,23 @@
     }
   }
 
+  // 交换源/目标语言（Auto 不参与交换，落到 to 侧则视为无效，保持 Auto）。
+  function swapLangs() {
+    if (fromLang === TRANSLATE_LANG.Auto) return;
+    const tmp = toLang;
+    toLang = fromLang;
+    fromLang = tmp === TRANSLATE_LANG.Auto ? TRANSLATE_LANG.Auto : tmp;
+  }
+
   function closeWindow() {
     // 关闭前清理图片/译文等状态，下次打开是干净窗口。
+    // 注意：关闭走 Window.Close() → 后端 WindowClosing hook（Cancel + Hide），
+    // 与输入翻译窗口一致。不要用 Window.Hide() 直接隐藏——那样会绕过后端
+    // hook，导致窗口隐藏状态异常、下次 Show 时 Focus 不生效（表现为被遮挡）。
     result = null;
     if (imgEl) imgEl.src = '';
     try {
-      Window.Hide();
+      Window.Close();
     } catch (e) {
       console.error(t('log.screenshotCloseFailed'), e);
     }
@@ -127,14 +214,24 @@
     }
   });
 
-  onMount(() => {
+  onMount(async () => {
     console.debug(t('log.screenshotLogMounted'));
-    // 截图翻译窗口是临时浮窗，挂载后设为置顶（AlwaysOnTop），
-    // 否则显示后会被其他窗口盖住、看不到。必须在挂载后设置（webview 就绪）。
-    try {
-      Window.SetAlwaysOnTop(true);
-    } catch (e) {
-      console.error(t('log.screenshotSetPinFailed'), e);
+    loadDefaults().then(() => {
+      // loadDefaults 设定初始值后，下一拍再允许语言变更触发重翻，避免初始设定误触发。
+      setTimeout(() => {
+        langReady = true;
+      }, 0);
+    });
+    // 截图翻译窗口是临时浮窗。窗口层级已在 main.go 设 MacWindowLevelModalPanel，
+    // 默认即浮在普通窗口之上（无需 AlwaysOnTop）。这里仅在用户主动 pin 时
+    // 调用 SetAlwaysOnTop(true) 永久钉住；pin=false 时不调用，避免把 modalPanel
+    // 层级压回普通（否则会丢失浮起能力）。
+    if ($pinnedStore) {
+      try {
+        await Window.SetAlwaysOnTop(true);
+      } catch (e) {
+        console.error(t('log.screenshotSetPinFailed'), e);
+      }
     }
     return () => {
       off();
@@ -144,7 +241,7 @@
 
 <div class="u-surface relative flex h-full flex-col overflow-hidden">
   <!-- 标题栏：复用统一 TitleBar 组件（含 macOS 红绿灯，与输入翻译/设置窗口一致）。
-       关闭走 onClose（Window.Hide）而非默认 Close，避免销毁复用中的浮窗实例。 -->
+       关闭走 onClose（后端 Hide）而非默认 Close，避免销毁复用中的浮窗实例。 -->
   <TitleBar onClose={closeWindow} />
 
   {#if result}
@@ -162,6 +259,40 @@
 
       <!-- 右：原文 + 多引擎译文 -->
       <div class="flex min-w-0 flex-1 flex-col overflow-y-auto p-4">
+        <!-- 常驻工具栏：仅出现在右侧内容区顶部，置顶（与输入翻译窗口各自记忆）+ 重新截图。 -->
+        <div class="mb-3 flex items-center justify-end gap-2">
+          <button
+            class="u-icon-btn u-icon-btn--sm u-no-drag"
+            class:u-icon-btn--active={pinned}
+            onclick={togglePin}
+            aria-label={pinned ? t('translate.unpin') : t('translate.pin')}
+            title={pinned ? t('translate.unpin') : t('translate.pin')}
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M12 17v5" />
+              <path
+                d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
+              />
+            </svg>
+          </button>
+          <button
+            class="u-btn u-btn--ghost u-no-drag px-2.5 py-1 text-xs"
+            onclick={recapture}
+            title={t('screenshot.recapture')}
+          >
+            {t('screenshot.recapture')}
+          </button>
+        </div>
+
         {#if result.error}
           <!-- 识别/翻译失败：停止转圈并展示错误（含超时），不再无限"识别中" -->
           <div
@@ -186,6 +317,52 @@
             <span class="text-sm">{t('screenshot.recognizing')}</span>
           </div>
         {:else}
+          <!-- 语言控制条：样式与输入翻译窗口一致，用户可直接改语言触发重翻。 -->
+          <div class="mb-3 flex items-center justify-center gap-2">
+            <select
+              class="u-field u-select u-lang-select px-3 py-2 text-sm"
+              value={fromLang}
+              aria-label={t('translate.from')}
+              onchange={(e) => (fromLang = e.currentTarget.value as TranslateLang)}
+            >
+              {#each ALL_TRANSLATE_LANGS as l}
+                <option value={l}>{langName(l)}</option>
+              {/each}
+            </select>
+
+            <button
+              class="u-icon-btn u-no-drag"
+              aria-label={t('translate.swap')}
+              title={t('translate.swap')}
+              onclick={swapLangs}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <path d="M7 10h14l-4-4" />
+                <path d="M17 14H3l4 4" />
+              </svg>
+            </button>
+
+            <select
+              class="u-field u-select u-lang-select px-3 py-2 text-sm"
+              value={toLang}
+              aria-label={t('translate.to')}
+              onchange={(e) => (toLang = e.currentTarget.value as TranslateLang)}
+            >
+              {#each TARGET_TRANSLATE_LANGS as l}
+                <option value={l}>{langName(l)}</option>
+              {/each}
+            </select>
+          </div>
+
           <div class="mb-3">
             <div
               class="mb-1 flex items-center justify-between text-xs font-medium text-[var(--app-muted)]"
@@ -224,7 +401,11 @@
                 {t('screenshot.result')}
               </div>
               {#each result.translations as tr}
-                <TranslateCard {tr} onCopied={() => showToast(t('common.copied'))} />
+                <TranslateCard
+                  {tr}
+                  expanded={expandedEngines.has(tr.engine)}
+                  onCopied={() => showToast(t('common.copied'))}
+                />
               {/each}
             </div>
           {:else}

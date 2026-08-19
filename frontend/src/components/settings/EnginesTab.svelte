@@ -52,9 +52,11 @@
   //   - ocrLangs:     语言码多选（"+" 拼接，如 "chi_sim+eng"）
   //   - ocrCorrect:   是否开启语言校正（仅 vision 语义，tesseract 忽略）
   //   - ocrTimeoutSec: OCR 超时秒数（默认 60）
+  //   - ocrRetry:     Vision OCR 失败兜底重试次数（仅 vision 语义，tesseract 忽略，默认 2）
   let ocrLangs = $state<string[]>([]);
   let ocrCorrect = $state(true);
   let ocrTimeoutSec = $state(60);
+  let ocrRetry = $state(2);
   // OCR 语言码候选项（来自后端 GetOcrLangs，与 Extra(JSON) 解耦）
   let ocrLangOptions = $state<string[]>([]);
 
@@ -70,6 +72,7 @@
     ocrLangs = [];
     ocrCorrect = true;
     ocrTimeoutSec = 60;
+    ocrRetry = 2;
     if (!extra) return;
     // 先试 JSON（统一方案）
     try {
@@ -82,6 +85,7 @@
       }
       if (typeof o.correct_text === 'boolean') ocrCorrect = o.correct_text;
       if (typeof o.timeout_sec === 'number' && o.timeout_sec > 0) ocrTimeoutSec = o.timeout_sec;
+      if (typeof o.retry_count === 'number' && o.retry_count > 0) ocrRetry = o.retry_count;
       return;
     } catch {
       /* 不是 JSON，落下面兼容旧纯字符串语言码 */
@@ -104,7 +108,10 @@
     }
     if (!isVision) o.langs = ocrLangs.join('+');
     o.timeout_sec = ocrTimeoutSec;
-    if (isVision) o.correct_text = ocrCorrect;
+    if (isVision) {
+      o.correct_text = ocrCorrect;
+      o.retry_count = ocrRetry;
+    }
     return JSON.stringify(o);
   }
   // system 引擎支持的语言列表（只读展示，由后端从 Translation.framework 读取）
@@ -331,6 +338,7 @@
     ocrLangs = [];
     ocrCorrect = true;
     ocrTimeoutSec = 60;
+    ocrRetry = 2;
     if (!name) {
       addSchema = [];
       return;
@@ -588,6 +596,21 @@
                 bind:value={ocrTimeoutSec}
               />
             </div>
+          {:else if f.widget === 'ocr_retry'}
+            <!-- OCR 失败重试次数（仅 vision） -->
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={ocrRetry}
+              />
+            </div>
           {:else if f.widget === 'ocr_correct'}
             <!-- OCR 语言校正开关（仅 vision） -->
             <div class="flex items-center justify-between gap-4">
@@ -767,6 +790,20 @@
                 max="300"
                 class="u-field w-28 px-3 py-1.5 text-sm"
                 bind:value={ocrTimeoutSec}
+              />
+            </div>
+          {:else if f.widget === 'ocr_retry'}
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="10"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={ocrRetry}
               />
             </div>
           {:else if f.widget === 'ocr_correct'}

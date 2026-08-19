@@ -3,5 +3,6 @@
 
 export type {
     LocaleChangedPayload,
+    ScreenshotRetranslatePayload,
     ThemeChangedPayload
 } from "./models.js";

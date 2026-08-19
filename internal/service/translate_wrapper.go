@@ -33,6 +33,7 @@ func (w *TranslateWrapper) ScreenshotOCR(engineName string) (*model.OcrResult, e
 }
 
 // ScreenshotTranslate 截图翻译主流程：区域截图→系统 OCR→多引擎翻译→投递到截图窗口。
-func (w *TranslateWrapper) ScreenshotTranslate() (*model.ScreenshotResult, error) {
-	return w.svc.ScreenshotTranslate()
+// session 标识缓存来源（events.ScreenshotSessionScreenshot / ScreenshotSessionInput）。
+func (w *TranslateWrapper) ScreenshotTranslate(session string) (*model.ScreenshotResult, error) {
+	return w.svc.ScreenshotTranslate(session)
 }

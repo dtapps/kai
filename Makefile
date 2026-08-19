@@ -48,10 +48,10 @@ i18n-go: ## 合并 Go 后端 i18n 拆分文件
 	./scripts/merge-go-i18n.sh
 
 i18n-frontend: ## 合并前端 i18n 拆分文件
-# 	./scripts/merge-frontend-i18n.sh
+	./scripts/merge-frontend-i18n.sh
 
-swift-build: ## 手动编译 Swift 桥接静态库（libkai_translate.a，含翻译与辅助功能）
-	cd internal/swiftbridge && bash ./build.sh
+swift-build: ## 手动编译 Swift 桥接动态库（libkai_bridge.dylib，含翻译与辅助功能）
+	cd pkg/swiftbridge/scripts && bash ./build.sh
 
 code-generate: sqlc i18n swift-build ##  代码生成 sqlc i18n swift
 
@@ -75,7 +75,7 @@ format-swift: ## 格式化 Swift 桥接层源码（原地，需 swift-format）
 		echo "   brew install swift-format"; \
 		echo "   或确保 swift 工具链自带 swift-format 在 PATH 中"; \
 		exit 1; }
-	swift-format --in-place ./internal/swiftbridge/*.swift
+	swift-format --in-place ./pkg/swiftbridge/internal/swift/*.swift
 	@echo ">> swift format done"
 
 format-frontend: ## 修复前端代码

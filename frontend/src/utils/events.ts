@@ -13,6 +13,14 @@ export const EventLocaleChanged = 'kai:locale:changed';
 export const EventScreenshotOCR = 'kai:screenshot:ocr';
 /** 前端请求重新截图（点击「重新截图」按钮）：后端触发一次新的区域截图流程 */
 export const EventScreenshotRecapture = 'kai:screenshot:recapture';
+/** 前端改语言后触发：复用上次 OCR 原文，跳过截图/OCR 直接按新语言重新翻译。payload: ScreenshotRetranslatePayload */
+export const EventScreenshotRetranslate = 'kai:screenshot:retranslate';
+
+// 截图/OCR 缓存的 session 标识：区分不同入口，避免互相覆盖（对齐 internal/events/events.go）。
+/** 截图翻译窗口（含热键/菜单/重新截图按钮，全部投到 ScreenshotWindow） */
+export const ScreenshotSessionScreenshot = 'screenshot';
+/** 输入翻译页内的截图 OCR（预留，与截图翻译窗口隔离） */
+export const ScreenshotSessionInput = 'input';
 
 // EventThemeChanged 主题变更广播，payload: ThemeChangedPayload
 export const EventThemeChanged = 'kai:theme:changed';
@@ -42,4 +50,14 @@ export interface LocaleChangedPayload {
 export interface ThemeChangedPayload {
   mode: string; // ThemeMode: auto | light | dark
   theme: string; // dark | light
+}
+
+// ScreenshotRetranslatePayload 截图翻译改语言重新翻译事件参数。
+// session 标识缓存来源（ScreenshotSessionScreenshot / ScreenshotSessionInput），
+// 后端据此取用对应入口最近一次 OCR 原文，避免不同入口互相串。
+// from/to 为目标翻译语言组合（from 允许 Auto），后端复用上次 OCR 原文重新翻译。
+export interface ScreenshotRetranslatePayload {
+  session: string; // ScreenshotSessionScreenshot | ScreenshotSessionInput
+  from: string; // TranslateLang: auto | zh | en | ...
+  to: string; // TranslateLang
 }

@@ -2,18 +2,6 @@
 
 package engine
 
-/*
-#cgo darwin CFLAGS: -I${SRCDIR}/../swiftbridge
-#cgo darwin LDFLAGS: -L${SRCDIR}/../swiftbridge -lkai_bridge -framework Vision -framework CoreGraphics
-#include <stdlib.h>
-
-// 由 swiftbridge/libkai_bridge.a 提供的 C 接口（Swift @_cdecl 暴露）。
-// correct: 1=开启语言校正(usesLanguageCorrection)，0=关闭；timeout_sec: OCR 超时秒数(<=0 用 Swift 默认)。
-int kai_ocr(const char* img, char* out, int out_cap, int correct, int timeout_sec);
-void kai_set_locale(const char* locale);
-*/
-import "C"
-
 import (
 	"bytes"
 	"context"
@@ -25,11 +13,12 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
-	"cnb.cool/dtapp/kai/internal/swiftbridge"
+	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 )
 
 // VisionOCR 调用 macOS 系统 Vision.framework 做离线 OCR（零安装、无需本机 tesseract）。
-// 通过 cgo 链接 Swift 桥接静态库（internal/swiftbridge）。静态库需用 build.sh 预先生成。
+// 通过 purego 运行时动态加载 Swift 桥接动态库（pkg/swiftbridge）。改 Swift 后只需重编
+// internal/swift/build.sh（产 .dylib 并自动复制到 pkg/swiftbridge），运行时 Dlopen 加载即最新，无需重链接。
 type VisionOCR struct {
 	name   string
 	config *EngineConfig // 持有所属引擎配置，从 Extra(JSON) 读取 OCR 专属参数
@@ -43,15 +32,21 @@ func NewVisionOCR(cfg *EngineConfig) *VisionOCR {
 // Name 引擎名
 func (v *VisionOCR) Name() string { return v.name }
 
-// ocrOptions 解析当前配置与本次请求的参数，得到最终生效的 correct / timeout。
-// 优先级：req 显式覆盖 > 引擎 Extra 配置 > 内置默认(true / 60s)。
+// ocrOptions 解析当前配置与本次请求的参数，得到最终生效的 correct / timeout / retry。
+// 优先级：req 显式覆盖 > 引擎 Extra 配置 > 内置默认(true / 60s / 2)。
 // 复用统一 parseOCRExtra 解析 Extra(JSON)，与 tesseract 保持 extra 格式一致。
-func (v *VisionOCR) ocrOptions(req model.OcrRequest) (correct bool, timeoutSec int) {
+// retry 为「额外重试次数（不含首次尝试）」：Extra 显式设 0 => 关闭重试（仅首次尝试）；
+// Extra 未含该字段(nil) => 回落默认 2; req.RetryCount>0 可显式覆盖。
+func (v *VisionOCR) ocrOptions(req model.OcrRequest) (correct bool, timeoutSec int, retryCount int) {
 	correct = true
 	timeoutSec = DefaultOCRTimeoutSec
+	retryCount = DefaultOCRRetryCount
 	e := parseOCRExtra(v.name, optExtra(v.config))
 	if e.TimeoutSec > 0 {
 		timeoutSec = e.TimeoutSec
+	}
+	if e.RetryCount != nil {
+		retryCount = *e.RetryCount // 允许 0（关闭重试）
 	}
 	if e.Correct != nil {
 		correct = *e.Correct
@@ -62,6 +57,9 @@ func (v *VisionOCR) ocrOptions(req model.OcrRequest) (correct bool, timeoutSec i
 	if req.TimeoutSec > 0 {
 		timeoutSec = req.TimeoutSec
 	}
+	if req.RetryCount > 0 {
+		retryCount = req.RetryCount
+	}
 	return
 }
 
@@ -71,15 +69,13 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 		return nil, ErrEmptyImage
 	}
 
-	correct, timeoutSec := v.ocrOptions(req)
+	correct, timeoutSec, retryCount := v.ocrOptions(req)
 
 	b64 := base64.StdEncoding.EncodeToString(req.ImageData)
-	cImg := C.CString(b64)
-	defer C.free(unsafe.Pointer(cImg))
 
 	outBuf := make([]byte, 1<<20) // 1MB 输出缓冲，足以容纳大图 OCR 的 region 明细
-	n := C.kai_ocr(cImg, (*C.char)(unsafe.Pointer(&outBuf[0])), C.int(len(outBuf)), boolToCInt(correct), C.int(timeoutSec))
-	slog.Debug(i18n.T("log.vision_ocr_call"), "n", int(n), "out_cap", len(outBuf), "correct", correct, "timeout", timeoutSec)
+	n := swiftbridge.KaiOCR(b64, unsafe.Pointer(&outBuf[0]), int32(len(outBuf)), boolToInt32(correct), int32(timeoutSec), int32(retryCount))
+	slog.Debug(i18n.T("log.vision_ocr_call"), "n", int(n), "out_cap", len(outBuf), "correct", correct, "timeout", timeoutSec, "retry", retryCount)
 	if n < 0 {
 		slog.Error(i18n.T("err.vision_ocr_buffer"), "n", int(n))
 		return nil, fmt.Errorf(i18n.T("err.vision_ocr_buffer"))
@@ -139,8 +135,8 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 	}, nil
 }
 
-// boolToCInt 将 Go bool 转为 C int（1/0）。
-func boolToCInt(b bool) C.int {
+// boolToInt32 将 Go bool 转为 C int（1/0），供 purego 的 int32 参数使用。
+func boolToInt32(b bool) int32 {
 	if b {
 		return 1
 	}

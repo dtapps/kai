@@ -1,6 +1,10 @@
 package service
 
 import (
+	"log/slog"
+
+	"cnb.cool/dtapp/kai/internal/i18n"
+	"cnb.cool/dtapp/kai/internal/model"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -25,7 +29,11 @@ func (w *WindowWrapper) translateWindow() application.Window {
 	if w.app == nil {
 		return nil
 	}
-	win, _ := w.app.Window.GetByName("translate")
+	win, ok := w.app.Window.GetByName(model.WindowTranslate)
+	if !ok {
+		slog.Error(i18n.T("log.window_handle_failed"), slog.String("window", model.WindowTranslate))
+		return nil
+	}
 	return win
 }
 
@@ -33,7 +41,24 @@ func (w *WindowWrapper) settingsWindow() application.Window {
 	if w.app == nil {
 		return nil
 	}
-	win, _ := w.app.Window.GetByName("settings")
+	win, ok := w.app.Window.GetByName(model.WindowSettings)
+	if !ok {
+		slog.Error(i18n.T("log.window_handle_failed"), slog.String("window", model.WindowSettings))
+		return nil
+	}
+	return win
+}
+
+// screenshotWindow 按名取截图翻译窗口句柄（与 translateWindow/settingsWindow 同款）。
+func (w *WindowWrapper) screenshotWindow() application.Window {
+	if w.app == nil {
+		return nil
+	}
+	win, ok := w.app.Window.GetByName(model.WindowScreenshot)
+	if !ok {
+		slog.Error(i18n.T("log.window_handle_failed"), slog.String("window", model.WindowScreenshot))
+		return nil
+	}
 	return win
 }
 
@@ -59,4 +84,11 @@ func (w *WindowWrapper) ShowTranslateWindow() {
 // ShowSettings 打开设置
 func (w *WindowWrapper) ShowSettings() {
 	showAndFocus(w.settingsWindow())
+}
+
+// ShowScreenshotWindow 呼出截图翻译窗口（与 ShowTranslateWindow 对称）。
+// 注：main.go 的 EventWindowShow('screenshot') 当前仍走独立的 showScreenshotWindow()
+// 包级函数；后续可统一迁移到本方法，使窗口呼出全部收口到 WindowWrapper。
+func (w *WindowWrapper) ShowScreenshotWindow() {
+	showAndFocus(w.screenshotWindow())
 }

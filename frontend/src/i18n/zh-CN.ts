@@ -20,6 +20,8 @@ export const zh = {
     translateFailed: '翻译失败',
     ocrError: '识别失败',
     retryHint: '请重试截图翻译',
+    expand: '展开',
+    collapse: '收起',
   },
   titlebar: {
     minimize: '最小化',
@@ -152,6 +154,9 @@ export const zh = {
     engineOcrCorrectDesc: '开启后识别更准（默认）；关闭后更快，偶发卡死概率更低',
     engineOcrTimeout: 'OCR 超时（秒）',
     engineOcrTimeoutDesc: '单次 OCR 的最长等待时间，超时将返回失败',
+    engineOcrRetry: 'OCR 失败重试次数',
+    engineOcrRetryDesc:
+      '识别瞬拒（CRImageReaderError）时的额外重试次数（不含第一次尝试），仅 macOS Vision 生效，默认 2；设为 0 即关闭重试（只试一次）',
     shortcuts: '快捷键',
     shortcutsTitle: '快捷键',
     shortcutsHint: '设置全局快捷键后保存即可立即生效。macOS 上 Alt 对应键盘上的 Option 键。',
@@ -270,6 +275,8 @@ export const zh = {
     loadLangListFailed: '[输入翻译] 加载语言列表失败',
     translateRequestFailed: '[输入翻译] 翻译请求失败',
     screenshotRecaptureFailed: '[截图翻译] 重新截图失败',
+    screenshotRetranslateEmit: '[动态桥接] 重新翻译已触发',
+    screenshotRetranslateFailed: '[动态桥接] 重新翻译触发失败',
     screenshotCloseFailed: '[截图翻译] 关闭窗口失败',
     screenshotCopyFailed: '[截图翻译] 复制失败',
     screenshotRenderError: '[截图翻译] 渲染失败(错误态)',

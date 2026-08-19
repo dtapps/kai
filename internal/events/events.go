@@ -1,5 +1,7 @@
 package events
 
+import "cnb.cool/dtapp/kai/internal/model"
+
 // 应用事件名称常量，防止拼写错误。
 const (
 	// EventWindowShow 前端呼出窗口，payload: string（"settings" | "main"）
@@ -29,6 +31,18 @@ const (
 
 	// EventScreenshotRecapture 前端「重新截图」按钮触发：后端隐藏窗口并重新走一次截图翻译流程。
 	EventScreenshotRecapture = "kai:screenshot:recapture"
+
+	// EventScreenshotRetranslate 前端改语言后触发：复用最近一次 OCR 原文，
+	// 跳过截图/OCR 直接用新语言重新翻译并增量推送结果。payload: ScreenshotRetranslatePayload
+	EventScreenshotRetranslate = "kai:screenshot:retranslate"
+)
+
+// 截图/OCR 缓存的 session 标识：区分不同入口，避免互相覆盖。
+const (
+	// ScreenshotSessionScreenshot 截图翻译窗口（含热键/菜单/重新截图按钮，全部投到 ScreenshotWindow）。
+	ScreenshotSessionScreenshot = "screenshot"
+	// ScreenshotSessionInput 输入翻译页内的截图 OCR（预留，与截图翻译窗口隔离）。
+	ScreenshotSessionInput = "input"
 )
 
 // LocaleChangedPayload 界面语言变更事件参数。
@@ -46,4 +60,14 @@ type LocaleChangedPayload struct {
 type ThemeChangedPayload struct {
 	Mode  string `json:"mode"`  // settings: auto | light | dark
 	Theme string `json:"theme"` // settings: dark | light
+}
+
+// ScreenshotRetranslatePayload 截图翻译改语言重新翻译事件参数。
+// Session 标识缓存来源（ScreenshotSessionScreenshot / ScreenshotSessionInput），
+// 后端据此取用对应入口最近一次 OCR 原文，避免不同入口互相串。
+// From/To 为目标翻译语言组合（From 允许 Auto），后端复用最近一次 OCR 原文重新翻译。
+type ScreenshotRetranslatePayload struct {
+	Session string         `json:"session"`
+	From    model.Language `json:"from"`
+	To      model.Language `json:"to"`
 }

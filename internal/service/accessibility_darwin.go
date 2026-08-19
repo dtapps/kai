@@ -6,28 +6,12 @@ import (
 	"log/slog"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
+	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 )
-
-/*
-#cgo darwin CFLAGS: -I${SRCDIR}/../swiftbridge
-#cgo darwin LDFLAGS: -L${SRCDIR}/../swiftbridge -lkai_bridge -framework ApplicationServices
-#include <stdlib.h>
-
-// 由 swiftbridge/libkai_bridge.a 提供的 C 接口（Swift @_cdecl 暴露）。
-int kai_accessibility_enabled(void);
-void kai_accessibility_request(void);
-int kai_screenrecording_enabled(void);
-void kai_screenrecording_request(void);
-void kai_set_locale(const char* locale);
-// TODO: 输入监控相关（kai_input_monitoring_enabled/kai_input_monitoring_request）当前未使用，已注释。如需 robotgo 模拟复制键再恢复。
-// int kai_input_monitoring_enabled(void);
-// void kai_input_monitoring_request(void);
-*/
-import "C"
 
 // isAccessibilityEnabled 检查 macOS 辅助功能是否已授权当前二进制。
 func (s *AppService) isAccessibilityEnabled() bool {
-	enabled := C.kai_accessibility_enabled() != 0
+	enabled := swiftbridge.KaiAccessibilityEnabled() != 0
 	s.log.Info(i18n.T("log.accessibility_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
 }
@@ -35,12 +19,12 @@ func (s *AppService) isAccessibilityEnabled() bool {
 // openAccessibilitySettings 通过系统弹窗请求辅助功能授权（仅 darwin 生效）。
 func (s *AppService) openAccessibilitySettings() {
 	s.log.Info(i18n.T("log.accessibility_request"))
-	C.kai_accessibility_request()
+	swiftbridge.KaiAccessibilityRequest()
 }
 
 // isScreenRecordingEnabled 检查 macOS 屏幕录制是否已授权当前二进制（截图 OCR 依赖）。
 func (s *AppService) isScreenRecordingEnabled() bool {
-	enabled := C.kai_screenrecording_enabled() != 0
+	enabled := swiftbridge.KaiScreenRecordingEnabled() != 0
 	s.log.Info(i18n.T("log.screenrecording_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
 }
@@ -48,7 +32,7 @@ func (s *AppService) isScreenRecordingEnabled() bool {
 // openScreenRecordingSettings 弹系统「屏幕录制」授权框（仅 darwin 生效）。
 func (s *AppService) openScreenRecordingSettings() {
 	s.log.Info(i18n.T("log.screenrecording_request"))
-	C.kai_screenrecording_request()
+	swiftbridge.KaiScreenRecordingRequest()
 }
 
 // TODO: 输入监控相关（isInputMonitoringEnabled / openInputMonitoringSettings）当前未使用，已注释。需 robotgo 模拟复制键时恢复。

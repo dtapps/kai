@@ -30,11 +30,11 @@ merge_locale() {
     local output_file="$LOCALES_DIR/$locale.json"
     
     if [ ! -d "$split_dir" ]; then
-        echo "错误: 目录不存在 $split_dir"
+        echo "error: directory not found: $split_dir"
         return 1
     fi
     
-    echo "合并 $locale ..."
+    echo "merging $locale ..."
     
     local tmp_file=$(mktemp)
 
@@ -49,15 +49,13 @@ merge_locale() {
     rm -f "$tmp_file"
     
     local count=$(jq 'length' "$output_file")
-    echo "  -> $output_file ($count keys)"
+    echo "  -> ${output_file#$PROJECT_DIR/} ($count keys)"
 }
 
 # 主流程
-echo "=== Go 后端 i18n 文件合并 ==="
-echo ""
+echo "=== merging Go backend i18n ==="
 
 merge_locale "zh-CN"
 merge_locale "en-US"
 
-echo ""
-echo "完成!"
+echo "done."

@@ -43,5 +43,12 @@ A translation tool that lives in the system tray, with selection, screenshot and
 ## 4. License
 See the `LICENSE` file in the repository.
 
-## 5. Acknowledgements
+## 5. Known Issues
+
+> The following are known limitations in the current version (Wails v3 beta.9), mostly caused by upstream framework or macOS platform behavior rather than application logic defects.
+
+- **macOS: screenshot window may be covered on first hotkey invocation**: When invoking the screenshot translation window via the hotkey (`⌥+S`) for the first time while another app is in the foreground, it may occasionally be covered by that app's window. A subsequent invocation (window already in the event loop) works normally. Cause: Kai is an accessory app (no Dock icon), so on macOS (especially Tahoe / macOS 27) its ability to reclaim foreground focus from a background state is limited by the system; a pure Wails solution has a race on the first invocation. Tray-menu clicks are unaffected (native clicks naturally transfer foreground focus). **Workaround**: if covered, click the Kai tray icon once or trigger the hotkey again.
+- **Custom title bar needs a click to activate**: On macOS, the custom-drawn title bar (frameless + transparent, used to follow the in-app light/dark theme) occasionally requires one extra click on the traffic lights (close/minimize/fullscreen) right after the window appears. This is platform behavior of an accessory app's window activation timing; interaction is normal once activated.
+
+## 6. Acknowledgements
 Design inspired by [Bob](https://github.com/ripperhe/Bob) and [Easydict](https://github.com/tisfeng/Easydict).

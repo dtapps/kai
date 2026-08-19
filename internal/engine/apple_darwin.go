@@ -2,20 +2,6 @@
 
 package engine
 
-/*
-#cgo darwin CFLAGS: -I${SRCDIR}/../swiftbridge
-#cgo darwin LDFLAGS: -L${SRCDIR}/../swiftbridge -lkai_bridge -framework Translation -framework Vision -framework CoreGraphics
-#include <stdlib.h>
-
-// 由 swiftbridge/libkai_bridge.a 提供的 C 接口（Swift @_cdecl 暴露）。
-int kai_translate(const char* src, const char* dst, const char* text,
-                  char* out, int out_cap);
-int kai_available_languages(char* out, int out_cap);
-void kai_set_log_config(const char* dir, const char* level, int retention_days, int compress);
-void kai_set_locale(const char* locale);
-*/
-import "C"
-
 import (
 	"bytes"
 	"context"
@@ -27,12 +13,13 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
-	"cnb.cool/dtapp/kai/internal/swiftbridge"
+	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 )
 
 // appleTranslator 调用 macOS 系统自带翻译（Translation.framework）。
-// 通过 cgo 链接 Swift 桥接静态库（internal/swiftbridge），免 API Key、无需辅助功能授权，
-// 是开箱即用的本地离线翻译后端。静态库需用 bridge/build.sh 预先生成（见 Taskfile darwin 构建）。
+// 通过 purego 运行时动态加载 Swift 桥接动态库（pkg/swiftbridge），免 API Key、无需辅助功能授权，
+// 是开箱即用的本地离线翻译后端。改 Swift 后只需重编 internal/swift/build.sh（产 .dylib 并自动复制到 pkg/swiftbridge），
+// 运行时 Dlopen 加载到的即是最新代码，无需重新链接主二进制。
 type appleTranslator struct{}
 
 // NewApple 创建系统翻译引擎。
@@ -46,23 +33,11 @@ func (s *appleTranslator) Name() string { return "apple" }
 // 使其 kai-bridge.log 与主应用日志（kai.log）使用同一套策略（等级过滤、按天滚动、保留天数、压缩）。
 // dir 为空则跳过；level 为 debug/info/warn/error（非法值由 Swift 侧回退 info）；
 // retentionDays <=0 表示仅按天滚动、不清理；compress 决定过期归档是否压缩为 .gz。
-// boolToInt 将 Go bool 转为 C int（1/0），供 cgo 的 int 参数使用。
-func boolToInt(b bool) int {
-	if b {
-		return 1
-	}
-	return 0
-}
-
 func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 	if dir == "" {
 		return
 	}
-	cDir := C.CString(dir)
-	cLevel := C.CString(level)
-	defer C.free(unsafe.Pointer(cDir))
-	defer C.free(unsafe.Pointer(cLevel))
-	C.kai_set_log_config(cDir, cLevel, C.int(retentionDays), C.int(boolToInt(compress)))
+	swiftbridge.KaiSetLogConfig(dir, level, int32(retentionDays), compress)
 }
 
 // SetBridgeLocale 将当前界面语言同步给 Swift 桥接层，使其 kai-bridge.log 调试日志
@@ -72,9 +47,7 @@ func SetBridgeLocale(locale string) {
 	if locale == "" {
 		return
 	}
-	cLocale := C.CString(locale)
-	defer C.free(unsafe.Pointer(cLocale))
-	C.kai_set_locale(cLocale)
+	swiftbridge.KaiSetLocale(locale)
 }
 
 // SupportsAutoSource 系统翻译（Translation.framework）支持自动检测源语言：
@@ -99,14 +72,7 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 	slog.Debug(i18n.T("log.apple_translate_invoke"), "from", sl, "to", tl, "text_len", len(text))
 
 	outBuf := make([]byte, 1<<16) // 64KB 输出缓冲，足以容纳长文本译文 + JSON 包装
-	cSrc := C.CString(sl)
-	cDst := C.CString(tl)
-	cText := C.CString(text)
-	defer C.free(unsafe.Pointer(cSrc))
-	defer C.free(unsafe.Pointer(cDst))
-	defer C.free(unsafe.Pointer(cText))
-
-	n := C.kai_translate(cSrc, cDst, cText, (*C.char)(unsafe.Pointer(&outBuf[0])), C.int(len(outBuf)))
+	n := swiftbridge.KaiTranslate(sl, tl, text, unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_translate_buffer"), "from", sl, "to", tl, "text_len", len(text))
 		return nil, fmt.Errorf(i18n.T("err.apple_translate_buffer"))
@@ -163,7 +129,7 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 func AvailableLanguages() ([]string, error) {
 	slog.Debug(i18n.T("log.apple_query_langs"))
 	outBuf := make([]byte, 1<<16)
-	n := C.kai_available_languages((*C.char)(unsafe.Pointer(&outBuf[0])), C.int(len(outBuf)))
+	n := swiftbridge.KaiAvailableLanguages(unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_lang_buffer"))
 		return nil, fmt.Errorf(i18n.T("err.apple_lang_buffer"))

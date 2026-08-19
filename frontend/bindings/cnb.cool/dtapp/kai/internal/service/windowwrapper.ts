@@ -24,6 +24,15 @@ export function SetApp(app: application$0.App | null): $CancellablePromise<void>
 }
 
 /**
+ * ShowScreenshotWindow 呼出截图翻译窗口（与 ShowTranslateWindow 对称）。
+ * 注：main.go 的 EventWindowShow('screenshot') 当前仍走独立的 showScreenshotWindow()
+ * 包级函数；后续可统一迁移到本方法，使窗口呼出全部收口到 WindowWrapper。
+ */
+export function ShowScreenshotWindow(): $CancellablePromise<void> {
+    return $Call.ByID(3066686029);
+}
+
+/**
  * ShowSettings 打开设置
  */
 export function ShowSettings(): $CancellablePromise<void> {

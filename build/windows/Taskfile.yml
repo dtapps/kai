@@ -34,6 +34,7 @@ tasks:
     summary: Builds the application using native Go cross-compilation
     internal: true
     deps:
+      - task: build:i18n
       - task: common:go:mod:tidy
       - task: common:build:frontend
         vars:
@@ -68,6 +69,14 @@ tasks:
       GOOS: windows
       CGO_ENABLED: '{{.CGO_ENABLED | default "0"}}'
       GOARCH: '{{.ARCH | default ARCH}}'
+
+  build:i18n:
+    summary: 合并 Go 后端与前端 i18n 拆分文件到主文件
+    internal: true
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - bash ./scripts/merge-go-i18n.sh
+      - bash ./scripts/merge-frontend-i18n.sh
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)

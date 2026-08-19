@@ -25,9 +25,10 @@ export function ScreenshotOCR(engineName: string): $CancellablePromise<model$0.O
 
 /**
  * ScreenshotTranslate 截图翻译主流程：区域截图→系统 OCR→多引擎翻译→投递到截图窗口。
+ * session 标识缓存来源（events.ScreenshotSessionScreenshot / ScreenshotSessionInput）。
  */
-export function ScreenshotTranslate(): $CancellablePromise<model$0.ScreenshotResult | null> {
-    return $Call.ByID(674436322);
+export function ScreenshotTranslate(session: string): $CancellablePromise<model$0.ScreenshotResult | null> {
+    return $Call.ByID(674436322, session);
 }
 
 export function Translate(req: model$0.TranslateRequest): $CancellablePromise<model$0.TranslateResult | null> {

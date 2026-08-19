@@ -30,11 +30,10 @@ merge_locale() {
     local output_file="$OUTPUT_DIR/$locale.json"
     
     if [ ! -d "$split_dir" ]; then
-        echo "跳过 $locale (目录不存在: $split_dir)"
         return 0
     fi
     
-    echo "合并 $locale ..."
+    echo "merging $locale ..."
     
     local tmp_file=$(mktemp)
 
@@ -49,15 +48,13 @@ merge_locale() {
     rm -f "$tmp_file"
     
     local count=$(jq 'length' "$output_file")
-    echo "  -> $output_file ($count keys)"
+    echo "  -> ${output_file#$PROJECT_DIR/} ($count keys)"
 }
 
 # 主流程
-echo "=== 前端 i18n 文件合并 ==="
-echo ""
+echo "=== merging frontend i18n ==="
 
 merge_locale "zh-CN"
 merge_locale "en-US"
 
-echo ""
-echo "完成!"
+echo "done."

@@ -108,6 +108,17 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 			// modalPanel 比普通 AlwaysOnTop(floating) 更高，确保更新窗口始终压在
 			// 应用其他窗口（及多数前台窗口）之上，不会被遮挡。
 			WindowLevel: application.MacWindowLevelModalPanel,
+			// 关键：让原生标题栏透明且内容全尺寸延伸（AppearsTransparent +
+			// HideTitle + FullSizeContent），否则 macOS 的 NSVisualEffectView
+			// 会绘制系统色背景，在深色主题下顶部露出一条浅色系统色带，与下方
+			// body 的 var(--bg) 深色内容不融合（标题栏「没适配主题」）。
+			// 透明后内容 var(--bg) 延伸到顶部，自定义 .titlebar 与之同色无缝衔接。
+			// 红绿灯仍由上方 MinimiseButtonState/MaximiseButtonState/CloseButtonState=ButtonHidden 隐藏。
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent: true,
+				HideTitle:          true,
+				FullSizeContent:    true,
+			},
 		},
 	})
 

@@ -233,11 +233,15 @@
     button.primary:hover { background: #5f9bff; }
     button.hidden { display: none; }
 
-    /* 自定义标题栏（隐藏原生标题栏后用于拖动与关闭） */
+    /* 自定义标题栏（隐藏原生红绿灯后用于拖动）。
+       必须铺满背景并与 body 同色，否则 macOS 原生标题栏的 NSVisualEffectView
+       系统色带会透出，与内容配色不搭（尤其在深色主题下顶部出现一条浅色带）。 */
     .titlebar {
       position: absolute;
       top: 0; left: 0; right: 0;
       height: 34px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--line);
       -webkit-app-region: drag;
       z-index: 10;
     }

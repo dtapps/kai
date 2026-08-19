@@ -1,7 +1,7 @@
 // 本文件是 Kai Swift 桥接层（cgo）错误码与 JSON 结构的「双端契约真实定义」。
 //
 // Go 端错误码常量在此唯一定义（导出），供 internal/engine 包引用；
-// Swift 端 BRIDGE_ERR_* 常量（internal/swiftbridge/kai_bridge.swift）必须是相同的字面量。
+// Swift 端 BRIDGE_ERR_* 常量（internal/swift/bridge_errors.swift）必须是相同的字面量。
 // 新增 / 修改任一错误码时，必须同步三处，缺一不可：
 //   ① 本文件 BridgeErr* 常量（Go 真实定义）
 //   ② kai_bridge.swift 的 BRIDGE_ERR_* 常量（Swift，字面量必须一致）
@@ -25,7 +25,7 @@ const (
 	BridgeErrAppleOcr           = "apple_ocr"            // Swift: BRIDGE_ERR_APPLE_OCR（系统级，复用 err.vision_ocr_engine）
 )
 
-// Swift 端常量（镜像，真实定义见 internal/swiftbridge/kai_bridge.swift）：
+// Swift 端常量（镜像，真实定义见 internal/swift/bridge_errors.swift）：
 //
 //	let BRIDGE_ERR_EMPTY_TEXT          = "empty_text"
 //	let BRIDGE_ERR_TARGET_REQUIRED     = "target_required"

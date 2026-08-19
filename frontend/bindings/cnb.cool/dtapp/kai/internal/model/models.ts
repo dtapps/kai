@@ -119,6 +119,12 @@ export interface OcrRequest {
      * TimeoutSec Vision OCR 超时秒数。<=0 时引擎用各自默认值（vision 默认 60s）。
      */
     "timeout_sec"?: number;
+
+    /**
+     * RetryCount Vision OCR 失败兜底重试次数（针对 CRImageReaderError 类瞬拒）。
+     * <=0 时引擎用默认值 2（仅 vision 语义生效）。
+     */
+    "retry_count"?: number;
 }
 
 /**

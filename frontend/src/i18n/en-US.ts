@@ -23,6 +23,8 @@ export const en: Dict = {
     translateFailed: 'Translation failed',
     ocrError: 'Recognition failed',
     retryHint: 'Please retry the screenshot translation',
+    expand: 'Expand',
+    collapse: 'Collapse',
   },
   titlebar: {
     minimize: 'Minimize',
@@ -156,6 +158,9 @@ export const en: Dict = {
       'On (default) = more accurate; Off = faster and less prone to occasional hangs',
     engineOcrTimeout: 'OCR timeout (seconds)',
     engineOcrTimeoutDesc: 'Max wait per OCR; a timeout returns failure',
+    engineOcrRetry: 'OCR retry count',
+    engineOcrRetryDesc:
+      'Extra retries when OCR is instantly rejected (CRImageReaderError), excluding the first try; macOS Vision only, default 2. Set 0 to disable retry (first try only)',
     shortcuts: 'Shortcuts',
     shortcutsTitle: 'Shortcuts',
     shortcutsHint:
@@ -278,6 +283,8 @@ export const en: Dict = {
     loadLangListFailed: '[input] Failed to load language list',
     translateRequestFailed: '[input] Translation request failed',
     screenshotRecaptureFailed: '[screenshot] Failed to recapture screenshot',
+    screenshotRetranslateEmit: '[dynamic-bridge] retranslate triggered',
+    screenshotRetranslateFailed: '[dynamic-bridge] failed to trigger retranslate',
     screenshotCloseFailed: '[screenshot] Failed to close window',
     screenshotCopyFailed: '[screenshot] Copy failed',
     screenshotRenderError: '[screenshot] Render failed (error state)',

@@ -1,6 +1,6 @@
 // bridge_errors.swift
 // Swift 桥接层「双端契约」：错误码常量 + 对外 JSON 的 Codable 模型。
-// 与 Go 侧 internal/swiftbridge/bridge_errors.go 一一对应（字面量 / 字段名必须一致）。
+// 与 Go 侧 pkg/swiftbridge/bridge_errors.go 一一对应（字面量 / 字段名必须一致）。
 //
 // 新增 / 修改任一错误码时，必须同步三处，缺一不可：
 //   ① Go 侧 bridge_errors.go 的 BridgeErr* 常量（真实定义）

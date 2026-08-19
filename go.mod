@@ -6,6 +6,7 @@ ignore ./frontend
 
 require (
 	github.com/aiwaki/makc v0.2.0
+	github.com/ebitengine/purego v0.10.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0
 	github.com/go-vgo/robotgo v1.0.2
@@ -26,7 +27,6 @@ require (
 	github.com/coder/websocket v1.8.15 // indirect
 	github.com/dblohm7/wingoes v0.0.0-20260526185140-fb298caac7ca // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
-	github.com/ebitengine/purego v0.10.2 // indirect
 	github.com/gen2brain/shm v0.2.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/godbus/dbus/v5 v5.2.2 // indirect

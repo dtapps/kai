@@ -23,12 +23,20 @@ tasks:
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
 
-  build:swiftbridge:
-    summary: 使用 cgo 编译 Swift 桥接静态库（含翻译与辅助功能）
+  build:i18n:
+    summary: 合并 Go 后端与前端 i18n 拆分文件到主文件
     internal: true
-    dir: internal/swiftbridge
+    dir: '{{.ROOT_DIR}}'
+    cmds:
+      - bash ./scripts/merge-go-i18n.sh
+      - bash ./scripts/merge-frontend-i18n.sh
+
+  build:swiftbridge:
+    summary: 编译 Swift 桥接动态库 libkai_bridge.dylib（纯 Go purego 运行时加载，含翻译与辅助功能）
+    internal: true
+    dir: pkg/swiftbridge/scripts
     # 不设置 sources/generates 增量缓存：build.sh 内部已 rm -f 强制重编，
-    # 若此处启用缓存，Task 可能判断 .a 较新而跳过，导致链接到未更新的旧 .a。
+    # 若此处启用缓存，Task 可能判断 dylib 较新而跳过，导致加载到未更新的旧 dylib。
     preconditions:
       - sh: command -v swiftc >/dev/null 2>&1
         msg: "swiftc is required to build the swift bridge. Install Xcode command line tools."
@@ -39,6 +47,7 @@ tasks:
     summary: Builds the application natively on macOS
     internal: true
     deps:
+      - task: build:i18n
       - task: common:go:mod:tidy
       - task: build:swiftbridge
       - task: common:build:frontend

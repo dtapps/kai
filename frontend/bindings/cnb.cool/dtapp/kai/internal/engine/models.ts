@@ -185,6 +185,11 @@ export enum FieldWidget {
     WidgetOCRCorrect = "ocr_correct",
 
     /**
+     * WidgetOCRRetry Vision OCR 失败兜底重试次数，正整数，写入 Extra.retry_count（仅 vision 语义生效）
+     */
+    WidgetOCRRetry = "ocr_retry",
+
+    /**
      * WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
      */
     WidgetOCRStatus = "ocr_status",

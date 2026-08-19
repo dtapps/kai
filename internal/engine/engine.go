@@ -354,6 +354,8 @@ const (
 	WidgetOCRTimeout FieldWidget = "ocr_timeout"
 	// WidgetOCRCorrect OCR 语言校正开关，写入 Extra.correct_text（仅 vision 语义生效）
 	WidgetOCRCorrect FieldWidget = "ocr_correct"
+	// WidgetOCRRetry Vision OCR 失败兜底重试次数，正整数，写入 Extra.retry_count（仅 vision 语义生效）
+	WidgetOCRRetry FieldWidget = "ocr_retry"
 	// WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
 	WidgetOCRStatus FieldWidget = "ocr_status"
 )
@@ -420,6 +422,12 @@ var engineSchemas = map[string]EngineSchema{
 				Widget:   WidgetOCRTimeout,
 				LabelKey: "settings.engineOcrTimeout",
 				HintKey:  "settings.engineOcrTimeoutDesc",
+			},
+			{
+				Field:    "extra",
+				Widget:   WidgetOCRRetry,
+				LabelKey: "settings.engineOcrRetry",
+				HintKey:  "settings.engineOcrRetryDesc",
 			},
 		},
 	},
@@ -613,10 +621,13 @@ func GetEngineSchema(name string) EngineSchema {
 //   - langs:      语言码，如 "chi_sim+eng"（"+" 分隔）。
 //   - timeoutSec: OCR 超时秒数；<=0 回落默认 60。
 //   - correct:    是否开启语言校正；仅 vision 语义生效，tesseract 忽略。nil/true=开启。
+//   - retryCount: Vision OCR 失败兜底重试次数（仅 vision 语义生效，tesseract 忽略）。
+//     该值为「额外重试次数」，不含首次尝试；<=0（或字段缺省）回落默认 2。显式 0 表示关闭重试。
 type ocrExtra struct {
 	Langs      string `json:"langs"`        // 语言码（+ 分隔），缺省回落默认
 	TimeoutSec int    `json:"timeout_sec"`  // OCR 超时秒数，<=0 用默认 60
 	Correct    *bool  `json:"correct_text"` // 语言校正（nil/true=开启），仅 vision 生效
+	RetryCount *int   `json:"retry_count"`  // Vision OCR 失败兜底「额外重试」次数（不含首次）；nil=用默认 2，显式 0=关闭
 }
 
 // DefaultOCRLangs 各 OCR 引擎的语言码默认（无 Extra 或 Extra 不含 langs 时回落）。
@@ -627,6 +638,9 @@ var DefaultOCRLangs = map[string]string{
 
 // DefaultOCRTimeoutSec OCR 超时默认值（秒）。
 const DefaultOCRTimeoutSec = 60
+
+// DefaultOCRRetryCount Vision OCR 失败兜底重试次数默认值。
+const DefaultOCRRetryCount = 2
 
 // parseOCRExtra 统一解析 OCR 引擎 Extra(JSON)。两引擎共用，保证 extra 格式一致。
 // 兼容旧数据：Extra 为纯字符串语言码（非 JSON）时，整串作为 langs 兜底，超时回落默认。
@@ -650,6 +664,9 @@ func parseOCRExtra(engineName, extra string) ocrExtra {
 		}
 		if je.Correct != nil {
 			out.Correct = je.Correct
+		}
+		if je.RetryCount != nil {
+			out.RetryCount = je.RetryCount
 		}
 		return out
 	}

@@ -2,29 +2,13 @@
 
 package selection
 
-/*
-#cgo darwin CFLAGS: -I${SRCDIR}/../swiftbridge
-#cgo darwin LDFLAGS: -L${SRCDIR}/../swiftbridge -lkai_bridge -framework ApplicationServices
-#include <stdlib.h>
-
-// 由 swiftbridge/libkai_bridge.a 提供的 C 接口（Swift @_cdecl 暴露）。
-// TODO(2026-08-11): kai_selected_text 已禁用（与选中文本 Swift 取词链路一并禁用，因用户反馈
-// 启用后电脑偶发异常）。Swift 端对应 @_cdecl 同步注释，故 cgo 声明此处一并注释，避免链接缺失符号。
-// int kai_selected_text(char* out, int out_cap);
-int kai_accessibility_enabled(void);
-int kai_selection_point(char* out, int out_cap);
-int kai_screen_size(char* out, int out_cap);
-void kai_set_locale(const char* locale);
-*/
-import "C"
-
 import (
 	"encoding/json"
 	"log/slog"
 	"unsafe"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
-	"cnb.cool/dtapp/kai/internal/swiftbridge"
+	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 )
 
 // TODO(2026-08-11): selectedTextViaBridge 已禁用。它仅被 point_darwin.go 的 currentSelectionOSA
@@ -51,7 +35,7 @@ import (
 
 // accessibilityEnabledViaBridge 仅查询辅助功能授权状态（供坐标定位前探活），不读取选区。
 func accessibilityEnabledViaBridge() bool {
-	enabled := C.kai_accessibility_enabled() != 0
+	enabled := swiftbridge.KaiAccessibilityEnabled() != 0
 	slog.Info(i18n.T("log.selection_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
 }
@@ -64,7 +48,7 @@ func isAccessibilityEnabled() bool {
 // selectionPointViaBridge 通过 Swift 桥接读取前台 app 窗口锚点（JSON {x,y}）。
 func selectionPointViaBridge() (x, y int) {
 	buf := make([]byte, 128)
-	n := C.kai_selection_point((*C.char)(unsafe.Pointer(&buf[0])), C.int(len(buf)))
+	n := swiftbridge.KaiSelectionPoint(unsafe.Pointer(&buf[0]), int32(len(buf)))
 	if n <= 0 {
 		return 0, 0
 	}
@@ -79,7 +63,7 @@ func selectionPointViaBridge() (x, y int) {
 // screenSizeViaBridge 通过 Swift 桥接读取主屏分辨率（JSON {w,h}）。
 func screenSizeViaBridge() (w, h float64) {
 	buf := make([]byte, 128)
-	n := C.kai_screen_size((*C.char)(unsafe.Pointer(&buf[0])), C.int(len(buf)))
+	n := swiftbridge.KaiScreenSize(unsafe.Pointer(&buf[0]), int32(len(buf)))
 	if n <= 0 {
 		return 0, 0
 	}

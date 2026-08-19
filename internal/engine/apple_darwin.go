@@ -37,6 +37,10 @@ func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 	if dir == "" {
 		return
 	}
+	// dylib 未加载（非 macOS / 缺失 / 路径错）时安全跳过，避免 nil 函数指针 panic。
+	if !swiftbridge.Available() {
+		return
+	}
 	swiftbridge.KaiSetLogConfig(dir, level, int32(retentionDays), compress)
 }
 
@@ -45,6 +49,9 @@ func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 // 空串则跳过（保持 Swift 侧默认 zh）。
 func SetBridgeLocale(locale string) {
 	if locale == "" {
+		return
+	}
+	if !swiftbridge.Available() {
 		return
 	}
 	swiftbridge.KaiSetLocale(locale)
@@ -72,6 +79,9 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 	slog.Debug(i18n.T("log.apple_translate_invoke"), "from", sl, "to", tl, "text_len", len(text))
 
 	outBuf := make([]byte, 1<<16) // 64KB 输出缓冲，足以容纳长文本译文 + JSON 包装
+	if !swiftbridge.Available() {
+		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
+	}
 	n := swiftbridge.KaiTranslate(sl, tl, text, unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_translate_buffer"), "from", sl, "to", tl, "text_len", len(text))
@@ -128,6 +138,9 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 // 供前端语言选择器等场景使用；失败返回错误。
 func AvailableLanguages() ([]string, error) {
 	slog.Debug(i18n.T("log.apple_query_langs"))
+	if !swiftbridge.Available() {
+		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
+	}
 	outBuf := make([]byte, 1<<16)
 	n := swiftbridge.KaiAvailableLanguages(unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
 	if n < 0 {

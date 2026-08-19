@@ -35,6 +35,11 @@ import (
 
 // accessibilityEnabledViaBridge 仅查询辅助功能授权状态（供坐标定位前探活），不读取选区。
 func accessibilityEnabledViaBridge() bool {
+	// dylib 未加载时安全降级：视为未授权（不 panic）。
+	if !swiftbridge.Available() {
+		slog.Warn(i18n.T("log.swiftbridge_unavailable"))
+		return false
+	}
 	enabled := swiftbridge.KaiAccessibilityEnabled() != 0
 	slog.Info(i18n.T("log.selection_query"), slog.Bool(i18n.T("log.field_result"), enabled))
 	return enabled
@@ -47,6 +52,9 @@ func isAccessibilityEnabled() bool {
 
 // selectionPointViaBridge 通过 Swift 桥接读取前台 app 窗口锚点（JSON {x,y}）。
 func selectionPointViaBridge() (x, y int) {
+	if !swiftbridge.Available() {
+		return 0, 0
+	}
 	buf := make([]byte, 128)
 	n := swiftbridge.KaiSelectionPoint(unsafe.Pointer(&buf[0]), int32(len(buf)))
 	if n <= 0 {
@@ -62,6 +70,9 @@ func selectionPointViaBridge() (x, y int) {
 
 // screenSizeViaBridge 通过 Swift 桥接读取主屏分辨率（JSON {w,h}）。
 func screenSizeViaBridge() (w, h float64) {
+	if !swiftbridge.Available() {
+		return 0, 0
+	}
 	buf := make([]byte, 128)
 	n := swiftbridge.KaiScreenSize(unsafe.Pointer(&buf[0]), int32(len(buf)))
 	if n <= 0 {

@@ -73,6 +73,10 @@ func (v *VisionOCR) Recognize(ctx context.Context, req model.OcrRequest) (*model
 
 	b64 := base64.StdEncoding.EncodeToString(req.ImageData)
 
+	// dylib 未加载（非 macOS / 缺失 / 路径错）时安全降级，避免 nil 函数指针 panic。
+	if !swiftbridge.Available() {
+		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
+	}
 	outBuf := make([]byte, 1<<20) // 1MB 输出缓冲，足以容纳大图 OCR 的 region 明细
 	n := swiftbridge.KaiOCR(b64, unsafe.Pointer(&outBuf[0]), int32(len(outBuf)), boolToInt32(correct), int32(timeoutSec), int32(retryCount))
 	slog.Debug(i18n.T("log.vision_ocr_call"), "n", int(n), "out_cap", len(outBuf), "correct", correct, "timeout", timeoutSec, "retry", retryCount)

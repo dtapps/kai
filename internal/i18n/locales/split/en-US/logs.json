@@ -116,5 +116,7 @@
   "log.screenshot_window_nil": "[screenshot-window] window handle is nil, cannot show screenshot window",
   "log.screenshot_prebuild_start": "[screenshot-prebuild] ApplicationStarted fired, pre-building impl visible={{.Visible}}",
   "log.screenshot_prebuild_after_show": "[screenshot-prebuild] after Show  visible={{.Visible}} focused={{.Focused}}",
-  "log.screenshot_prebuild_after_hide": "[screenshot-prebuild] after Hide  visible={{.Visible}} focused={{.Focused}}"
+  "log.screenshot_prebuild_after_hide": "[screenshot-prebuild] after Hide  visible={{.Visible}} focused={{.Focused}}",
+  "log.swiftbridge_unavailable": "[dynamic-bridge] Swift bridge unavailable (dylib not loaded), feature degraded",
+  "log.swiftbridge_loaded": "[dynamic-bridge] Swift bridge loaded"
 }

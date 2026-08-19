@@ -111,5 +111,6 @@
   "err.swiftbridge_purego_resolve_path": "[动态桥接] 无法解析自身路径",
   "err.swiftbridge_purego_dlopen": "[动态桥接] 加载动态库 %s 失败: %s",
   "err.swiftbridge_purego_register": "[动态桥接] 注册符号 %s 失败: %s",
-  "err.swiftbridge_purego_panic": "[动态桥接] 注册符号时发生 panic: %v"
+  "err.swiftbridge_purego_panic": "[动态桥接] 注册符号时发生 panic: %v",
+  "err.swiftbridge_unavailable": "[动态桥接] Swift 桥接不可用（动态库未加载）"
 }

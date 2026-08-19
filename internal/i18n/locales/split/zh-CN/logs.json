@@ -116,5 +116,7 @@
   "log.screenshot_window_nil": "[截图窗口] 窗口句柄为 nil，无法呼出截图窗口",
   "log.screenshot_prebuild_start": "[截图窗口预建] ApplicationStarted 触发，开始预建 impl 可见={{.Visible}}",
   "log.screenshot_prebuild_after_show": "[截图窗口预建] Show 后 可见={{.Visible}} 聚焦={{.Focused}}",
-  "log.screenshot_prebuild_after_hide": "[截图窗口预建] Hide 后 可见={{.Visible}} 聚焦={{.Focused}}"
+  "log.screenshot_prebuild_after_hide": "[截图窗口预建] Hide 后 可见={{.Visible}} 聚焦={{.Focused}}",
+  "log.swiftbridge_unavailable": "[动态桥接] Swift 桥接不可用（动态库未加载），功能降级",
+  "log.swiftbridge_loaded": "[动态桥接] Swift 桥接已加载"
 }

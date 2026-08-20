@@ -22,3 +22,5 @@ pkg/swiftbridge/internal/swift/libkai_bridge.dylib
 .mimocode/
 .vscode/
 docs/*-*-*.md
+
+.env

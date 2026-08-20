@@ -1,20 +1,40 @@
 .PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe format-swift check-cross
 
-# 开发端口固定为 9247
+# ==================== 构建配置 ====================
+
+# 开发服务器端口
 PORT ?= 9247
 
-# 将 stderr 合并到 stdout（便于查看完整输出）。注意：此处「绝不」接 grep 管道，
-# 否则会吞掉 golangci-lint 的退出码（grep 匹配到噪声即返回 0），导致 make check
-# 在 lint 失败时仍继续（"失败还在继续"）。噪声可裸打印，不影响正确性。
-# 用法：<命令> $(FILTER)
+# 根目录有 .env 就载入其中的构建变量（KEY=val 形式，# 注释与空行自动忽略）
+# 载入后下方 VERSION/... 用 ?= 定义，.env 同名值优先、缺失则回退默认值；命令行 make KEY=val 可再覆盖。
+ifneq (,$(wildcard $(CURDIR)/.env))
+include $(CURDIR)/.env
+export
+endif
+
+# 版本号
+VERSION     ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
+# 构建时间(UTC)
+BUILD_TIME  ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+# 提交短哈希
+GIT_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "")
+# GitHub API Token
+GITHUB_TOKEN ?=
+# CNB API Token
+CNB_TOKEN   ?=
+# 开发标记，true 为开发态，false 为正式构建
+DEV         ?= false
+
+# 合并 stderr 到 stdout
 FILTER := 2>&1
 
 # 默认目标
 help: ## 显示帮助信息
 	@echo "Kai 开发命令"
 	@echo ""
-	@grep -E '^[a-zA-Z0-9_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
+	@grep -E '^[a-zA-Z0-9_-]+:.*## ' Makefile | sort | \
+		sed -E 's/^([a-zA-Z0-9_-]+):.*## (.*)$$/\1|\2/' | \
+		awk -F'|' '{printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 
 # ==================== 开发工具 ====================
 
@@ -56,7 +76,7 @@ swift-build: ## 手动编译 Swift 桥接动态库（libkai_bridge.dylib，含�
 code-generate: sqlc i18n swift-build ##  代码生成 sqlc i18n swift
 
 dev: i18n ## 运行 Wails 开发模式
-	wails3 dev -port $(PORT)
+	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 dev -port $(PORT)
 
 # ==================== 格式化 / 修复 ====================
 
@@ -121,16 +141,6 @@ vuln-go: ## Go 依赖漏洞检查（发现漏洞即停止）
 	govulncheck -show verbose ./...
 
 # ==================== 构建打包 ====================
-
-# 版本/构建时间默认值：git tag 优先，无 tag 用 dev；构建时间取当前 UTC。
-# 通过同名变量传给 task（task 的 {{.VERSION}} / {{.BUILD_TIME}} 会读取），可在命令行覆盖：
-#   make darwin-package VERSION=1.2.0 BUILD_TIME=2026-08-12T00:00:00Z
-VERSION     ?= $(shell git describe --tags --always 2>/dev/null || echo dev)
-BUILD_TIME  ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
-GIT_COMMIT  ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo "")
-GITHUB_TOKEN ?=
-CNB_TOKEN   ?=
-DEV         ?= false
 
 darwin-build: ## [macOS] 编译正式二进制 -> bin/Kai（不打包成 .app）
 	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 task darwin:build

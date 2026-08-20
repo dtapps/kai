@@ -25,8 +25,8 @@ func (m *MirrorProvider) Window() *updater.BuiltinWindow {
 }
 
 // renderWindowHTML 把内嵌的 updater_window.html 模板按当前包全局 locale/theme/当前版本注入文案后返回。
-// theme 控制更新窗口配色：ThemeDark 强制深色（注入 class="dark"），ThemeLight 强制浅色，
-// ThemeLight 不注入 class、由 CSS 的 prefers-color-scheme 跟随系统。
+// 配色跟随应用主题 GetTheme()：ThemeDark 注入 "dark"、ThemeLight 注入 "light"（HTML 用
+// body[data-theme="..."] 决定内容区配色），与 recreateNativeWindow 的 BackgroundColour 保持一致。
 // locale/theme 已由 T()/GetTheme() 内部读全局，无需入参（每次渲染实时读，热更新语言/配色）。
 // CurrentVersion 从 app.Updater.CurrentVersion() 读取；app 为 nil 时注入空串。
 // 模板解析或执行失败时回退为原始内嵌 HTML（降级不致命）。

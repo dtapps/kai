@@ -27,6 +27,7 @@ var (
 	updaterHandles          = map[string]*updaterWindow{}
 	resizeHandlerRegistered bool // resize 全局监听只注册一次，避免重复重建窗口时泄漏
 	closeHandlerRegistered  bool // user 动作关闭监听只注册一次
+	themeHandlerRegistered  bool // 系统主题变更监听只注册一次
 )
 
 // updaterWindow 把库自建的 *application.WebviewWindow 适配成
@@ -64,16 +65,15 @@ func (h *updaterWindow) Show() {
 //     user:cancel/skip/remind 后 Hide）。第 2 种场景的旧 session close 不会再误藏。
 func (h *updaterWindow) Close() {}
 
-// createUpdaterWindow 创建一个 *updaterWindow 对象（稳定句柄）并为其创建底层
-// WebviewWindow。注意：句柄对象一经创建便保持稳定，后续只重建其内部的 win
-// （见 recreateNativeWindow），这样框架 Init 时持有的 WindowHandle 指针在窗口
-// 销毁重建后依然有效——否则「关闭后再检查更新」弹出的新窗口与框架持有的旧
-// 句柄不是同一个对象，user:cancel 会打到已销毁的旧窗口，表现为「关闭按钮没反应」。
+// createUpdaterWindow 仅创建一个 *updaterWindow 对象（稳定句柄），**不创建底层
+// WebviewWindow**。窗口的按需创建推迟到第一次 ShowUpdaterWindow 才发生——这样启动
+// 阶段（app.Updater.Init 经 OpenUpdaterWindow 拿到句柄）不会把更新窗口建出来，
+// 避免无谓的 webview 初始化与系统红绿灯占位。句柄对象一经创建便保持稳定，后续
+// 只重建其内部的 win（见 recreateNativeWindow），这样框架 Init 时持有的 WindowHandle
+// 指针在窗口销毁重建后依然有效——否则「关闭后再检查更新」弹出的新窗口与框架持有的
+// 旧句柄不是同一个对象，user:cancel 会打到已销毁的旧窗口，表现为「关闭按钮没反应」。
 func createUpdaterWindow(app *application.App) *updaterWindow {
-	h := &updaterWindow{app: app}
-	// Init 阶段创建为隐藏窗口，启动时不弹窗；由 ShowUpdaterWindow 负责显示。
-	recreateNativeWindow(app, h, false)
-	return h
+	return &updaterWindow{app: app}
 }
 
 // recreateNativeWindow 仅重建 h 底层的 WebviewWindow（h 对象本身保持稳定）。
@@ -86,6 +86,25 @@ func createUpdaterWindow(app *application.App) *updaterWindow {
 // 移除（不读 event.Cancelled），因此 e.Cancel() 无法阻止销毁；这里 Hide 仅为
 // 「未真正销毁」场景兜底，真正重建由 ensureUpdaterWindow / ShowUpdaterWindow 完成。
 func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
+	// 配色统一跟随应用主题 GetTheme()（dark/light，auto 已由 main.go 的
+	// resolveUpdaterTheme 解析后通过 SetTheme 灌入，这里拿到的已是 dark/light）：
+	//   底色 BackgroundColour：深 (30,30,30) / 浅 (255,255,255)
+	//   macOS 原生标题栏 Mac.Appearance：深 DarkAqua / 浅 Aqua（标题栏跟随应用主题）
+	//   Windows 标题栏 CustomTheme：深/浅两套 ThemeSettings（标题栏跟随应用主题）
+	dark := GetTheme() == ThemeDark
+	bg := application.NewRGB(255, 255, 255)
+	appearance := application.NSAppearanceNameAqua
+	if dark {
+		bg = application.NewRGB(30, 30, 30)
+		appearance = application.NSAppearanceNameDarkAqua
+	}
+	mac := application.MacWindow{
+		Appearance: appearance,
+	}
+	winTheme := lightTitleTheme()
+	if dark {
+		winTheme = darkTitleTheme()
+	}
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:                 globalWindowName,
 		Title:                T("window_title_check"),
@@ -95,31 +114,18 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 		DisableResize:        false,
 		Hidden:               !show, // show=false 时隐藏（启动不弹窗），show=true 时可见
 		AllowSimpleEventEmit: true,  // 关键：允许 JS Events.Emit 直接驱动 Go 监听
+		BackgroundColour:     bg,
+		Mac:                  mac,
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
+			CustomTheme:     winTheme,
 		},
-		// 隐藏原生标题栏红绿灯按钮（关闭/最小化/全屏），但保留原生标题栏与标题文字。
-		// 用框架原生的 ButtonState=ButtonHidden（applyWindowButtonStates 在 OnCreate 对所有
-		// 窗口生效），比 MacTitleBar.Hide（会去掉 Titled 样式、连标题一起消失且红绿灯未必隐藏）更可靠。
-		MinimiseButtonState: application.ButtonHidden,
-		MaximiseButtonState: application.ButtonHidden,
-		CloseButtonState:    application.ButtonHidden,
-		Mac: application.MacWindow{
-			// modalPanel 比普通 AlwaysOnTop(floating) 更高，确保更新窗口始终压在
-			// 应用其他窗口（及多数前台窗口）之上，不会被遮挡。
-			WindowLevel: application.MacWindowLevelModalPanel,
-			// 关键：让原生标题栏透明且内容全尺寸延伸（AppearsTransparent +
-			// HideTitle + FullSizeContent），否则 macOS 的 NSVisualEffectView
-			// 会绘制系统色背景，在深色主题下顶部露出一条浅色系统色带，与下方
-			// body 的 var(--bg) 深色内容不融合（标题栏「没适配主题」）。
-			// 透明后内容 var(--bg) 延伸到顶部，自定义 .titlebar 与之同色无缝衔接。
-			// 红绿灯仍由上方 MinimiseButtonState/MaximiseButtonState/CloseButtonState=ButtonHidden 隐藏。
-			TitleBar: application.MacTitleBar{
-				AppearsTransparent: true,
-				HideTitle:          true,
-				FullSizeContent:    true,
-			},
-		},
+		// 红绿灯按钮：禁用（灰显不可点）最小化/最大化，保留关闭（可见可用）。
+		MinimiseButtonState: application.ButtonDisabled,
+		MaximiseButtonState: application.ButtonDisabled,
+		CloseButtonState:    application.ButtonEnabled,
+		// 始终保持在应用其他窗口之上（不抢占其他前台 app）。
+		AlwaysOnTop: true,
 	})
 
 	win.OnWindowEvent(events.Common.WindowClosing, func(e *application.WindowEvent) {
@@ -128,6 +134,33 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 	})
 
 	h.win = win
+}
+
+// darkTitleTheme / lightTitleTheme 返回 Windows 标题栏 CustomTheme 配色，
+// 与内容区配色对齐（CSS --bg 深 #15161a / 浅 #eef0f4），由应用主题 GetTheme() 选择。
+// WindowTheme 颜色为 *uint32，hex 格式 0x00BBGGRR。
+func darkTitleTheme() application.ThemeSettings {
+	titleBar := uint32(0x001A1615) // #15161a
+	text := uint32(0x00E9E6E6)     // 浅色标题文字 #e6e6e9
+	wt := &application.WindowTheme{TitleBarColour: &titleBar, TitleTextColour: &text}
+	return application.ThemeSettings{
+		DarkModeActive:    wt,
+		DarkModeInactive:  wt,
+		LightModeActive:   wt,
+		LightModeInactive: wt,
+	}
+}
+
+func lightTitleTheme() application.ThemeSettings {
+	titleBar := uint32(0x00F4F0EE) // #eef0f4
+	text := uint32(0x001D1816)     // 深色标题文字 #16181d
+	wt := &application.WindowTheme{TitleBarColour: &titleBar, TitleTextColour: &text}
+	return application.ThemeSettings{
+		DarkModeActive:    wt,
+		DarkModeInactive:  wt,
+		LightModeActive:   wt,
+		LightModeInactive: wt,
+	}
 }
 
 // getLiveUpdaterWindow 返回存活的更新窗口句柄：若窗口尚未创建、或已被用户
@@ -180,6 +213,10 @@ func ensureUpdaterWindow(app *application.App) *updaterWindow {
 			registerCloseHandler(app)
 			closeHandlerRegistered = true
 		}
+		if !themeHandlerRegistered {
+			registerThemeHandler(app)
+			themeHandlerRegistered = true
+		}
 		return h
 	}
 
@@ -196,12 +233,14 @@ func ensureUpdaterWindow(app *application.App) *updaterWindow {
 	return h
 }
 
-// OpenUpdaterWindow 在给定 app 上创建（或复用）更新窗口，并把它包装成
-// updater.Window 选项返回，供 app.Updater.Init 使用。窗口创建后默认隐藏，
-// 不会在启动时弹出；由框架的 Show() 在检查更新时才显示。
+// OpenUpdaterWindow 在给定 app 上创建一个稳定的更新窗口句柄，并包装成
+// updater.Window 选项返回供 app.Updater.Init 使用。**注意：此处只创建稳定句柄
+// 对象，并不创建底层 WebviewWindow**——底层窗口推迟到第一次 ShowUpdaterWindow
+// 才按需创建，因此启动阶段不会把更新窗口建出来（避免无用 webview 初始化、
+// 系统红绿灯占位等）。由框架的 Show()/检查更新菜单触发显示时才真正建窗口。
 //
-// 初始语言/配色直接读包全局 GetLocale/GetTheme（注入到 HTML 模板），
-// 调用方在 Open 前通过 SetLocale/SetTheme 设定即可。
+// 初始语言直接读包全局 GetLocale（注入到 HTML 模板）；配色跟随应用 GetTheme()。
+// 调用方在 Open 前通过 SetLocale/SetTheme 设定语言与主题即可。
 func OpenUpdaterWindow(app *application.App) updater.WindowOption {
 	handleMu.Lock()
 	defer handleMu.Unlock()
@@ -221,11 +260,14 @@ func ShowUpdaterWindow(app *application.App) {
 	handleMu.Lock()
 	defer handleMu.Unlock()
 	h := ensureUpdaterWindow(app)
-	// 销毁旧窗口（含 Init 阶段创建的隐藏窗口或上一次显示的旧窗口），重建为可见窗口。
-	if h.win != nil {
+	// 按需创建：窗口此前从未建过（Init 阶段只建了稳定句柄、未建底层 WebviewWindow），
+	// 直接创建一个可见窗口即可，无需先建隐藏再销毁。已存在则销毁旧窗口重建为可见。
+	if h.win == nil {
+		recreateNativeWindow(app, h, true)
+	} else {
 		h.win.Close() // WebviewWindow.Close：框架无条件销毁并移出注册表
+		recreateNativeWindow(app, h, true)
 	}
-	recreateNativeWindow(app, h, true)
 	h.win.Show()
 	h.win.Show() // 双 Show：规避 Wails Hidden 首次 Show 不显示的 bug
 	h.win.Focus()
@@ -294,4 +336,23 @@ func registerCloseHandler(app *application.App) {
 	app.Event.On(evtUserCancel, hide)
 	app.Event.On(evtUserSkip, hide)
 	app.Event.On(evtUserRemind, hide)
+}
+
+// registerThemeHandler 监听系统外观变更（Wails 官方 events.Common.ThemeChanged，
+// 跨平台由原生实现；main.go 已用 application.Env.IsDarkMode() 作为可信来源派发）。
+// 触发后重建窗口，底色由 recreateNativeWindow 内部按应用 GetTheme() 决定深/浅。
+// 当系统深/浅切换且更新窗口当前可见时，销毁并重建底层窗口，使 BackgroundColour
+// 跟随新外观同步（Wails 的 BackgroundColour 创建时固定、无法热更新，只能重建）。
+// 隐藏或已销毁的窗口跳过——下次 ShowUpdaterWindow 会用最新的系统外观重建。
+func registerThemeHandler(app *application.App) {
+	app.Event.OnApplicationEvent(events.Common.ThemeChanged, func(*application.ApplicationEvent) {
+		h := getLiveUpdaterWindow(app)
+		if h == nil {
+			return
+		}
+		recreateNativeWindow(app, h, true)
+		h.win.Show()
+		h.win.Show() // 双 Show：与 ShowUpdaterWindow 保持一致
+		h.win.Focus()
+	})
 }

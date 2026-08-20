@@ -5,21 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Updater</title>
   <style>
+    /* 配色跟随应用主题 GetTheme()：由 <body data-theme="dark|light"> 决定，
+       与 recreateNativeWindow 的 BackgroundColour 保持一致。默认（无 data-theme）走浅色。 */
     :root {
-      --bg: #15161a;
-      --card: #1e1f25;
-      --card-2: #26272f;
-      --text: #f4f4f6;
-      --muted: #8b8d98;
-      --faint: #5c5e6b;
-      --accent: #4C8DFF;
-      --accent-soft: rgba(76, 141, 255, 0.14);
-      --success: #30d158;
-      --error: #ff5b50;
-      --line: rgba(255, 255, 255, 0.07);
-      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
-    }
-    body[data-theme="light"] {
       --bg: #eef0f4;
       --card: #ffffff;
       --card-2: #f5f6f9;
@@ -32,6 +20,20 @@
       --error: #e23b30;
       --line: rgba(0, 0, 0, 0.07);
       --shadow: 0 12px 40px rgba(20, 30, 60, 0.12);
+    }
+    body[data-theme="dark"] {
+      --bg: #15161a;
+      --card: #1e1f25;
+      --card-2: #26272f;
+      --text: #f4f4f6;
+      --muted: #8b8d98;
+      --faint: #5c5e6b;
+      --accent: #4C8DFF;
+      --accent-soft: rgba(76, 141, 255, 0.14);
+      --success: #30d158;
+      --error: #ff5b50;
+      --line: rgba(255, 255, 255, 0.07);
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
     }
     * { box-sizing: border-box; }
     html, body {
@@ -50,7 +52,7 @@
     #app {
       min-width: 440px;
       min-height: 100%;
-      padding: 44px 36px 28px;
+      padding: 38px 36px 28px;
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -99,22 +101,30 @@
       max-width: 380px;
     }
 
-    /* 版本对比胶囊 */
+    /* 版本对比卡片：明确传达「从旧版本升级到新版本」 */
     .versions {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
       margin: 22px 0 4px;
-      padding: 10px 18px;
+      padding: 14px 22px;
       background: var(--card-2);
       border: 1px solid var(--line);
-      border-radius: 999px;
+      border-radius: 16px;
       font-size: 13px;
+      box-shadow: var(--shadow);
     }
     .versions .v { font-weight: 600; font-variant-numeric: tabular-nums; }
-    .versions .from { color: var(--faint); }
-    .versions .to { color: var(--accent); }
-    .versions .arrow { color: var(--faint); font-size: 12px; }
+    .versions .from { color: var(--faint); font-size: 14px; }
+    .versions .to { color: var(--accent); font-size: 20px; font-weight: 700; }
+    /* 升级箭头：向上寓意「升上去」 */
+    .versions .arrow {
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .versions .arrow svg { width: 22px; height: 22px; }
 
     /* 进度条 */
     .progress {
@@ -166,8 +176,22 @@
     .notes h2 { font-size: 15.5px; }
     .notes h3 { font-size: 14px; }
     .notes p { margin: 0.5em 0; }
-    .notes ul { padding-left: 20px; margin: 0.4em 0; }
+    .notes ul, .notes ol { padding-left: 20px; margin: 0.4em 0; }
     .notes li { margin: 0.25em 0; }
+    .notes strong { font-weight: 600; }
+    .notes em { font-style: italic; }
+    .notes table {
+      border-collapse: collapse;
+      margin: 0.5em 0;
+      font-size: 12.5px;
+      border: 1px solid var(--line);
+    }
+    .notes th, .notes td {
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      text-align: left;
+    }
+    .notes th { background: var(--card-2); font-weight: 600; }
     .notes code {
       background: var(--card-2);
       padding: 1.5px 6px;
@@ -229,27 +253,16 @@
       border-color: var(--accent);
       color: #fff;
       flex: 1.4;
+      font-size: 15px;
+      font-weight: 600;
     }
     button.primary:hover { background: #5f9bff; }
     button.hidden { display: none; }
 
-    /* 自定义标题栏（隐藏原生红绿灯后用于拖动）。
-       必须铺满背景并与 body 同色，否则 macOS 原生标题栏的 NSVisualEffectView
-       系统色带会透出，与内容配色不搭（尤其在深色主题下顶部出现一条浅色带）。 */
-    .titlebar {
-      position: absolute;
-      top: 0; left: 0; right: 0;
-      height: 34px;
-      background: var(--bg);
-      border-bottom: 1px solid var(--line);
-      -webkit-app-region: drag;
-      z-index: 10;
-    }
   </style>
 </head>
 <body data-theme="{{.Theme}}">
 <div id="app">
-  <div class="titlebar"></div>
   <div class="icon info" id="icon">
     <div class="ring" id="ring" style="display:none"></div>
     <span id="iconGlyph"></span>
@@ -261,7 +274,7 @@
   <div class="versions" id="versions" style="display:none">
     <span class="from" id="fromLabel">当前</span>
     <span class="v from" id="currentVersion">—</span>
-    <span class="arrow">→</span>
+    <span class="arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg></span>
     <span class="to" id="newVersion">—</span>
   </div>
 
@@ -291,7 +304,6 @@
 (function () {
   "use strict";
 
-  var THEME = "{{.Theme}}";
   var LANG  = "{{.Lang}}";
 
   function t(key) {
@@ -302,14 +314,14 @@
   var ZH = {
     window_checking_title: "正在检查更新",
     window_up_to_date: "已是最新版本",
-    window_update_available: "发现新版本",
-    window_downloading_title: "正在下载更新",
+    window_update_available: "发现新版本，建议升级",
+    window_downloading_title: "正在下载升级包",
     window_download_starting: "准备下载…",
     window_downloaded: "已下载",
-    window_verifying: "正在校验更新",
-    window_installing_title: "正在安装更新",
+    window_verifying: "正在校验升级包",
+    window_installing_title: "正在安装升级",
     window_unpacking: "正在解包并准备…",
-    window_update_ready: "更新已就绪",
+    window_update_ready: "升级就绪",
     window_update_failed: "更新失败",
     window_error_default: "发生未知错误",
     window_current: "当前",
@@ -319,21 +331,21 @@
     window_close: "关闭",
     window_skip_version: "跳过此版本",
     window_remind_later: "稍后提醒",
-    window_install_update: "安装更新",
-    window_restart: "重启应用",
+    window_install_update: "升级",
+    window_restart: "完成升级并重启",
     window_try_again: "重试"
   };
   var EN = {
     window_checking_title: "Checking for Updates",
     window_up_to_date: "You're Up to Date",
-    window_update_available: "Update Available",
-    window_downloading_title: "Downloading Update",
+    window_update_available: "New version found, upgrade recommended",
+    window_downloading_title: "Downloading Upgrade",
     window_download_starting: "Preparing download…",
     window_downloaded: "Downloaded",
-    window_verifying: "Verifying Update",
-    window_installing_title: "Installing Update",
+    window_verifying: "Verifying Upgrade",
+    window_installing_title: "Installing Upgrade",
     window_unpacking: "Unpacking and staging…",
-    window_update_ready: "Update Ready",
+    window_update_ready: "Upgrade Ready",
     window_update_failed: "Update Failed",
     window_error_default: "An unexpected error occurred.",
     window_current: "Current",
@@ -343,8 +355,8 @@
     window_close: "Close",
     window_skip_version: "Skip This Version",
     window_remind_later: "Remind Me Later",
-    window_install_update: "Install Update",
-    window_restart: "Restart",
+    window_install_update: "Upgrade",
+    window_restart: "Finish Upgrade & Restart",
     window_try_again: "Try Again"
   };
 
@@ -364,7 +376,8 @@
     refresh: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"/><path d="M21 3v5h-5"/></svg>',
     check: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
     alert: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/></svg>',
-    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>'
+    spark: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v4"/><path d="M12 17v4"/><path d="M3 12h4"/><path d="M17 12h4"/><circle cx="12" cy="12" r="3.2"/></svg>',
+    upgrade: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="m5 12 7-7 7 7"/></svg>'
   };
 
   // i18n 静态文案
@@ -403,31 +416,87 @@
     }
   }
 
-  function renderMarkdown(md) {
-    if (!md) return "";
-    var esc = md.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-    esc = esc.replace(/```([\s\S]*?)```/g, function (_, c) {
-      return "<pre><code>" + c.replace(/^\n/, "") + "</code></pre>";
-    });
-    esc = esc.replace(/`([^`]+)`/g, "<code>$1</code>");
-    esc = esc.replace(/^######\s?(.*)$/gm, "<h3>$1</h3>");
-    esc = esc.replace(/^#####\s?(.*)$/gm, "<h3>$1</h3>");
-    esc = esc.replace(/^####\s?(.*)$/gm, "<h3>$1</h3>");
-    esc = esc.replace(/^###\s?(.*)$/gm, "<h2>$1</h2>");
-    esc = esc.replace(/^##\s?(.*)$/gm, "<h2>$1</h2>");
-    esc = esc.replace(/^#\s?(.*)$/gm, "<h1>$1</h1>");
-    esc = esc.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
-    esc = esc.replace(/^\s*[-*]\s+(.*)$/gm, "<li>$1</li>");
-    esc = esc.replace(/(?:<li>[\s\S]*?<\/li>)+/g, function (m) { return "<ul>" + m + "</ul>"; });
-    esc = esc.replace(/\n{2,}/g, "</p><p>");
-    esc = esc.replace(/\n/g, "<br>");
-    return "<p>" + esc + "</p>";
+  // 与 wails v3 框架内置 window.html 的 renderMarkdown 对齐：notes 一律当
+  // Markdown 渲染（不再做 HTML 探测分支）。支持段落、bold **、italic *、
+  // 行内 code、fenced code、有序/无序列表、GFM 表格、标题。先 escape 再替换
+  // 防 XSS；链接固定 rel="noopener" + target="_blank"。超出子集的内容按原文本显示。
+  function renderMarkdown(src) {
+    if (!src) return "";
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+    }
+    function inline(s) {
+      s = s.replace(/`([^`]+)`/g, function (_, c) { return "<code>" + c + "</code>"; });
+      s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
+      s = s.replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+      return s;
+    }
+    var lines = escapeHtml(src).split(/\r?\n/);
+    var out = [];
+    var i = 0;
+    while (i < lines.length) {
+      var L = lines[i];
+      // Fenced code block
+      if (/^```/.test(L)) {
+        var buf = [];
+        i++;
+        while (i < lines.length && !/^```/.test(lines[i])) { buf.push(lines[i]); i++; }
+        out.push("<pre><code>" + buf.join("\n") + "</code></pre>");
+        i++; continue;
+      }
+      // Heading
+      var h = /^(#{1,6})\s+(.+)$/.exec(L);
+      if (h) {
+        var lvl = Math.min(h[1].length, 3); // cap at h3 visual-weight-wise
+        out.push("<h" + lvl + ">" + inline(h[2]) + "</h" + lvl + ">");
+        i++; continue;
+      }
+      // GFM-style table
+      if (/^\|.*\|$/.test(L) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i+1])) {
+        var rows = [L];
+        i += 2; // skip header + separator
+        while (i < lines.length && /^\|.*\|$/.test(lines[i])) { rows.push(lines[i]); i++; }
+        var html = "<table>";
+        rows.forEach(function (r, idx) {
+          var cells = r.replace(/^\||\|$/g, "").split("|").map(function (c) { return inline(c.trim()); });
+          var tag = idx === 0 ? "th" : "td";
+          html += "<tr><" + tag + ">" + cells.join("</" + tag + "><" + tag + ">") + "</" + tag + "></tr>";
+        });
+        html += "</table>";
+        out.push(html);
+        continue;
+      }
+      // List (bullet or numbered)
+      var ulRe = /^[-*]\s+(.+)$/;
+      var olRe = /^\d+\.\s+(.+)$/;
+      if (ulRe.test(L) || olRe.test(L)) {
+        var isOL = olRe.test(L);
+        var re = isOL ? olRe : ulRe;
+        var items = [];
+        while (i < lines.length && re.test(lines[i])) {
+          items.push("<li>" + inline(re.exec(lines[i])[1]) + "</li>");
+          i++;
+        }
+        out.push("<" + (isOL ? "ol" : "ul") + ">" + items.join("") + "</" + (isOL ? "ol" : "ul") + ">");
+        continue;
+      }
+      // Blank line — paragraph break
+      if (L.trim() === "") { i++; continue; }
+      // Paragraph (collect contiguous non-empty lines)
+      var para = [L];
+      i++;
+      while (i < lines.length && lines[i].trim() !== "" && !/^[-*]\s/.test(lines[i]) && !/^\d+\.\s/.test(lines[i]) && !/^\|.*\|$/.test(lines[i]) && !/^#{1,6}\s/.test(lines[i]) && !/^```/.test(lines[i])) {
+        para.push(lines[i]); i++;
+      }
+      out.push("<p>" + inline(para.join(" ")) + "</p>");
+    }
+    return out.join("\n");
   }
 
   function renderNotes(notes) {
     if (!notes || !notes.trim()) { elNotes.innerHTML = ""; show(elNotes, false); return; }
-    var looksHtml = /<([a-z][a-z0-9]*)\b[^>]*>/.test(notes);
-    elNotes.innerHTML = looksHtml ? notes : renderMarkdown(notes);
+    elNotes.innerHTML = renderMarkdown(notes);
     show(elNotes, true);
   }
 
@@ -468,7 +537,7 @@
     setRank(RANK.available);
     clearError(); hideProgress(); renderNotes("");
     setVersions(currentVersion, rel.version || "");
-    setIcon("info", false, ICON.spark);
+    setIcon("info", false, ICON.upgrade);
     elTitle.textContent = t("window_update_available");
     elSub.textContent = "";
     resetActions(); show(btnInstall, true); show(btnSkip, true); show(btnRemind, true);

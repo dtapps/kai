@@ -1,6 +1,6 @@
 module cnb.cool/dtapp/kai
 
-go 1.26.4
+go 1.27.0
 
 ignore ./frontend
 

@@ -34,6 +34,10 @@ export const EventInputFill = 'kai:input:fill';
 // EventTranslateResult 多引擎翻译逐个返回结果，payload: TranslateResult
 export const EventTranslateResult = 'kai:translate:result';
 
+// EventEnginesChanged 设置里增删/启停翻译引擎后广播，通知翻译窗口等刷新引擎列表。
+// 无 payload（纯前端窗口间通知，各窗口自行重新拉取 GetEngines）。
+export const EventEnginesChanged = 'kai:engines:changed';
+
 // 事件 payload 类型定义（对齐 internal/events/events.go 的 Go 端结构体）
 
 // LocaleChangedPayload 语言变更事件参数。

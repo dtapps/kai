@@ -122,7 +122,7 @@ export const zh = {
       baidu_endpoint: '留空使用默认端点',
       tencent_endpoint: '留空使用默认端点',
       youdao_endpoint: '留空使用默认端点',
-      openai_endpoint: '留空使用默认地址（/v1/chat/completions）',
+      openai_endpoint: '留空使用默认 Base URL（https://api.openai.com/v1）',
       deepl_api_key: '输入 DeepL API Key',
       openai_api_key: '输入 OpenAI API Key',
       openai_model: '例如 gpt-4o',

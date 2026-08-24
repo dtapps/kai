@@ -80,6 +80,7 @@
   "err.openai_decode": "OpenAI: 解析响应失败",
   "err.openai_api_error": "OpenAI: 接口错误 %s",
   "err.openai_api_status": "OpenAI: 接口返回异常状态 %s",
+  "err.openai_model_gone": "OpenAI 兼容接口返回 410：模型 %s 可能不可用或不匹配，请确认 endpoint 与模型配置是否正确（接口信息：%s）",
   "err.youdao_request": "有道翻译: 构造请求失败",
   "err.youdao_do": "有道翻译: 发送请求失败",
   "err.youdao_decode": "有道翻译: 解析响应失败",

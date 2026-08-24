@@ -35,6 +35,11 @@ const (
 	// EventScreenshotRetranslate 前端改语言后触发：复用最近一次 OCR 原文，
 	// 跳过截图/OCR 直接用新语言重新翻译并增量推送结果。payload: ScreenshotRetranslatePayload
 	EventScreenshotRetranslate = "kai:screenshot:retranslate"
+
+	// EventEnginesChanged 引擎增删/启停/配置变更后广播，通知所有窗口（尤其翻译窗口）
+	// 重新拉取引擎列表。payload: EngineChangedPayload（变更引擎 ID + 启用态）。
+	// 与前端 frontend/src/utils/events.ts 的 EventEnginesChanged 对齐，是单一真相源。
+	EventEnginesChanged = "kai:engines:changed"
 )
 
 // 截图/OCR 缓存的 session 标识：区分不同入口，避免互相覆盖。

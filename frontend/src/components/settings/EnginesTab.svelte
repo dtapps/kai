@@ -24,6 +24,8 @@
   } from '@bindings/cnb.cool/dtapp/kai/internal/engine/models.ts';
   import { SystemLanguages } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
   import { Dialogs } from '@wailsio/runtime';
+  import { emitEvent } from '../../runtime';
+  import { EventEnginesChanged } from '../../utils/events';
   let engines = $state<AllEngineItem[]>([]);
 
   // 按 Kind 分组展示：翻译引擎 / OCR 引擎（TTS 的 apple 引擎归入翻译类）
@@ -253,6 +255,9 @@
         Title: t('settings.engineSavedTitle'),
         Message: t('settings.engineSaved'),
       });
+      // 保存可能改变启用态/配置，重新拉取并广播变更给翻译窗口等
+      await loadEngines();
+      emitEvent(EventEnginesChanged);
     } catch (e) {
       await Dialogs.Error({
         Title: t('settings.engineOpErrorTitle'),
@@ -275,6 +280,8 @@
       await ToggleEngineEnabled(id, enabled);
       // 成功：重新拉取以与后端保持一致
       await loadEngines();
+      // 广播引擎变更，通知翻译窗口等重新拉取引擎列表
+      emitEvent(EventEnginesChanged);
     } catch (e) {
       await Dialogs.Error({
         Title: t('settings.engineOpErrorTitle'),
@@ -294,6 +301,8 @@
       await RemoveEngine(id);
       selectedId = null;
       await loadEngines();
+      // 广播引擎变更，通知翻译窗口等重新拉取引擎列表
+      emitEvent(EventEnginesChanged);
       await Dialogs.Info({
         Title: t('settings.engineSavedTitle'),
         Message: t('settings.engineRemoved'),
@@ -382,6 +391,8 @@
       });
       showAdd = false;
       await loadEngines();
+      // 广播引擎变更，通知翻译窗口等重新拉取引擎列表
+      emitEvent(EventEnginesChanged);
     } catch (e) {
       await Dialogs.Error({
         Title: t('settings.engineOpErrorTitle'),

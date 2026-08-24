@@ -21,7 +21,7 @@
       console.error('toggle pin failed', e);
     }
   }
-  import { EventTranslateResult, EventInputFill, EventWindowClosing } from '../utils/events';
+  import { EventTranslateResult, EventInputFill, EventWindowClosing, EventEnginesChanged } from '../utils/events';
   import type { TranslateResult } from '@bindings/cnb.cool/dtapp/kai/internal/model/models.ts';
   import type {
     EngineListItem,
@@ -215,6 +215,11 @@
       // 清空后结果区缩回，重算高度。
       adjustWindowHeight();
     });
+    // 设置里增删/启停引擎后广播：重新拉取引擎列表，使翻译窗口结果卡片同步最新状态
+    // （否则开启/关闭的引擎不会刷新，仍是旧列表）。
+    const offEngines = onEvent(EventEnginesChanged, () => {
+      loadEngines();
+    });
     // 初始化与首屏测量：必须等引擎加载完成再测高度，否则默认窗口算错。
     (async () => {
       // 恢复持久化的置顶状态 + 缓存窗口宽度（只改高度不改宽度）
@@ -249,6 +254,7 @@
       offResult();
       offInputFill();
       offClosing();
+      offEngines();
     };
   });
 

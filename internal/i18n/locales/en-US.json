@@ -97,6 +97,7 @@
   "err.openai_decode": "OpenAI: failed to decode response",
   "err.openai_do": "OpenAI: failed to send request",
   "err.openai_marshal": "OpenAI: failed to marshal request",
+  "err.openai_model_gone": "OpenAI-compatible endpoint returned 410: model %s may be unavailable or mismatched. Verify the endpoint and model config (endpoint message: %s)",
   "err.openai_request": "OpenAI: failed to build request",
   "err.paste_failed": "Paste failed",
   "err.screenshot_failed": "Screenshot failed",

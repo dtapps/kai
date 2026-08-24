@@ -12,6 +12,7 @@ import (
 
 	"cnb.cool/dtapp/kai/internal/configstore"
 	"cnb.cool/dtapp/kai/internal/engine"
+	"cnb.cool/dtapp/kai/internal/events"
 	"cnb.cool/dtapp/kai/internal/hotkey"
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/network"
@@ -282,6 +283,8 @@ func (w *EngineWrapper) AddEngine(cfg *engine.EngineConfig) (int64, error) {
 	}
 	w.registerEngines()
 	w.reregisterHotkeys()
+	// 后端全局广播：通知所有窗口（尤其翻译窗口）引擎已变更，重新拉取列表。
+	w.app.Event.Emit(events.EventEnginesChanged, EngineChangedPayload{ID: cfg.ID, Enabled: cfg.Enabled})
 	return id, nil
 }
 
@@ -300,6 +303,8 @@ func (w *EngineWrapper) UpdateEngineConfig(cfg *engine.EngineConfig) error {
 	}
 	w.registerEngines()
 	w.reregisterHotkeys()
+	// 后端全局广播：通知所有窗口（尤其翻译窗口）引擎已变更，重新拉取列表。
+	w.app.Event.Emit(events.EventEnginesChanged, EngineChangedPayload{ID: cfg.ID, Enabled: cfg.Enabled})
 	return nil
 }
 
@@ -334,6 +339,8 @@ func (w *EngineWrapper) ToggleEngineEnabled(id int64, enabled bool) error {
 	}
 	w.registerEngines()
 	w.reregisterHotkeys()
+	// 后端全局广播：通知所有窗口（尤其翻译窗口）引擎启用态已变更。
+	w.app.Event.Emit(events.EventEnginesChanged, EngineChangedPayload{ID: id, Enabled: enabled})
 	return nil
 }
 
@@ -380,6 +387,8 @@ func (w *EngineWrapper) RemoveEngine(id int64) error {
 	}
 	w.registerEngines()
 	w.reregisterHotkeys()
+	// 后端全局广播：通知所有窗口（尤其翻译窗口）引擎已被删除。
+	w.app.Event.Emit(events.EventEnginesChanged, EngineChangedPayload{ID: id, Enabled: false})
 	return nil
 }
 

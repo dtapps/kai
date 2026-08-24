@@ -125,7 +125,7 @@ export const en: Dict = {
       baidu_endpoint: 'Leave empty for the default endpoint',
       tencent_endpoint: 'Leave empty for the default endpoint',
       youdao_endpoint: 'Leave empty for the default endpoint',
-      openai_endpoint: 'Leave empty for the default endpoint (/v1/chat/completions)',
+      openai_endpoint: 'Leave empty for the default Base URL (https://api.openai.com/v1)',
       deepl_api_key: 'Enter your DeepL API Key',
       openai_api_key: 'Enter your OpenAI API Key',
       openai_model: 'e.g. gpt-4o',

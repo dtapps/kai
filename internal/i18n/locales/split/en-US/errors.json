@@ -80,6 +80,7 @@
   "err.openai_decode": "OpenAI: failed to decode response",
   "err.openai_api_error": "OpenAI: API error %s",
   "err.openai_api_status": "OpenAI: unexpected status %s",
+  "err.openai_model_gone": "OpenAI-compatible endpoint returned 410: model %s may be unavailable or mismatched. Verify the endpoint and model config (endpoint message: %s)",
   "err.youdao_request": "Youdao Translate: failed to build request",
   "err.youdao_do": "Youdao Translate: failed to send request",
   "err.youdao_decode": "Youdao Translate: failed to decode response",

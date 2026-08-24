@@ -158,10 +158,8 @@ func DefaultEngineConfigs() []*EngineConfig {
 const (
 	// DeepLFreeEndpoint DeepL 免费版默认端点（Pro 版用户需在设置里改为 api.deepl.com）
 	DeepLFreeEndpoint = "https://api-free.deepl.com/v2/translate"
-	// OpenAIDefaultBaseURL OpenAI 兼容接口默认 base URL
+	// OpenAIDefaultBaseURL OpenAI 兼容接口默认 base URL（SDK 自动拼 /chat/completions）
 	OpenAIDefaultBaseURL = "https://api.openai.com/v1"
-	// OpenAIDefaultChatEndpoint OpenAI 默认完整 chat/completions 端点（base + 路径）
-	OpenAIDefaultChatEndpoint = OpenAIDefaultBaseURL + "/chat/completions"
 	// DefaultEndpoint Google 默认公开端点
 	DefaultEndpoint = "https://translate.googleapis.com/translate_a/single"
 	// BaiduDefaultEndpoint 百度翻译开放平台默认端点
@@ -395,7 +393,7 @@ type EngineSchema struct {
 // 依据各引擎 NewXxx 构造函数的实际取值：
 //   - apple/google：公开端点免 Key（google 可在设置中自定义 endpoint，留空用默认）
 //   - deepl：endpoint 默认免费版端点（可改为 Pro 版）；api_key 必填（免费版也需注册获取）
-//   - openai：api_key + endpoint(作为完整接口地址，默认 chat/completions) + extra(作为 model)
+//   - openai：api_key + endpoint(作为 Base URL，默认 https://api.openai.com/v1，自动拼 /chat/completions) + extra(作为 model)
 //   - baidu/tencent/youdao：appkey/appid = api_key，密钥 = secret
 //   - tesseract：endpoint(可选 tesseract 二进制路径)；语言码/超时等 OCR 专属参数统一存于 Extra(JSON)
 var engineSchemas = map[string]EngineSchema{
@@ -474,7 +472,7 @@ var engineSchemas = map[string]EngineSchema{
 				PlaceholderKey: "settings.engine_ph.openai_endpoint",
 				Type:           FieldString,
 				Required:       false,
-				Default:        OpenAIDefaultChatEndpoint,
+				Default:        OpenAIDefaultBaseURL,
 			},
 			{
 				Field:          "api_key",

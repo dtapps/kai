@@ -97,6 +97,7 @@
   "err.openai_decode": "OpenAI: 解析响应失败",
   "err.openai_do": "OpenAI: 发送请求失败",
   "err.openai_marshal": "OpenAI: 序列化请求失败",
+  "err.openai_model_gone": "OpenAI 兼容接口返回 410：模型 %s 可能不可用或不匹配，请确认 endpoint 与模型配置是否正确（接口信息：%s）",
   "err.openai_request": "OpenAI: 构造请求失败",
   "err.paste_failed": "粘贴失败",
   "err.screenshot_failed": "截图失败",

@@ -12,6 +12,7 @@ require (
 	github.com/go-vgo/robotgo v1.0.2
 	github.com/mattn/go-sqlite3 v1.14.50
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/openai/openai-go/v3 v3.52.0
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.11
 	go.dtapp.net/library/contrib/http_log v1.0.13
@@ -49,6 +50,10 @@ require (
 	github.com/spf13/pflag v1.0.10 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/tailscale/win v0.0.0-20260619195133-2d76c33a64c1 // indirect
+	github.com/tidwall/gjson v1.19.0 // indirect
+	github.com/tidwall/match v1.2.0 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
+	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/vcaesar/gops v0.42.0 // indirect

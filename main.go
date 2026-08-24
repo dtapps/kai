@@ -582,10 +582,6 @@ func main() {
 		})
 	})
 
-	// Windows 启动前自检：确保 WebView2 Runtime 可用，缺失则提示用户安装后退出，
-	// 避免崩在 WebView2 controller 创建阶段（80010108 COM 竞态 / Runtime 缺失）。
-	webview.EnsureWebView2()
-
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}

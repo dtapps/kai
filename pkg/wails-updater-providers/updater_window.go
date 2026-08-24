@@ -79,12 +79,6 @@ func createUpdaterWindow(app *application.App) *updaterWindow {
 // recreateNativeWindow 仅重建 h 底层的 WebviewWindow（h 对象本身保持稳定）。
 // 创建时 Wails 会正确注入原生桥接 window._wails.invoke 与 inline event shim，
 // 因此 JS 的 Events.Emit（关闭/安装/跳过按钮、resize 自适应）均可用。
-// show=false 时创建为隐藏窗口（Init 阶段不弹窗）；show=true 时创建为可见窗口
-// （ShowUpdaterWindow 显示路径使用，配合双 Show + Focus 确保真正显示）。
-//
-// 注意：Wails 在 WindowClosing 时有一个内部监听器会无条件销毁窗口并从注册表
-// 移除（不读 event.Cancelled），因此 e.Cancel() 无法阻止销毁；这里 Hide 仅为
-// 「未真正销毁」场景兜底，真正重建由 ensureUpdaterWindow / ShowUpdaterWindow 完成。
 func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 	// 配色统一跟随应用主题 GetTheme()（dark/light，auto 已由 main.go 的
 	// resolveUpdaterTheme 解析后通过 SetTheme 灌入，这里拿到的已是 dark/light）：
@@ -112,7 +106,7 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 		Height:               globalWindowH,
 		HTML:                 renderWindowHTML(app),
 		DisableResize:        false,
-		Hidden:               !show, // show=false 时隐藏（启动不弹窗），show=true 时可见
+		Hidden:               true, // 一律隐藏创建，显示由调用方双 Show() 完成（规避 80010108）
 		AllowSimpleEventEmit: true,  // 关键：允许 JS Events.Emit 直接驱动 Go 监听
 		BackgroundColour:     bg,
 		Mac:                  mac,

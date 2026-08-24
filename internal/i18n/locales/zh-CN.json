@@ -266,8 +266,6 @@
   "menu.tooltip": "Kai - 翻译 & OCR",
   "notification.update_available_subtitle": "发现新版本 {{.version}}，点击菜单「检查更新」安装",
   "notification.update_available_title": "Kai 有更新可用",
-  "webview2.missing_text": "Kai 需要 Microsoft Edge WebView2 Runtime 才能显示界面。\n请点击「确定」前往官网下载安装（Evergreen 独立安装包），安装后重新启动 Kai。\n若已安装仍报错，请在「添加或删除程序」中修复/重装 WebView2 Runtime。",
-  "webview2.missing_title": "Kai 启动失败：缺少 WebView2",
   "window.screenshot_title": "Kai 截图翻译",
   "window.selection_title": "Kai 划词",
   "window.settings_title": "Kai 设置",

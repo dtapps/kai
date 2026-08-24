@@ -1,4 +1,1 @@
-{
-  "webview2.missing_title": "Kai 启动失败：缺少 WebView2",
-  "webview2.missing_text": "Kai 需要 Microsoft Edge WebView2 Runtime 才能显示界面。\n请点击「确定」前往官网下载安装（Evergreen 独立安装包），安装后重新启动 Kai。\n若已安装仍报错，请在「添加或删除程序」中修复/重装 WebView2 Runtime。"
-}
+{}

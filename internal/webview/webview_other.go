@@ -11,4 +11,4 @@ func EnsureWebView2() {}
 func BrowserArgs() []string { return nil }
 
 // ApplyOptions 在非 Windows 平台为空操作（AdditionalBrowserArgs 字段不存在）。
-func ApplyOptions(opts interface{}) {}
+func ApplyOptions(opts any) {}

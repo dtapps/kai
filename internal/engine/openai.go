@@ -17,9 +17,9 @@ import (
 // 配置：APIKey=sk-...，Endpoint=Base URL（默认 https://api.openai.com/v1），Extra=模型名（如 gpt-4o-mini）。
 // Endpoint 填 base URL 即可（与 DeepSeek/硅基流动等兼容平台一致），SDK 自动拼 /chat/completions。
 type openaiTranslator struct {
-	apiKey   string
-	model    string
-	client   openai.Client
+	apiKey string
+	model  string
+	client openai.Client
 }
 
 // normalizeOpenAIBaseURL 将用户填写的 endpoint 规范化为纯 Base URL。

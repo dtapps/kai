@@ -518,10 +518,10 @@ func main() {
 		BuildTime:   parseBuildTime(buildinfo.BuildTime),
 		GitCommit:   buildinfo.GitCommit,
 		Prerelease:  settingsService.Get().Updater.Prerelease,
-	}
-	// 自定义资源匹配：仅匹配 updater- 前缀的升级专用压缩包。
-	// matcher 直接读库全局语言，语言切换时只需调用 SetLocale，matcher 闭包自动跟随。
-	updOpts.AssetMatcher = kupdater.NewUpdaterAssetMatcher()
+
+		// 自定义资源匹配：仅匹配 updater- 前缀的升级专用压缩包。
+		// matcher 直接读库全局语言，语言切换时只需调用 SetLocale，matcher 闭包自动跟随。
+		AssetMatcher: kupdater.NewUpdaterAssetMatcher()}
 	updaterProvider, err = kupdater.NewMirrorProvider(&updOpts)
 	if err != nil {
 		slog.Error(i18n.T("log.updater_init_failed"), "error", err)

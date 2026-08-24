@@ -21,7 +21,12 @@
       console.error('toggle pin failed', e);
     }
   }
-  import { EventTranslateResult, EventInputFill, EventWindowClosing, EventEnginesChanged } from '../utils/events';
+  import {
+    EventTranslateResult,
+    EventInputFill,
+    EventWindowClosing,
+    EventEnginesChanged,
+  } from '../utils/events';
   import type { TranslateResult } from '@bindings/cnb.cool/dtapp/kai/internal/model/models.ts';
   import type {
     EngineListItem,

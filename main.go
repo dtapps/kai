@@ -32,6 +32,7 @@ import (
 	"cnb.cool/dtapp/kai/internal/service"
 	"cnb.cool/dtapp/kai/internal/settings"
 	"cnb.cool/dtapp/kai/internal/translate"
+	"cnb.cool/dtapp/kai/internal/webview"
 	"cnb.cool/dtapp/kai/pkg/swiftbridge"
 	kupdater "cnb.cool/dtapp/kai/pkg/wails-updater-providers"
 )
@@ -262,7 +263,7 @@ func main() {
 	notifications.New()
 	notifySvc = service.NewNotificationService(notifications.NotificationService_)
 
-	app = application.New(application.Options{
+	appOpts := application.Options{
 		Name:        "Kai",
 		Description: i18n.T("app.description"),
 		Services: []application.Service{
@@ -289,7 +290,12 @@ func main() {
 			ActivationPolicy: application.ActivationPolicyAccessory,
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
-	})
+	}
+	// Windows 专属：注入 WebView2 浏览器参数（GPU 兜底，规避偶发 80010108）。
+	// AdditionalBrowserArgs 是 application.Options 的 Windows 专属字段，故由
+	// webview.ApplyOptions 按平台设置（非 Windows 为空操作）。
+	webview.ApplyOptions(&appOpts)
+	app = application.New(appOpts)
 	appSvc.SetApp(app) // 统一注入 app 到 AppService 内部持有的 domain 与 Wrapper
 	// main.go 侧直接 Bind 的 wrapper 实例（与 AppService 内部不是同一批），
 	// 同样需要 app 才能执行 Event.Emit 广播，故在此逐一注入。
@@ -353,7 +359,6 @@ func main() {
 		MaxHeight:      2000,
 		DisableResize:  true,
 		URL:            "/translate.html",
-		Hidden:         true,
 		Frameless:      true,
 		BackgroundType: application.BackgroundTypeTransparent,
 		Mac: application.MacWindow{
@@ -367,6 +372,16 @@ func main() {
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
 	})
+	// 关键（2026-08-24，Windows WebView2 修复）：
+	// 此前用 `Hidden: true` 创建，beta 系列（含 beta.11）对 Hidden 窗口会延迟创建
+	// WebView2 controller，推迟到首次 Show() 时在后台 goroutine 异步创建，撞上 COM
+	// 单元（STA）竞态 → 报 80010108 (RPC_E_DISCONNECTED) "The object invoked has
+	// disconnected from its clients"，窗口直接崩溃/空白。这与 macOS 上 Hidden 半成品态
+	// 是同一类根因的 Windows 版。正解：不用 Hidden 创建，改为创建后即 Hide()——
+	// 走 !options.Hidden 分支在主线程完成真实 WebView 初始化（与 macOS screenshotWindow
+	// 同源修法），彻底脱离延迟创建的竞态窗口。窗口为 Frameless+Transparent，创建即 Hide
+	// 在同一事件循环内，启动无可见闪现。
+	mainWindow.Hide()
 	// 点红 X = 隐藏窗口（不退出）：用 RegisterHook 在 WindowClosing 的
 	// 销毁 listener 之前 Cancel 掉关闭，并改为 Hide。这样红 X 保留、
 	// 窗口不被销毁，随时可再次 Show。
@@ -383,7 +398,6 @@ func main() {
 		Width:          1280,
 		Height:         800,
 		URL:            "/settings.html",
-		Hidden:         true,
 		Frameless:      true,
 		BackgroundType: application.BackgroundTypeTransparent,
 		Mac: application.MacWindow{
@@ -401,6 +415,9 @@ func main() {
 		event.Cancel()
 		settingsWindow.Hide()
 	})
+	// 同 mainWindow：禁用 Hidden:true 创建，改为创建后即 Hide()，避免 Windows 上
+	// WebView2 controller 延迟创建引发的 80010108 COM 竞态崩溃。
+	settingsWindow.Hide()
 
 	// 截图翻译窗口：左图右译。由截图快捷键/EventScreenshotOCR 呼出。
 	// frameless + 透明标题栏 + 自定义 TitleBar（InvisibleTitleBarHeight=36 启用拖拽）。
@@ -564,6 +581,10 @@ func main() {
 			Theme: string(sysTheme),
 		})
 	})
+
+	// Windows 启动前自检：确保 WebView2 Runtime 可用，缺失则提示用户安装后退出，
+	// 避免崩在 WebView2 controller 创建阶段（80010108 COM 竞态 / Runtime 缺失）。
+	webview.EnsureWebView2()
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

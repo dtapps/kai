@@ -266,6 +266,8 @@
   "menu.tooltip": "Kai - Translate & OCR",
   "notification.update_available_subtitle": "New version {{.version}} found, click \"Check for Updates\" to install",
   "notification.update_available_title": "Kai update available",
+  "webview2.missing_text": "Kai requires the Microsoft Edge WebView2 Runtime to display its UI.\nClick OK to download and install it from the official site (Evergreen standalone package), then restart Kai.\nIf it is already installed and the error persists, repair or reinstall the WebView2 Runtime via Add or Remove Programs.",
+  "webview2.missing_title": "Kai failed to start: WebView2 missing",
   "window.screenshot_title": "Kai Screenshot Translate",
   "window.selection_title": "Kai Selection",
   "window.settings_title": "Kai Settings",

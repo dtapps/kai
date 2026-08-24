@@ -14,7 +14,7 @@ require (
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/openai/openai-go/v3 v3.52.0
 	github.com/spf13/viper v1.21.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.11
+	github.com/wailsapp/wails/v3 v3.0.0-beta.12
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.47.0
 	golang.org/x/text v0.41.0

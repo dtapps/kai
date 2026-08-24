@@ -135,8 +135,8 @@ github.com/vcaesar/screenshot v0.11.1 h1:GgPuN89XC4Yh38dLx4quPlSo3YiWWhwIria/j3L
 github.com/vcaesar/screenshot v0.11.1/go.mod h1:gJNwHBiP1v1v7i8TQ4yV1XJtcyn2I/OJL7OziVQkwjs=
 github.com/vcaesar/tt v0.30.0 h1:rjhUUL6q0+dWBNw6Qi9dTfY4vxQVgPGRLdH7jeKW1A4=
 github.com/vcaesar/tt v0.30.0/go.mod h1:cH2+AwGAJm19Wa6xvEa+0r+sXDJBT0QgNQey6mwqLeU=
-github.com/wailsapp/wails/v3 v3.0.0-beta.11 h1:+DA9+DjHq/zV1Wkrg637WD0nSKly20w6jYbe/4LCwk4=
-github.com/wailsapp/wails/v3 v3.0.0-beta.11/go.mod h1:zKZYhB3WjrN5LhJWbnOAVMN0Xf8qTozbw2nf5micKl4=
+github.com/wailsapp/wails/v3 v3.0.0-beta.12 h1:Vema2kFgJvkwPovQ8GMBBrkZNm5cKVR4bYzSCMgU+PU=
+github.com/wailsapp/wails/v3 v3.0.0-beta.12/go.mod h1:zKZYhB3WjrN5LhJWbnOAVMN0Xf8qTozbw2nf5micKl4=
 github.com/yusufpapurcu/wmi v1.2.4 h1:zFUKzehAFReQwLys1b/iSMl+JQGSCSjtVqQn9bBrPo0=
 github.com/yusufpapurcu/wmi v1.2.4/go.mod h1:SBZ9tNy3G9/m5Oi98Zks0QjeHVDvuK0qfxQmPyzfmi0=
 go.dtapp.net/library/contrib/http_log v1.0.13 h1:64zMMW4mqrv+CMlspjihRq+aD6B+kK6W/w7Cs7QzncE=

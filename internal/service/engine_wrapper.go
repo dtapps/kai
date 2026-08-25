@@ -106,6 +106,9 @@ func (w *EngineWrapper) registerEngines() {
 	if e, ok := engines["openai"]; ok && e.Enabled {
 		w.registry.RegisterTranslator(engine.NewOpenAI(e, newClient(30*time.Second)))
 	}
+	if e, ok := engines["anthropic"]; ok && e.Enabled {
+		w.registry.RegisterTranslator(engine.NewAnthropic(e))
+	}
 	if e, ok := engines["baidu"]; ok && e.Enabled {
 		w.registry.RegisterTranslator(engine.NewBaidu(e, newClient(15*time.Second)))
 	}

@@ -3,6 +3,7 @@
   "engine.deepl": "DeepL",
   "engine.google": "Google",
   "engine.openai": "OpenAI",
+  "engine.anthropic": "Anthropic",
   "engine.baidu": "百度",
   "engine.tencent": "腾讯",
   "engine.youdao": "有道",

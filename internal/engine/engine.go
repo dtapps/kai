@@ -168,6 +168,8 @@ const (
 	TencentDefaultEndpoint = "https://tmt.tencentcloudapi.com"
 	// YoudaoDefaultEndpoint 有道智云默认端点
 	YoudaoDefaultEndpoint = "https://openapi.youdao.com/api"
+	// AnthropicDefaultBaseURL Anthropic Claude API 默认 base URL（SDK 内部拼 /v1/messages）
+	AnthropicDefaultBaseURL = "https://api.anthropic.com"
 )
 
 // OcrEngine OCR 引擎统一接口
@@ -269,6 +271,7 @@ func KnownEngines() []EngineMeta {
 		"google",
 		"deepl",
 		"openai",
+		"anthropic",
 		"baidu",
 		"tencent",
 		"youdao",
@@ -562,6 +565,33 @@ var engineSchemas = map[string]EngineSchema{
 				LabelKey:       "settings.engine_field.app_secret",
 				PlaceholderKey: "settings.engine_ph.youdao_app_secret",
 				Type:           FieldSecret, Required: true},
+		},
+	},
+	"anthropic": {
+		Kind: KindTranslator,
+		Fields: []EngineFieldSchema{
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.anthropic_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        AnthropicDefaultBaseURL,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.api_key",
+				PlaceholderKey: "settings.engine_ph.anthropic_api_key",
+				Type:           FieldSecret,
+				Required:       true,
+			},
+			{
+				Field:          "extra",
+				LabelKey:       "settings.engine_field.model",
+				PlaceholderKey: "settings.engine_ph.anthropic_model",
+				Type:           FieldString,
+				Required:       false,
+			},
 		},
 	},
 	"tesseract": {

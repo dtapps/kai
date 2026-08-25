@@ -290,6 +290,20 @@ func main() {
 			ActivationPolicy: application.ActivationPolicyAccessory,
 			ApplicationShouldTerminateAfterLastWindowClosed: false,
 		},
+		// 单实例：Wails v3 内置（macOS 用 flock + NSDistributedNotification 通知首个实例）。
+		// 第二次启动时第二个进程会触发 OnSecondInstanceLaunch 并把自身退出，
+		// 由首个实例把主窗口唤到前台，避免多实例争抢数据库/快捷键/托盘。
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: "cnb.cool.dtapp.kai",
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				slog.Info(i18n.T("log.single_instance_second_launch"))
+				// Kai 是 Accessory app（无主窗口常驻，仅托盘），第二次启动时把
+				// 已有实例的设置窗口唤到前台（与托盘菜单行为一致）。主线程安全地走 Show/Focus。
+				if settingsWindow != nil {
+					settingsWindow.Show().Focus()
+				}
+			},
+		},
 	}
 	// Windows 专属：注入 WebView2 浏览器参数（GPU 兜底，规避偶发 80010108）。
 	// AdditionalBrowserArgs 是 application.Options 的 Windows 专属字段，故由

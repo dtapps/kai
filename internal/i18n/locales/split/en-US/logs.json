@@ -109,6 +109,7 @@
   "log.global_panic": "Global unrecovered panic",
   "log.global_panic_stack": "Global unrecovered panic stack",
   "log.data_dir": "Data directory: {{.Dir}}",
+  "log.single_instance_second_launch": "Another Kai instance detected, brought its main window to front",
   "log.screenshot_window_show_enter": "[screenshot-window] enter show  visible={{.Visible}} focused={{.Focused}}",
   "log.screenshot_window_after_show": "[screenshot-window] after Show  visible={{.Visible}} focused={{.Focused}}",
   "log.screenshot_window_after_focus": "[screenshot-window] after Focus  visible={{.Visible}} focused={{.Focused}}",

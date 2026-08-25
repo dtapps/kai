@@ -243,6 +243,7 @@
   "log.service_load_engine_list_failed": "读取引擎列表失败",
   "log.service_load_engine_list_fallback": "读取引擎列表失败，回退到注册表顺序",
   "log.service_read_engine_config_failed": "读取引擎配置失败",
+  "log.single_instance_second_launch": "检测到已有 Kai 实例，已将其主窗口唤到前台",
   "log.swiftbridge_loaded": "[动态桥接] Swift 桥接已加载",
   "log.swiftbridge_unavailable": "[动态桥接] Swift 桥接不可用（动态库未加载），功能降级",
   "log.translate_engine_cost": "[翻译] 引擎耗时 引擎={{.Engine}} 耗时={{.Ms}}ms 成功={{.Ok}} 错误={{.Err}}",

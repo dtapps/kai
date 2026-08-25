@@ -109,6 +109,7 @@
   "log.global_panic": "全局未捕获 panic",
   "log.global_panic_stack": "全局未捕获 panic 调用栈",
   "log.data_dir": "数据目录: {{.Dir}}",
+  "log.single_instance_second_launch": "检测到已有 Kai 实例，已将其主窗口唤到前台",
   "log.screenshot_window_show_enter": "[截图窗口] 进入呼窗 可见={{.Visible}} 聚焦={{.Focused}}",
   "log.screenshot_window_after_show": "[截图窗口] Show 后 可见={{.Visible}} 聚焦={{.Focused}}",
   "log.screenshot_window_after_focus": "[截图窗口] Focus 后 可见={{.Visible}} 聚焦={{.Focused}}",

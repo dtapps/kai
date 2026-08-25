@@ -107,7 +107,7 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 		HTML:                 renderWindowHTML(app),
 		DisableResize:        false,
 		Hidden:               true, // 一律隐藏创建，显示由调用方双 Show() 完成（规避 80010108）
-		AllowSimpleEventEmit: true,  // 关键：允许 JS Events.Emit 直接驱动 Go 监听
+		AllowSimpleEventEmit: true, // 关键：允许 JS Events.Emit 直接驱动 Go 监听
 		BackgroundColour:     bg,
 		Mac:                  mac,
 		Windows: application.WindowsWindow{

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"time"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
@@ -368,6 +369,10 @@ const (
 	WidgetOCRRetry FieldWidget = "ocr_retry"
 	// WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
 	WidgetOCRStatus FieldWidget = "ocr_status"
+	// WidgetLLMModel LLM 翻译引擎的模型名，独立文本输入，值合并写入 Extra.model
+	WidgetLLMModel FieldWidget = "llm_model"
+	// WidgetLLMTimeout LLM 翻译引擎的单次请求超时（秒），数字输入，值合并写入 Extra.timeout_sec
+	WidgetLLMTimeout FieldWidget = "llm_timeout"
 )
 
 // EngineFieldSchema 描述某个引擎所需的单个配置字段。
@@ -494,11 +499,23 @@ var engineSchemas = map[string]EngineSchema{
 				Required:       true,
 			},
 			{
-				Field:          "extra",
+				Field:          "llm_model",
+				Widget:         WidgetLLMModel,
 				LabelKey:       "settings.engine_field.model",
 				PlaceholderKey: "settings.engine_ph.openai_model",
 				Type:           FieldString,
 				Required:       false,
+				Default:        "gpt-4o-mini",
+			},
+			{
+				Field:          "llm_timeout",
+				Widget:         WidgetLLMTimeout,
+				LabelKey:       "settings.engine_field.timeout",
+				PlaceholderKey: "settings.engine_ph.llm_timeout",
+				HintKey:        "settings.engine_hint.llm_timeout",
+				Type:           FieldString,
+				Required:       false,
+				Default:        "30",
 			},
 		},
 	},
@@ -595,11 +612,23 @@ var engineSchemas = map[string]EngineSchema{
 				Required:       true,
 			},
 			{
-				Field:          "extra",
+				Field:          "llm_model",
+				Widget:         WidgetLLMModel,
 				LabelKey:       "settings.engine_field.model",
 				PlaceholderKey: "settings.engine_ph.anthropic_model",
 				Type:           FieldString,
 				Required:       false,
+				Default:        "claude-3-5-sonnet-20241022",
+			},
+			{
+				Field:          "llm_timeout",
+				Widget:         WidgetLLMTimeout,
+				LabelKey:       "settings.engine_field.timeout",
+				PlaceholderKey: "settings.engine_ph.llm_timeout",
+				HintKey:        "settings.engine_hint.llm_timeout",
+				Type:           FieldString,
+				Required:       false,
+				Default:        "30",
 			},
 		},
 	},
@@ -622,11 +651,23 @@ var engineSchemas = map[string]EngineSchema{
 				Required:       true,
 			},
 			{
-				Field:          "extra",
+				Field:          "llm_model",
+				Widget:         WidgetLLMModel,
 				LabelKey:       "settings.engine_field.model",
 				PlaceholderKey: "settings.engine_ph.gemini_model",
 				Type:           FieldString,
 				Required:       false,
+				Default:        "gemini-2.0-flash",
+			},
+			{
+				Field:          "llm_timeout",
+				Widget:         WidgetLLMTimeout,
+				LabelKey:       "settings.engine_field.timeout",
+				PlaceholderKey: "settings.engine_ph.llm_timeout",
+				HintKey:        "settings.engine_hint.llm_timeout",
+				Type:           FieldString,
+				Required:       false,
+				Default:        "30",
 			},
 		},
 	},
@@ -736,5 +777,59 @@ func parseOCRExtra(engineName, extra string) ocrExtra {
 	}
 	// 兼容旧纯字符串语言码（如 "chi_sim+eng"）。
 	out.Langs = extra
+	return out
+}
+
+// DefaultLLMTimeoutSec LLM 翻译引擎请求超时默认值（秒）。
+const DefaultLLMTimeoutSec = 30
+
+// cloneHTTPClientWithTimeout 基于 base 克隆一个独立 *http.Client 并设置单次请求超时。
+// 共享的全局 client（network.BuildHTTPClient 返回）不可直接改 Timeout（会相互影响），
+// 故克隆独立实例，使「引擎级超时」同时作用到 HTTP 层（Transport 复用，避免重复建连）。
+// timeoutSec<=0 时回落 DefaultLLMTimeoutSec；base 为 nil 时自建基础 client 兜底。
+func cloneHTTPClientWithTimeout(base *http.Client, timeoutSec int) *http.Client {
+	d := time.Duration(timeoutSec) * time.Second
+	if d <= 0 {
+		d = DefaultLLMTimeoutSec * time.Second
+	}
+	if base == nil {
+		base = &http.Client{
+			Transport: &http.Transport{Proxy: http.ProxyFromEnvironment},
+		}
+	}
+	return &http.Client{
+		Transport:     base.Transport,
+		Timeout:       d,
+		CheckRedirect: base.CheckRedirect,
+	}
+}
+
+// llmExtra LLM 翻译引擎（openai / anthropic / gemini）Extra 的统一 JSON 解析结果。
+// 所有 LLM 引擎共用同一 Extra(JSON) 结构，保证「统一改 JSON」。
+type llmExtra struct {
+	Model      string `json:"model"`       // 模型名（如 gpt-4o-mini、claude-3-5-sonnet-20241022、gemini-2.0-flash）
+	TimeoutSec int    `json:"timeout_sec"` // 单次请求超时（秒），<=0 回落 DefaultLLMTimeoutSec
+}
+
+// parseLLMExtra 统一解析 LLM 引擎 Extra(JSON)。
+// 兼容旧数据：Extra 为纯模型名字符串（非 JSON）时，整串作为 model 兜底，超时回落默认。
+func parseLLMExtra(extra string) llmExtra {
+	out := llmExtra{TimeoutSec: DefaultLLMTimeoutSec}
+	if extra == "" {
+		return out
+	}
+	// 优先按 JSON 解析（统一方案）。
+	var je llmExtra
+	if err := json.Unmarshal([]byte(extra), &je); err == nil {
+		if je.Model != "" {
+			out.Model = je.Model
+		}
+		if je.TimeoutSec > 0 {
+			out.TimeoutSec = je.TimeoutSec
+		}
+		return out
+	}
+	// 兼容旧纯字符串模型名（如 "gpt-4o-mini"）。
+	out.Model = extra
 	return out
 }

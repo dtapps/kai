@@ -3,7 +3,6 @@ package engine
 import (
 	"context"
 	"fmt"
-	"net/http"
 	"strings"
 	"time"
 
@@ -13,51 +12,50 @@ import (
 	genai "google.golang.org/genai"
 )
 
-// geminiTranslator 是 Google Gemini 翻译引擎，基于官方新版 Gen AI Go SDK
-//（google.golang.org/genai，GA 版，替代已弃用的 github.com/google/generative-ai-go）。
-// 配置：APIKey=Google AI Studio / Gemini API Key，Endpoint=API Base URL
-// （默认官方地址，可在设置中以完整 Base URL 覆盖），
-// Model(Extra)=模型名（如 gemini-1.5-flash、gemini-2.0-flash、gemini-2.5-flash）。
+// geminiTranslator 是 Google Gemini 翻译引擎，基于官方 google.golang.org/genai SDK 实现。
 type geminiTranslator struct {
-	client *genai.Client
-	model  string
+	client  *genai.Client
+	model   string
+	timeout time.Duration
 }
 
 // NewGemini 由引擎配置构造 Gemini 引擎。
 // 通过 ClientConfig 同时传入 APIKey 与全局 HTTPClient：新版 SDK 会正确把密钥注入到
 // 自定义 HTTPClient 的请求中（旧版 SDK 在自定义 HTTPClient 下会丢失密钥，导致
-// "API key is required"）。优先用 service 层注入的全局 client（带自定义 DNS/代理/日志）；
-// nil 时回退自建独立 *http.Transport 的 client 兜底。
+// "API key is required"）。必须注入全局 client（cfg.HTTPClient 由 service 层提供），
+// 否则返回错误——不使用裸直连，避免丢失项目的 DNS/代理/日志网络策略。
 func NewGemini(cfg *EngineConfig) (*geminiTranslator, error) {
-	var httpClient *http.Client
-	if cfg.HTTPClient != nil {
-		httpClient = cfg.HTTPClient
-	} else {
-		httpClient = &http.Client{
-			Transport: &http.Transport{
-				Proxy:                 http.ProxyFromEnvironment,
-				TLSHandshakeTimeout:   30 * time.Second,
-				ResponseHeaderTimeout: 30 * time.Second,
-			},
-			Timeout: 60 * time.Second,
-		}
+	ex := parseLLMExtra(cfg.Extra)
+	if cfg.HTTPClient == nil {
+		return nil, fmt.Errorf(i18n.T("err.gemini_uninitialized"))
 	}
+	// 克隆为带引擎级超时的独立实例（超时同步到 HTTP 层），避免直接改共享全局
+	// client 的 Timeout 相互影响。
+	httpClient := cloneHTTPClientWithTimeout(cfg.HTTPClient, ex.TimeoutSec)
+
 	cc := &genai.ClientConfig{
-		APIKey:    cfg.APIKey,
-		Backend:   genai.BackendGeminiAPI,
+		APIKey:     cfg.APIKey,
+		Backend:    genai.BackendGeminiAPI,
 		HTTPClient: httpClient,
 	}
 	// 仅在用户显式配置了非默认 Base URL 时覆盖（Endpoint 存完整 Base URL）。
 	if cfg.Endpoint != "" && cfg.Endpoint != GeminiDefaultEndpoint {
 		cc.HTTPOptions.BaseURL = cfg.Endpoint
 	}
+
 	client, err := genai.NewClient(context.Background(), cc)
 	if err != nil {
 		return nil, fmt.Errorf(i18n.T("err.gemini_client"), err)
 	}
+
+	model := ex.Model
+	if model == "" {
+		model = "gemini-1.5-flash"
+	}
 	return &geminiTranslator{
-		client: client,
-		model:  cfg.Extra,
+		client:  client,
+		model:   model,
+		timeout: time.Duration(ex.TimeoutSec) * time.Second,
 	}, nil
 }
 
@@ -68,8 +66,11 @@ func (e *geminiTranslator) translate(ctx context.Context, text, from, to string)
 	if e.model == "" {
 		return "", fmt.Errorf(i18n.T("err.gemini_model_required"))
 	}
-	if e.client == nil {
-		return "", fmt.Errorf(i18n.T("err.gemini_uninitialized"))
+	// 引擎级请求超时（默认 30s，可由 Extra.timeout_sec 配置）。
+	if e.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, e.timeout)
+		defer cancel()
 	}
 
 	system := i18n.T("engine.openai_system")

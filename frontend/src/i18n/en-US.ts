@@ -114,12 +114,17 @@ export const en: Dict = {
       binary: 'Binary path',
       api_key: 'API Key',
       model: 'Model',
+      timeout: 'Timeout (s)',
       app_id: 'App ID',
       app_secret: 'App Secret',
       secret_id: 'Secret ID',
       secret_key: 'Secret Key',
       app_key: 'App Key',
       langs: 'Recognition language',
+    },
+    engine_hint: {
+      llm_timeout:
+        'Per-request timeout in seconds (default 30). On timeout this engine errors without affecting others.',
     },
     engine_ph: {
       google_endpoint: 'Leave empty for the default endpoint',
@@ -131,12 +136,14 @@ export const en: Dict = {
       anthropic_endpoint: 'Leave empty for the default Base URL (https://api.anthropic.com)',
       anthropic_api_key: 'Enter your Anthropic API Key (sk-ant-...)',
       anthropic_model: 'e.g. claude-3-5-sonnet-20241022',
-      gemini_endpoint: 'Leave empty for the default endpoint (https://generativelanguage.googleapis.com)',
+      gemini_endpoint:
+        'Leave empty for the default endpoint (https://generativelanguage.googleapis.com)',
       gemini_api_key: 'Enter your Gemini API Key',
       gemini_model: 'e.g. gemini-2.0-flash',
       deepl_api_key: 'Enter your DeepL API Key',
       openai_api_key: 'Enter your OpenAI API Key',
       openai_model: 'e.g. gpt-4o',
+      llm_timeout: 'default 30',
       baidu_app_id: 'Enter your Baidu App ID',
       baidu_app_secret: 'Enter your Baidu App Secret',
       tencent_secret_id: 'Enter your Tencent Secret ID',

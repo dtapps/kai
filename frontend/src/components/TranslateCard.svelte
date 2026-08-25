@@ -27,6 +27,9 @@
 </script>
 
 <div class="u-card p-3">
+  <!-- 该 div 在有翻译结果时动态充当按钮（role=button + tabindex + 键盘支持），
+       属于有意为之的交互元素，故忽略非交互元素的 tabindex 静态检查。 -->
+  <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <div
     class="flex items-center justify-between"
     class:cursor-pointer={tr?.result}

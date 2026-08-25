@@ -116,6 +116,41 @@
     }
     return JSON.stringify(o);
   }
+  // LLM 翻译引擎（openai / anthropic / gemini）统一存放于 Extra(JSON) 的参数：
+  //   - llmModel:      模型名（如 gpt-4o-mini）
+  //   - llmTimeoutSec: 单次请求超时（秒，默认 30）
+  let llmModel = $state('');
+  let llmTimeoutSec = $state(30);
+  // 解析引擎 extra(JSON) 中的 LLM 参数，回填到本地状态。
+  // 兼容旧数据：extra 为纯模型名字符串（非 JSON）时，整串作为 model 兜底。
+  function loadLlmOpts(extra: string | undefined) {
+    llmModel = '';
+    llmTimeoutSec = 30;
+    if (!extra) return;
+    try {
+      const o = JSON.parse(extra);
+      if (typeof o.model === 'string' && o.model) llmModel = o.model;
+      if (typeof o.timeout_sec === 'number' && o.timeout_sec > 0) llmTimeoutSec = o.timeout_sec;
+      return;
+    } catch {
+      /* 不是 JSON，落下面兼容旧纯模型名字符串 */
+    }
+    llmModel = extra;
+  }
+  // 将 LLM 参数合并进 extra(JSON)。model 为空时由后端回落默认模型。
+  function buildExtraWithLlm(extra: string | undefined): string {
+    let o: Record<string, unknown> = {};
+    if (extra) {
+      try {
+        o = JSON.parse(extra);
+      } catch {
+        o = {};
+      }
+    }
+    o.model = llmModel;
+    o.timeout_sec = Number(llmTimeoutSec) || 30;
+    return JSON.stringify(o);
+  }
   // system 引擎支持的语言列表（只读展示，由后端从 Translation.framework 读取）
   let systemLangs = $state<string[]>([]);
   let systemLangsLoading = $state(false);
@@ -200,6 +235,10 @@
       await loadOcrLangs();
       loadOcrOpts(saved?.extra);
     }
+    // 选中 LLM 翻译引擎（openai / anthropic / gemini）时，回填 extra(JSON) 中的模型与超时
+    if (['openai', 'anthropic', 'gemini'].includes(eng.value)) {
+      loadLlmOpts(saved?.extra);
+    }
   }
 
   // checkTesseract 调用后端探测本机 tesseract 安装情况
@@ -246,6 +285,10 @@
     let extra = configValues['extra'] || undefined;
     if (eng.kind === 'ocr') {
       extra = buildExtraWithOcr(configValues['extra'], eng.value === 'vision');
+    }
+    // LLM 引擎（openai / anthropic / gemini）：把模型名与超时写回 extra(JSON) 再提交
+    if (['openai', 'anthropic', 'gemini'].includes(eng.value)) {
+      extra = buildExtraWithLlm(configValues['extra']);
     }
     try {
       await UpdateEngineConfig({
@@ -354,6 +397,8 @@
     ocrCorrect = true;
     ocrTimeoutSec = 60;
     ocrRetry = 2;
+    llmModel = '';
+    llmTimeoutSec = 30;
     if (!name) {
       addSchema = [];
       return;
@@ -384,6 +429,10 @@
     const addSchemaKind = addSchema.length ? addSchema[0] : null;
     if (addSchemaKind && (await addEngineIsOcr(addName))) {
       extra = buildExtraWithOcr(addValues['extra'], addName === 'vision');
+    }
+    // LLM 引擎（openai / anthropic / gemini）：把模型名与超时拼进 extra(JSON) 再提交
+    if (['openai', 'anthropic', 'gemini'].includes(addName)) {
+      extra = buildExtraWithLlm(addValues['extra']);
     }
     try {
       await AddEngine({
@@ -640,6 +689,35 @@
                 <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
               </label>
             </div>
+          {:else if f.widget === 'llm_model'}
+            <!-- LLM 翻译引擎：模型名 -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
+              <input
+                id={'ef-' + f.field}
+                type="text"
+                class="u-field w-full px-3 py-2 text-sm"
+                placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                bind:value={llmModel}
+              />
+            </div>
+          {:else if f.widget === 'llm_timeout'}
+            <!-- LLM 翻译引擎：单次请求超时（秒） -->
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="1"
+                max="300"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={llmTimeoutSec}
+              />
+            </div>
           {:else if f.type === 'secret'}
             <!-- 密钥类字段：支持明文/掩码切换，便于查看已保存的值 -->
             {@const revealKey = 'ef-reveal-' + f.field}
@@ -658,7 +736,9 @@
                 <button
                   type="button"
                   class="absolute right-2 top-1/2 -translate-y-1/2 u-muted px-1 text-xs"
-                  aria-label={revealed[revealKey] ? t('settings.hideSecret') : t('settings.showSecret')}
+                  aria-label={revealed[revealKey]
+                    ? t('settings.hideSecret')
+                    : t('settings.showSecret')}
                   onclick={() => toggleReveal(revealKey)}
                 >
                   {revealed[revealKey] ? '🙈' : '👁'}
@@ -859,6 +939,35 @@
                 <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
               </label>
             </div>
+          {:else if f.widget === 'llm_model'}
+            <!-- 新增弹层：LLM 模型名 -->
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'add-ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
+              <input
+                id={'add-ef-' + f.field}
+                type="text"
+                class="u-field w-full px-3 py-2 text-sm"
+                placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                bind:value={llmModel}
+              />
+            </div>
+          {:else if f.widget === 'llm_timeout'}
+            <!-- 新增弹层：LLM 超时（秒） -->
+            <div class="flex items-center justify-between gap-4">
+              <div>
+                <p class="text-sm font-medium">{f.label_key ? t(f.label_key as any) : f.field}</p>
+                {#if f.hint_key}<p class="u-muted text-xs">{t(f.hint_key as any)}</p>{/if}
+              </div>
+              <input
+                type="number"
+                min="1"
+                max="300"
+                class="u-field w-28 px-3 py-1.5 text-sm"
+                bind:value={llmTimeoutSec}
+              />
+            </div>
           {:else if f.type === 'secret'}
             <!-- 密钥类字段：支持明文/掩码切换，便于查看已保存的值 -->
             {@const revealKey = 'add-ef-reveal-' + f.field}
@@ -877,7 +986,9 @@
                 <button
                   type="button"
                   class="absolute right-2 top-1/2 -translate-y-1/2 u-muted px-1 text-xs"
-                  aria-label={revealed[revealKey] ? t('settings.hideSecret') : t('settings.showSecret')}
+                  aria-label={revealed[revealKey]
+                    ? t('settings.hideSecret')
+                    : t('settings.showSecret')}
                   onclick={() => toggleReveal(revealKey)}
                 >
                   {revealed[revealKey] ? '🙈' : '👁'}

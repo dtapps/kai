@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
@@ -14,12 +15,14 @@ import (
 )
 
 // OpenAI 兼容聊天接口翻译引擎（Chat Completions），基于官方 openai-go SDK。
-// 配置：APIKey=sk-...，Endpoint=Base URL（默认 https://api.openai.com/v1），Extra=模型名（如 gpt-4o-mini）。
+// 配置：APIKey=sk-...，Endpoint=Base URL（默认 https://api.openai.com/v1），
+// Extra=JSON（{"model":"gpt-4o-mini","timeout_sec":30}）；兼容旧版纯模型名字符串。
 // Endpoint 填 base URL 即可（与 DeepSeek/硅基流动等兼容平台一致），SDK 自动拼 /chat/completions。
 type openaiTranslator struct {
-	apiKey string
-	model  string
-	client openai.Client
+	apiKey  string
+	model   string
+	timeout time.Duration
+	client  openai.Client
 }
 
 // normalizeOpenAIBaseURL 将用户填写的 endpoint 规范化为纯 Base URL。
@@ -40,7 +43,8 @@ func normalizeOpenAIBaseURL(raw string) string {
 
 // NewOpenAI 创建 OpenAI 兼容翻译引擎。
 func NewOpenAI(cfg *EngineConfig, client *http.Client) Translator {
-	modelName := cfg.Extra
+	ex := parseLLMExtra(cfg.Extra)
+	modelName := ex.Model
 	if modelName == "" {
 		modelName = "gpt-4o-mini"
 	}
@@ -54,15 +58,17 @@ func NewOpenAI(cfg *EngineConfig, client *http.Client) Translator {
 	if ep := normalizeOpenAIBaseURL(cfg.Endpoint); ep != "" {
 		opts = append(opts, option.WithBaseURL(ep))
 	}
-	// 复用项目统一 http.Client（含超时、贡献日志），保证与全局网络策略一致
+	// 复用项目统一 http.Client，并克隆为带引擎级超时的独立实例（超时同步到 HTTP 层），
+	// 避免直接改共享全局 client 的 Timeout 相互影响。
 	if client != nil {
-		opts = append(opts, option.WithHTTPClient(client))
+		opts = append(opts, option.WithHTTPClient(cloneHTTPClientWithTimeout(client, ex.TimeoutSec)))
 	}
 
 	return &openaiTranslator{
-		apiKey: cfg.APIKey,
-		model:  modelName,
-		client: openai.NewClient(opts...),
+		apiKey:  cfg.APIKey,
+		model:   modelName,
+		timeout: time.Duration(ex.TimeoutSec) * time.Second,
+		client:  openai.NewClient(opts...),
 	}
 }
 
@@ -72,6 +78,13 @@ func (o *openaiTranslator) Name() string { return "openai" }
 func (o *openaiTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	if o.apiKey == "" {
 		return nil, ErrAPIKey
+	}
+	// 引擎级请求超时（默认 30s，可由 Extra.timeout_sec 配置）。
+	// 若上游 ctx 更早到期则以先到期者为准（Go context 语义）。
+	if o.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, o.timeout)
+		defer cancel()
 	}
 	src := string(req.From)
 	dst := string(req.To)

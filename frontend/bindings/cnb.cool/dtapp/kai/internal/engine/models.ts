@@ -193,6 +193,16 @@ export enum FieldWidget {
      * WidgetOCRStatus tesseract 安装状态探测卡（含可编辑自定义二进制路径 endpoint），仅 tesseract
      */
     WidgetOCRStatus = "ocr_status",
+
+    /**
+     * WidgetLLMModel LLM 翻译引擎的模型名，独立文本输入，值合并写入 Extra.model
+     */
+    WidgetLLMModel = "llm_model",
+
+    /**
+     * WidgetLLMTimeout LLM 翻译引擎的单次请求超时（秒），数字输入，值合并写入 Extra.timeout_sec
+     */
+    WidgetLLMTimeout = "llm_timeout",
 };
 
 /**

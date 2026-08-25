@@ -107,7 +107,17 @@ func (w *EngineWrapper) registerEngines() {
 		w.registry.RegisterTranslator(engine.NewOpenAI(e, newClient(30*time.Second)))
 	}
 	if e, ok := engines["anthropic"]; ok && e.Enabled {
+		// 注入全局 HTTP client（带自定义 DNS/代理/日志），与 openai/gemini 一致。
+		e.HTTPClient = newClient(60 * time.Second)
 		w.registry.RegisterTranslator(engine.NewAnthropic(e))
+	}
+	if e, ok := engines["gemini"]; ok && e.Enabled {
+		// 注入全局 HTTP client（带自定义 DNS/代理/日志），避免 Gemini SDK
+		// 触碰被 useragent 包裹的全局 http.DefaultTransport 而 panic。
+		e.HTTPClient = newClient(60 * time.Second)
+		if g, err := engine.NewGemini(e); err == nil {
+			w.registry.RegisterTranslator(g)
+		}
 	}
 	if e, ok := engines["baidu"]; ok && e.Enabled {
 		w.registry.RegisterTranslator(engine.NewBaidu(e, newClient(15*time.Second)))

@@ -21,9 +21,15 @@ type anthropicTranslator struct {
 }
 
 // NewAnthropic 由引擎配置构造 Anthropic 引擎。
+// 复用项目全局 HTTP client（由 service 层注入，带自定义 DNS/代理/日志/贡献上报），
+// 与 openai/gemini 等引擎保持一致，统一走 network.BuildHTTPClient 网络策略。
 func NewAnthropic(cfg *EngineConfig) *anthropicTranslator {
 	opts := []option.RequestOption{
 		option.WithAPIKey(cfg.APIKey),
+	}
+	// 注入全局 HTTP client；nil 时回退 SDK 默认 client（全局 DefaultTransport）。
+	if cfg.HTTPClient != nil {
+		opts = append(opts, option.WithHTTPClient(cfg.HTTPClient))
 	}
 	if cfg.Endpoint != "" && cfg.Endpoint != AnthropicDefaultBaseURL {
 		opts = append(opts, option.WithBaseURL(cfg.Endpoint))

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"runtime"
 
 	"cnb.cool/dtapp/kai/internal/i18n"
@@ -79,6 +80,11 @@ type EngineConfig struct {
 	Secret   string `json:"secret,omitempty"`   // API 令牌密钥（用作签名密钥）
 	Extra    string `json:"extra,omitempty"`    // 额外扩展配置（JSON 字符串）
 	Endpoint string `json:"endpoint,omitempty"` // 自定义接口地址（可选）
+	// HTTPClient 可选注入的全局 HTTP 客户端（带自定义 DNS/代理/日志）。
+	// 由 service 层注入；Gemini 等基于 google API 的引擎必须注入，否则 SDK 会触碰
+	// 被 useragent 包裹的全局 http.DefaultTransport 而 panic。nil 时引擎自建一个
+	// 独立 *http.Transport 的 client 作为兜底。
+	HTTPClient *http.Client `json:"-"`
 }
 
 // 引擎层公共错误（唯一来源，settings/service 复用，避免 engine 反向 import settings 造成循环依赖）
@@ -170,6 +176,8 @@ const (
 	YoudaoDefaultEndpoint = "https://openapi.youdao.com/api"
 	// AnthropicDefaultBaseURL Anthropic Claude API 默认 base URL（SDK 内部拼 /v1/messages）
 	AnthropicDefaultBaseURL = "https://api.anthropic.com"
+	// GeminiDefaultEndpoint Gemini API 默认 endpoint（完整 scheme+host，SDK 内部拼 /v1beta/models/...）
+	GeminiDefaultEndpoint = "https://generativelanguage.googleapis.com"
 )
 
 // OcrEngine OCR 引擎统一接口
@@ -272,6 +280,7 @@ func KnownEngines() []EngineMeta {
 		"deepl",
 		"openai",
 		"anthropic",
+		"gemini",
 		"baidu",
 		"tencent",
 		"youdao",
@@ -589,6 +598,33 @@ var engineSchemas = map[string]EngineSchema{
 				Field:          "extra",
 				LabelKey:       "settings.engine_field.model",
 				PlaceholderKey: "settings.engine_ph.anthropic_model",
+				Type:           FieldString,
+				Required:       false,
+			},
+		},
+	},
+	"gemini": {
+		Kind: KindTranslator,
+		Fields: []EngineFieldSchema{
+			{
+				Field:          "endpoint",
+				LabelKey:       "settings.engine_field.endpoint",
+				PlaceholderKey: "settings.engine_ph.gemini_endpoint",
+				Type:           FieldString,
+				Required:       false,
+				Default:        GeminiDefaultEndpoint,
+			},
+			{
+				Field:          "api_key",
+				LabelKey:       "settings.engine_field.api_key",
+				PlaceholderKey: "settings.engine_ph.gemini_api_key",
+				Type:           FieldSecret,
+				Required:       true,
+			},
+			{
+				Field:          "extra",
+				LabelKey:       "settings.engine_field.model",
+				PlaceholderKey: "settings.engine_ph.gemini_model",
 				Type:           FieldString,
 				Required:       false,
 			},

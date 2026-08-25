@@ -131,6 +131,12 @@
   let addSchema = $state<EngineFieldSchema[]>([]);
   let addValues = $state<Record<string, string>>({});
 
+  // secret 字段明文/掩码切换状态（按字段 key 记录），便于查看已保存的密钥值。
+  let revealed = $state<Record<string, boolean>>({});
+  function toggleReveal(key: string) {
+    revealed = { ...revealed, [key]: !revealed[key] };
+  }
+
   onMount(() => {
     loadEngines();
   });
@@ -634,15 +640,40 @@
                 <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
               </label>
             </div>
+          {:else if f.type === 'secret'}
+            <!-- 密钥类字段：支持明文/掩码切换，便于查看已保存的值 -->
+            {@const revealKey = 'ef-reveal-' + f.field}
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
+              <div class="relative">
+                <input
+                  id={'ef-' + f.field}
+                  type={revealed[revealKey] ? 'text' : 'password'}
+                  class="u-field w-full px-3 py-2 pr-10 text-sm"
+                  placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                  bind:value={configValues[f.field]}
+                />
+                <button
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 u-muted px-1 text-xs"
+                  aria-label={revealed[revealKey] ? t('settings.hideSecret') : t('settings.showSecret')}
+                  onclick={() => toggleReveal(revealKey)}
+                >
+                  {revealed[revealKey] ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
           {:else}
-            <!-- 普通文本 / 密码字段 -->
+            <!-- 普通文本字段 -->
             <div>
               <label class="mb-1.5 block text-sm font-medium" for={'ef-' + f.field}>
                 {f.label_key ? t(f.label_key as any) : f.field}
               </label>
               <input
                 id={'ef-' + f.field}
-                type={f.type === 'secret' ? 'password' : 'text'}
+                type="text"
                 class="u-field w-full px-3 py-2 text-sm"
                 placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
                 bind:value={configValues[f.field]}
@@ -828,6 +859,31 @@
                 <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
               </label>
             </div>
+          {:else if f.type === 'secret'}
+            <!-- 密钥类字段：支持明文/掩码切换，便于查看已保存的值 -->
+            {@const revealKey = 'add-ef-reveal-' + f.field}
+            <div>
+              <label class="mb-1.5 block text-sm font-medium" for={'add-ef-' + f.field}>
+                {f.label_key ? t(f.label_key as any) : f.field}
+              </label>
+              <div class="relative">
+                <input
+                  id={'add-ef-' + f.field}
+                  type={revealed[revealKey] ? 'text' : 'password'}
+                  class="u-field w-full px-3 py-2 pr-10 text-sm"
+                  placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
+                  bind:value={addValues[f.field]}
+                />
+                <button
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 u-muted px-1 text-xs"
+                  aria-label={revealed[revealKey] ? t('settings.hideSecret') : t('settings.showSecret')}
+                  onclick={() => toggleReveal(revealKey)}
+                >
+                  {revealed[revealKey] ? '🙈' : '👁'}
+                </button>
+              </div>
+            </div>
           {:else}
             <div>
               <label class="mb-1.5 block text-sm font-medium" for={'add-ef-' + f.field}>
@@ -835,7 +891,7 @@
               </label>
               <input
                 id={'add-ef-' + f.field}
-                type={f.type === 'secret' ? 'password' : 'text'}
+                type="text"
                 class="u-field w-full px-3 py-2 text-sm"
                 placeholder={f.placeholder_key ? t(f.placeholder_key as any) : ''}
                 bind:value={addValues[f.field]}

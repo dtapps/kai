@@ -1,10 +1,9 @@
 import { writable, derived, get } from 'svelte/store';
-import { onEvent } from '../runtime';
+import { onEvent, System } from '../runtime';
 import { EventLocaleChanged, EventThemeChanged, type ThemeChangedPayload } from '../utils/events';
 import {
   GetTheme,
   SetTheme,
-  GetSystemTheme,
 } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
 import { THEME, type ThemeMode, type ResolvedTheme } from '../constants/theme';
 
@@ -49,8 +48,9 @@ export async function initTheme(): Promise<void> {
     const mode = await GetTheme();
     if (mode === THEME.Auto || mode === THEME.Light || mode === THEME.Dark)
       themeMode.set(mode as ThemeMode);
-    const sys = await GetSystemTheme();
-    systemDark.set(sys === THEME.Dark);
+    // 使用 @wailsio/runtime 原生 API 获取系统暗色模式，减少 RPC 调用
+    const isDarkMode = await System.IsDarkMode();
+    systemDark.set(isDarkMode);
   } catch {
     // ignore
   }

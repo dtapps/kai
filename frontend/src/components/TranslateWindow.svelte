@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount, tick } from 'svelte';
-  import TitleBar from './TitleBar.svelte';
   import { t, langName, engineName } from '../i18n';
   import { rootStyle } from '../stores/theme';
   import { currentLang } from '../stores/ui';
@@ -54,9 +53,6 @@
   // 避免中英文/标点/长单词断行导致的估算偏差（这是之前翻译即出滚动条的根因）。
   const RESULT_MIN = 200;
   const RESULT_MAX = 720;
-  // 后端 frameless 窗口设置了 InvisibleTitleBarHeight=36，SetSize 的 height 是窗口总高，
-  // webview 内容区 = 窗口总高 - 该值。为保证内容全部可见，目标高度需补偿标题栏。
-  const TITLE_BAR_H = 36;
   // webview 内 main 还有布局间距需补偿，否则窗口比内容矮 48px → 底部被裁出滚动条：
   // main 的 p-4（上下各 16 = 32）+ fixedEl 与 resultEl 之间的 gap-4（16）。
   const LAYOUT_EXTRA = 48;
@@ -173,14 +169,13 @@
       resultEl.style.height = `${ideal}px`;
       // 固定区真实高度：直接测语言条+输入卡片容器 offsetHeight（不随内容变，稳定可靠）。
       const fixedH = fixedEl.offsetHeight;
-      // 窗口整体高度 = 固定区 + 结果区 + 标题栏补偿 + webview 内布局间距补偿。
+      // 窗口整体高度 = 固定区 + 结果区 + webview 内布局间距补偿。
       // 只让结果区参与伸缩；LAYOUT_EXTRA 补 main 的 p-4(32)+gap-4(16)，否则窗口矮 48px 出滚动条。
-      const targetH = fixedH + resultH + TITLE_BAR_H + LAYOUT_EXTRA;
+      const targetH = fixedH + resultH + LAYOUT_EXTRA;
       console.debug(t('log.heightLogSetWindowHeight'), {
         窗口宽度: winW,
         固定区: fixedH,
         结果区: resultH,
-        标题栏补偿: TITLE_BAR_H,
         布局间距: LAYOUT_EXTRA,
         目标高度: targetH,
       });
@@ -374,8 +369,6 @@
 </script>
 
 <div class="u-surface flex flex-col" style={rootStyleToStyle($rootStyle)}>
-  <TitleBar />
-
   <main class="flex flex-col gap-4 overflow-hidden p-4">
     <!-- 固定区：语言条 + 输入卡片，高度恒定不变，只有翻译结果区随内容伸缩 -->
     <div bind:this={fixedEl} class="flex flex-col gap-4">

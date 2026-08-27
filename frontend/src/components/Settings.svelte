@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
   import { get } from 'svelte/store';
-  import TitleBar from './TitleBar.svelte';
   import { t } from '../i18n';
   import { userLang } from '../stores/ui';
   import { rootStyle } from '../stores/theme';
@@ -59,8 +58,6 @@
 </script>
 
 <div class="u-surface flex h-full w-full flex-col" style={rootStyleToStyle($rootStyle)}>
-  <TitleBar />
-
   <div class="flex flex-1 overflow-hidden">
     <!-- Sidebar -->
     <nav class="u-sidebar u-border-r flex w-44 flex-col gap-1 p-4">

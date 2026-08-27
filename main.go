@@ -237,7 +237,7 @@ func main() {
 
 	// 快捷键管理器：回调闭包桥接到 domain service
 	hm := hotkey.NewManager(nil, settingsService, ekCtrl,
-		func() application.Window { return mainWindow },
+		func() application.Window { return translateWindow },
 		func() error { _, err := trSvc.ScreenshotOCR(reg.DefaultOCREngineName()); return err },
 		func() error {
 			_, err := trSvc.ScreenshotTranslate(kevents.ScreenshotSessionScreenshot)
@@ -358,69 +358,13 @@ func main() {
 		}()
 	})
 
-	// 主翻译窗口（默认隐藏，由快捷键/托盘呼出）
-	// frameless + 透明标题栏；InvisibleTitleBarHeight=36 保留原生不可见标题栏区域，
-	// 让 macOS 拖拽生效（frameless+透明下前端 -webkit-app-region 不接收拖拽事件），
-	// 与前端 TitleBar 组件（h-9=36px, -webkit-app-region:drag）精确对齐。
-	mainWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           model.WindowTranslate,
-		Title:          i18n.T("window.translate_title"),
-		Width:          420,
-		Height:         560,
-		MinWidth:       420,
-		MaxWidth:       420,
-		MinHeight:      520,
-		MaxHeight:      2000,
-		DisableResize:  true,
-		URL:            "/translate.html",
-		Frameless:      true,
-		BackgroundType: application.BackgroundTypeTransparent,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 36,
-			Backdrop:                application.MacBackdropNormal,
-			TitleBar: application.MacTitleBar{
-				AppearsTransparent: true,
-			},
-		},
-		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
-		},
-	})
-	// 关键（2026-08-24，Windows WebView2 修复）：
-	// 此前用 `Hidden: true` 创建，beta 系列（含 beta.11）对 Hidden 窗口会延迟创建
-	// WebView2 controller，推迟到首次 Show() 时在后台 goroutine 异步创建，撞上 COM
-	// 单元（STA）竞态 → 报 80010108 (RPC_E_DISCONNECTED) "The object invoked has
-	// disconnected from its clients"，窗口直接崩溃/空白。这与 macOS 上 Hidden 半成品态
-	// 是同一类根因的 Windows 版。正解：不用 Hidden 创建，改为创建后即 Hide()——
-	// 走 !options.Hidden 分支在主线程完成真实 WebView 初始化（与 macOS screenshotWindow
-	// 同源修法），彻底脱离延迟创建的竞态窗口。窗口为 Frameless+Transparent，创建即 Hide
-	// 在同一事件循环内，启动无可见闪现。
-	mainWindow.Hide()
-	// 点红 X = 隐藏窗口（不退出）：用 RegisterHook 在 WindowClosing 的
-	// 销毁 listener 之前 Cancel 掉关闭，并改为 Hide。这样红 X 保留、
-	// 窗口不被销毁，随时可再次 Show。
-	_ = mainWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
-		event.Cancel()
-		mainWindow.Hide()
-	})
-	mainWindow.Center()
-
-	// 设置窗口（与 translate 一致：frameless + 透明标题栏 + 自定义 TitleBar 组件，InvisibleTitleBarHeight=36 启用拖拽）
+	// 主窗口（设置页作为主界面，启动即显示）
 	settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           model.WindowSettings,
-		Title:          i18n.T("window.settings_title"),
-		Width:          1280,
-		Height:         800,
-		URL:            "/settings.html",
-		Frameless:      true,
-		BackgroundType: application.BackgroundTypeTransparent,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 36,
-			Backdrop:                application.MacBackdropNormal,
-			TitleBar: application.MacTitleBar{
-				AppearsTransparent: true,
-			},
-		},
+		Name:   model.WindowSettings,
+		Title:  i18n.T("window.settings_title"),
+		Width:  1280,
+		Height: 800,
+		URL:    "/settings.html",
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
@@ -429,42 +373,46 @@ func main() {
 		event.Cancel()
 		settingsWindow.Hide()
 	})
-	// 同 mainWindow：禁用 Hidden:true 创建，改为创建后即 Hide()，避免 Windows 上
+	// 主窗口启动即显示并居中
+	settingsWindow.Center()
+
+	// 输入翻译窗口
+	translateWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Name:          model.WindowTranslate,
+		Title:         i18n.T("window.translate_title"),
+		Width:         420,
+		Height:        560,
+		MinWidth:      420,
+		MaxWidth:      420,
+		MinHeight:     520,
+		MaxHeight:     2000,
+		DisableResize: true,
+		URL:           "/translate.html",
+		Windows: application.WindowsWindow{
+			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
+		},
+	})
+	// 禁用 Hidden:true 创建，改为创建后即 Hide()，避免 Windows 上
 	// WebView2 controller 延迟创建引发的 80010108 COM 竞态崩溃。
-	settingsWindow.Hide()
+	translateWindow.Hide()
+	// 点红 X = 隐藏窗口（不退出）：用 RegisterHook 在 WindowClosing 的
+	// 销毁 listener 之前 Cancel 掉关闭，并改为 Hide。这样红 X 保留、
+	// 窗口不被销毁，随时可再次 Show。
+	_ = translateWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
+		event.Cancel()
+		translateWindow.Hide()
+	})
+	translateWindow.Center()
 
 	// 截图翻译窗口：左图右译。由截图快捷键/EventScreenshotOCR 呼出。
-	// frameless + 透明标题栏 + 自定义 TitleBar（InvisibleTitleBarHeight=36 启用拖拽）。
-	//
-	// 关键（2026-08-18 终极定位，推翻前几轮误判）：
-	// 曾用 `Hidden: true` 创建，但 beta.9 对 Hidden 窗口的 impl.run() 走 else 分支——
-	// 只注册 WindowDidBecomeKey 监听、从不主动 orderFront；该监听还要等 WebViewDidFinishNavigation
-	// 才注册，且回调里调的是 w.parent.Show()（App 级 [NSApp unhide]，非窗口级 orderFront）。
-	// 整个 Hidden 状态机对「截图窗口要可靠显示」是 hostile 的：预建/截图时无论单次还是双次 Show，
-	// 窗口都停在不显示态（日志 IsVisible=false 实证，且 IsVisible 读的是 AppKit occlusionState
-	// 可见位，对 accessory+透明+曾 orderOut 的窗口刷新不可靠，本就是误诊判据）。
-	// 正解：不用 Hidden 创建，改为创建后立刻 Hide()——走 !options.Hidden 分支立即真实初始化
-	// （app show + setShadow + setAlwaysOnTop + WebView 加载），再 orderOut 隐藏。等价于 mainWindow
-	// 经 Center() 完成的「真实 show 初始化」，彻底脱离 Hidden 半成品态。截图时 Show() 走已正常初始化
-	// 窗口的 makeKeyAndOrderFront，稳定上屏。窗口为 Frameless+Transparent，创建即 Hide 在同一事件循环内，
-	// 启动无可见闪现。
 	screenshotWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:           model.WindowScreenshot,
-		Title:          i18n.T("window.screenshot_title"),
-		Width:          900,
-		Height:         600,
-		MinWidth:       600,
-		MinHeight:      400,
-		URL:            "/screenshot.html",
-		Frameless:      true,
-		BackgroundType: application.BackgroundTypeTransparent,
-		Mac: application.MacWindow{
-			InvisibleTitleBarHeight: 36,
-			Backdrop:                application.MacBackdropNormal,
-			TitleBar: application.MacTitleBar{
-				AppearsTransparent: true,
-			},
-		},
+		Name:      model.WindowScreenshot,
+		Title:     i18n.T("window.screenshot_title"),
+		Width:     900,
+		Height:    600,
+		MinWidth:  600,
+		MinHeight: 400,
+		URL:       "/screenshot.html",
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
@@ -476,7 +424,7 @@ func main() {
 		event.Cancel()
 		screenshotWindow.Hide()
 	})
-	registerTray(app, hm, configSvc, settingsService, mainWindow, settingsWindow)
+	registerTray(app, hm, configSvc, settingsService)
 
 	// 语言变更后，用最新语言重建托盘菜单文案（托盘为原生，只能后端重建）。
 	// 优先用事件 payload 携带的语言（mode 可能含 auto，由 i18n 解析为具体语言），
@@ -604,7 +552,7 @@ func main() {
 // 包级窗口/tray 引用，便于语言变更时重建菜单
 var (
 	tray             *application.SystemTray
-	mainWindow       application.Window
+	translateWindow  application.Window
 	settingsWindow   application.Window
 	screenshotWindow application.Window
 )
@@ -623,24 +571,24 @@ func showScreenshotWindow() {
 	})
 }
 
-func registerTray(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
+func registerTray(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service) {
 	tray = app.SystemTray.New()
 	tray.SetIcon(selectTrayIcon(app))
 	// 不要用 AttachWindow：macOS 上点击托盘激活 app 时会连带恢复(settings)等所有窗口。
 	// 改为手动 toggle 主窗口，避免一次性打开全部窗口。
 	tray.OnClick(func() {
-		if mainWindow.IsVisible() {
-			mainWindow.Hide()
+		if settingsWindow.IsVisible() {
+			settingsWindow.Hide()
 		} else {
-			mainWindow.Show().Focus()
+			settingsWindow.Show().Focus()
 		}
 	})
-	buildTrayMenu(app, hm, configSvc, ss, mainWindow, settingsWindow)
+	buildTrayMenu(app, hm, configSvc, ss)
 }
 
 // buildTrayMenu 用当前语言构建托盘菜单（语言/快捷键启用状态变更时重建）。
 // 菜单项按配置中对应快捷键的「是否启用」动态显示：仅启用时才加入托盘菜单。
-func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service, mainWindow application.Window, settingsWindow application.Window) {
+func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service) {
 	// lang 取空串，由 i18n.T 回退到 SetLocale 设置的全局语言（含 auto 解析），
 	// 确保语言广播后即时重建菜单用最新语言，不依赖配置落盘时序。
 	trayMenu := app.Menu.New()
@@ -715,10 +663,10 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 
 // rebuildTrayMenu 语言/快捷键启用状态变更时重建托盘菜单（动态显示菜单项）
 func rebuildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service) {
-	if mainWindow == nil || settingsWindow == nil {
+	if translateWindow == nil || settingsWindow == nil {
 		return
 	}
-	buildTrayMenu(app, hm, configSvc, ss, mainWindow, settingsWindow)
+	buildTrayMenu(app, hm, configSvc, ss)
 }
 
 // checkUpdateOnStart 启动后异步检查更新，有更新时发通知（对齐 certflow）。

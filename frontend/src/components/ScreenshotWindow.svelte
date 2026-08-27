@@ -9,7 +9,6 @@
     EventScreenshotRetranslate,
     ScreenshotSessionScreenshot,
   } from '../utils/events';
-  import TitleBar from './TitleBar.svelte';
   import TranslateCard from './TranslateCard.svelte';
   import {
     TRANSLATE_LANG,
@@ -240,10 +239,6 @@
 </script>
 
 <div class="u-surface relative flex h-full flex-col overflow-hidden">
-  <!-- 标题栏：复用统一 TitleBar 组件（含 macOS 红绿灯，与输入翻译/设置窗口一致）。
-       关闭走 onClose（后端 Hide）而非默认 Close，避免销毁复用中的浮窗实例。 -->
-  <TitleBar onClose={closeWindow} />
-
   {#if result}
     <div class="flex min-h-0 flex-1">
       <!-- 左：区域截图 -->

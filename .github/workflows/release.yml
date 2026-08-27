@@ -24,6 +24,11 @@ on:
         required: false
         type: string
         default: ''
+      prerelease:
+        description: '标记为预发布版本'
+        required: false
+        type: boolean
+        default: false
       nsis_version:
         description: 'NSIS 版本号（例如 3.12，留空用默认 3.12）'
         required: false
@@ -571,9 +576,22 @@ jobs:
         shell: bash
         run: |
           cd release
-          # 用 GLOBIGNORE 排除自身，避免自包含；输出裸文件名（无 "./" 前缀），与 updater 解析匹配。
+          # 预发布版本：生成 BUILD_TIME / Git 提交 文件，供 updater 检查更新使用；
+          # 文件名 GIT_COMMIT / BUILD_TIME 与 updater provider 默认 gitCommitFile / buildTimeFile 对齐。
+          # 正式版不需要这两个文件（正式版通过 tag 比对来更新）。
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            printf '%s\n' "${{ needs.prepare.outputs.build_time }}" > BUILD_TIME
+            printf '%s\n' "${{ needs.prepare.outputs.git_commit }}" > GIT_COMMIT
+            echo "已生成 BUILD_TIME / GIT_COMMIT（预发布版本）"
+          fi
+          # 生成 SHA256SUMS：用 GLOBIGNORE 排除自身及不纳入校验的文件，
+          # 输出裸文件名（无 "./" 前缀），与 updater 解析逻辑匹配。
           rm -f SHA256SUMS
-          GLOBIGNORE='SHA256SUMS'
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            GLOBIGNORE='SHA256SUMS:BUILD_TIME:GIT_COMMIT'
+          else
+            GLOBIGNORE='SHA256SUMS'
+          fi
           if command -v sha256sum >/dev/null 2>&1; then
             sha256sum * > SHA256SUMS
           else
@@ -651,12 +669,20 @@ jobs:
           echo "" >> release_body.md
           echo "${CHANGES}" >> release_body.md
 
+      - name: 删除同名旧 Release（如果存在）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="v${{ inputs.version }}"
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+
       - name: 发布 Release
         uses: softprops/action-gh-release@v3
         with:
           tag_name: v${{ inputs.version }}
           name: v${{ inputs.version }}
           draft: false
+          prerelease: ${{ inputs.prerelease }}
           body_path: release_body.md
           files: release/*
 
@@ -694,7 +720,8 @@ jobs:
               --arg event "$EVENT" \
               --arg title "$TITLE" \
               --arg version "v${{ inputs.version }}" \
-              '{branch: $branch, event: $event, title: $title, env: {version: $version}}')" \
+              --arg prerelease "${{ inputs.prerelease }}" \
+              '{branch: $branch, event: $event, title: $title, env: {version: $version, pre_release: $prerelease}}')" \
             "${API}/${REPO}/-/build/start")
 
           echo "CNB build/start 响应 HTTP=${HTTP}"
@@ -746,6 +773,10 @@ jobs:
 
           TITLE="Kai v${VERSION} 构建完成"
           TAGS="Kai|stable"
+          if [ "${{ inputs.prerelease }}" = "true" ]; then
+            TITLE="Kai v${VERSION} (预发布) 构建完成"
+            TAGS="Kai|prerelease"
+          fi
           DESP="**版本**: \`${VERSION}\`  "$'\n'
           DESP="${DESP}**构建时间**: ${BUILD_TIME_CN}  "$'\n'
           DESP="${DESP}**Git 提交**: ${{ needs.prepare.outputs.git_commit }}  "$'\n'

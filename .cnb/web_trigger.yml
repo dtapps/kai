@@ -1,8 +1,8 @@
 branch:
   - reg: ^master
-  - buttons:
+    buttons:
       - name: 发布 Release
-        description: 从 GitHub 下载 release 构建产物并发布到 CNB
+        description: 从 GitHub 下载 release 构建产物并发布到 CNB（可选是否预发布）
         event: web_trigger_release
         permissions:
           roles:
@@ -11,9 +11,16 @@ branch:
             - developer
         inputs:
           version:
+            name: 版本号
             description: 请输入版本号（例如 1.0.0）
             required: true
             type: input
+          pre_release:
+            name: 预发布版本
+            description: 是否为预发布版本
+            required: false
+            type: switch
+            default: "false"
       - name: 发布 Nightly
         description: 从 GitHub 下载 nightly 构建产物并发布到 CNB（预发布）
         event: web_trigger_nightly

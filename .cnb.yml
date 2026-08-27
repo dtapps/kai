@@ -180,7 +180,7 @@
     cpus: 4
   imports: https://cnb.cool/dtapp/envs/-/blob/main/github.yml # 导入外部环境变量/配置
   stages:
-      - name: 处理版本号
+      - name: 处理版本号与选项
         script: |
           # 正式版版本号由外部 API 通过环境变量 version 传入（api_trigger_release 的 env 字段）
           if [ -z "$version" ]; then
@@ -192,8 +192,28 @@
           fi
           echo "版本号: $version"
           echo "##[set-output interior_version=$version]"
+
+          # preRelease 选项：由页面/ENV 传入 pre_release（true/false），默认 false
+          pre_release="${pre_release:-false}"
+          if [ "$pre_release" != "true" ] && [ "$pre_release" != "false" ]; then
+            echo "警告：pre_release 值为 '${pre_release}'，仅支持 true/false，已回落到 false"
+            pre_release="false"
+          fi
+          echo "preRelease: $pre_release"
+          echo "##[set-output pre_release=$pre_release]"
         exports:
           interior_version: INTERIOR_VERSION
+          pre_release: PRE_RELEASE
+
+      - name: 生成 Release 选项文件
+        script: |
+          cat > release_options.yml << EOF
+          tag: ${INTERIOR_VERSION}
+          title: "${INTERIOR_VERSION}"
+          descriptionFromFile: release_body.md
+          preRelease: ${PRE_RELEASE}
+          overlying: false
+          EOF
 
       - name: 从 GitHub Release 下载构建产物
         script: |
@@ -269,13 +289,66 @@
 
           cat release_body.md
 
+      # 删除已存在的 Release 与 Tag，再重建，避免旧附件堆积。
+      # 两步均调用 CNB Open API，CNB_TOKEN 需 repo-release:rw 权限，
+      # CNB_API_ENDPOINT 由流水线自动注入。注意：DeleteTag 不会自动删 Release，
+      # DeleteRelease 也不会自动删 Tag，所以两个对象必须分别删除。
+      - name: 删除已存在的 Release 与 Tag
+        shell: true
+        script: |
+          set -e
+          API="${CNB_API_ENDPOINT%/}"
+          REPO="dtapp/kai"
+          TAG="${INTERIOR_VERSION}"
+
+          # ---- 第 1 步：删除 Release（发行版） ----
+          # 查询：GET /-/releases/tags/{tag}  → 200 存在 / 404 不存在
+          echo "查询是否已存在 release (tag=$TAG) ..."
+          HTTP=$(curl -s -o /tmp/nr.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases/tags/$TAG")
+          if [ "$HTTP" = "200" ]; then
+            ID=$(jq -r '.id // .release_id // empty' /tmp/nr.json)
+            echo "release 已存在 (id=$ID)，删除后重新发布"
+            # 删除：DELETE /-/releases/{id}  → 成功返回 204/200
+            DEL=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+              -H "Authorization: Bearer $CNB_TOKEN" \
+              -H "Accept: application/vnd.cnb.api+json" \
+              "$API/$REPO/-/releases/$ID")
+            if [ "$DEL" = "204" ] || [ "$DEL" = "200" ]; then
+              echo "已删除旧 release"
+            else
+              echo "删除 release 失败 HTTP=$DEL"; exit 1
+            fi
+          elif [ "$HTTP" = "404" ]; then
+            echo "release 不存在，直接发布"
+          else
+            echo "查询 release 失败 HTTP=$HTTP"; cat /tmp/nr.json; exit 1
+          fi
+
+          # ---- 第 2 步：删除 Git Tag（标签） ----
+          # 删除：DELETE /-/tags/{repo}/{tag}  → 204 成功 / 404 不存在
+          # 该接口仅删 tag，不删关联 Release，故需在第 1 步之外单独删除。
+          echo "删除同名 tag (tag=$TAG) ..."
+          TAG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X DELETE \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/tags/$TAG")
+          if [ "$TAG_HTTP" = "204" ] || [ "$TAG_HTTP" = "200" ]; then
+            echo "已删除旧 tag"
+          elif [ "$TAG_HTTP" = "404" ]; then
+            echo "tag 不存在，跳过"
+          else
+            # 删 tag 失败不阻断发布（后续 git:release 会在已有 tag 上重建）
+            echo "删除 tag 失败 HTTP=$TAG_HTTP（继续发布）"
+          fi
+
       # https://docs.cnb.cool/zh/build/internal-steps.html#git-release
       - name: 创建 Release
         type: git:release
-        options:
-          tag: ${INTERIOR_VERSION}
-          title: "${INTERIOR_VERSION}"
-          descriptionFromFile: release_body.md
+        optionsFrom: release_options.yml
 
       # https://docs.cnb.cool/zh/plugin/public/cnbcool/attachments.html
       - name: 上传 Release 附件
@@ -309,6 +382,7 @@ master:
     - *trigger_release
 
   # API 触发：由 GitHub Actions 发布正式版后调用 CNB Open API 触发（event=api_trigger_release）
-  # 需通过 env 传入 version 变量（如 {"version":"v1.2.3"}），发布到 CNB 正式 Release
+  # 需通过 env 传入 version 变量（如 {"version":"v1.2.3"}），发布到 CNB
+  # 可选：传入 pre_release 变量控制是否为预发布版本（true/false），默认 false
   api_trigger_release:
     - *trigger_release

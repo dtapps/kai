@@ -327,9 +327,11 @@ func (w *EngineWrapper) ToggleEngineEnabled(id int64, enabled bool) error {
 	if w.configStore == nil {
 		return errEngineStoreNotReady
 	}
+	var cfg *engine.EngineConfig
 	if enabled {
 		ctx0, cancel0 := context.WithTimeout(context.Background(), 5*time.Second)
-		cfg, err := w.configStore.GetEngineByID(ctx0, id)
+		var err error
+		cfg, err = w.configStore.GetEngineByID(ctx0, id)
 		cancel0()
 		if err != nil {
 			return err
@@ -343,9 +345,9 @@ func (w *EngineWrapper) ToggleEngineEnabled(id int64, enabled bool) error {
 	if err := w.configStore.SetEngineEnabled(ctx, id, enabled); err != nil {
 		return err
 	}
-	// OCR 单选：启用某 OCR 时，自动禁用其它已启用的 OCR 引擎（库内 tesseract 等），
-	// 保证同时只有一个 OCR 处于启用状态。
-	if enabled {
+	// OCR 单选：仅在启用某 OCR 引擎时，自动禁用其它已启用的 OCR 引擎（库内 tesseract 等），
+	// 保证同时只有一个 OCR 处于启用状态。启用翻译引擎时不应触发此逻辑。
+	if enabled && cfg != nil && engine.KindOfEngine(cfg.Engine) == engine.KindOCR {
 		if err := w.disableOtherOcrs(ctx, id); err != nil {
 			return err
 		}

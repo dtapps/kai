@@ -56,7 +56,8 @@ func selectionPointViaBridge() (x, y int) {
 		return 0, 0
 	}
 	buf := make([]byte, 128)
-	n := swiftbridge.KaiSelectionPoint(unsafe.Pointer(&buf[0]), int32(len(buf)))
+	// 调用 Swift 桥接：unsafe.Pointer 为与 C/Swift 交互所必需。
+	n := swiftbridge.KaiSelectionPoint(unsafe.Pointer(&buf[0]), int32(len(buf))) //nolint:gosec
 	if n <= 0 {
 		return 0, 0
 	}
@@ -74,7 +75,8 @@ func screenSizeViaBridge() (w, h float64) {
 		return 0, 0
 	}
 	buf := make([]byte, 128)
-	n := swiftbridge.KaiScreenSize(unsafe.Pointer(&buf[0]), int32(len(buf)))
+	// 调用 Swift 桥接：unsafe.Pointer 为与 C/Swift 交互所必需。
+	n := swiftbridge.KaiScreenSize(unsafe.Pointer(&buf[0]), int32(len(buf))) //nolint:gosec
 	if n <= 0 {
 		return 0, 0
 	}

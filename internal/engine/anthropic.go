@@ -18,7 +18,7 @@ import (
 // Extra=JSON（{"model":"claude-3-5-sonnet-20241022","timeout_sec":30}）；兼容旧版纯模型名字符串。
 type anthropicTranslator struct {
 	client  anthropic.Client
-	model   string
+	model   anthropic.Model
 	timeout time.Duration
 }
 
@@ -38,13 +38,13 @@ func NewAnthropic(cfg *EngineConfig) *anthropicTranslator {
 	if cfg.Endpoint != "" && cfg.Endpoint != AnthropicDefaultBaseURL {
 		opts = append(opts, option.WithBaseURL(cfg.Endpoint))
 	}
-	model := ex.Model
-	if model == "" {
-		model = "claude-3-5-sonnet-20241022"
+	modelName := anthropic.Model(ex.Model) // nolint:unconvert // 类型转换提供编译期类型安全
+	if modelName == "" {
+		modelName = "claude-3-5-sonnet-20241022"
 	}
 	return &anthropicTranslator{
 		client:  anthropic.NewClient(opts...),
-		model:   model,
+		model:   modelName,
 		timeout: time.Duration(ex.TimeoutSec) * time.Second,
 	}
 }
@@ -68,7 +68,7 @@ func (e *anthropicTranslator) translate(ctx context.Context, text, from, to stri
 	userContent := fmt.Sprintf(userPrompt, srcName(from), dstName(to), text)
 
 	params := anthropic.MessageNewParams{
-		Model:     anthropic.Model(e.model),
+		Model:     e.model,
 		MaxTokens: int64(8192),
 		System: []anthropic.TextBlockParam{
 			{Text: system},

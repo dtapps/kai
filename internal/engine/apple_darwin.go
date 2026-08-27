@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"math"
 	"strings"
 	"unsafe"
 
@@ -41,7 +42,9 @@ func SetLogConfig(dir, level string, retentionDays int, compress bool) {
 	if !swiftbridge.Available() {
 		return
 	}
-	swiftbridge.KaiSetLogConfig(dir, level, int32(retentionDays), compress)
+	// 安全转换 int -> int32：超出 int32 范围时截断至最大值，避免溢出（gosec G115）。
+	days := min(retentionDays, math.MaxInt32)
+	swiftbridge.KaiSetLogConfig(dir, level, int32(days), compress) //nolint:gosec // 溢出已在上方显式兜底
 }
 
 // SetBridgeLocale 将当前界面语言同步给 Swift 桥接层，使其 kai-bridge.log 调试日志
@@ -82,7 +85,7 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 	if !swiftbridge.Available() {
 		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
 	}
-	n := swiftbridge.KaiTranslate(sl, tl, text, unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
+	n := swiftbridge.KaiTranslate(sl, tl, text, unsafe.Pointer(&outBuf[0]), int32(len(outBuf))) //nolint:gosec // 与 Swift 交互所必需，缓冲区由 Go 侧分配
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_translate_buffer"), "from", sl, "to", tl, "text_len", len(text))
 		return nil, fmt.Errorf(i18n.T("err.apple_translate_buffer"))
@@ -142,7 +145,7 @@ func AvailableLanguages() ([]string, error) {
 		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
 	}
 	outBuf := make([]byte, 1<<16)
-	n := swiftbridge.KaiAvailableLanguages(unsafe.Pointer(&outBuf[0]), int32(len(outBuf)))
+	n := swiftbridge.KaiAvailableLanguages(unsafe.Pointer(&outBuf[0]), int32(len(outBuf))) //nolint:gosec // 与 Swift 交互所必需，缓冲区由 Go 侧分配
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_lang_buffer"))
 		return nil, fmt.Errorf(i18n.T("err.apple_lang_buffer"))

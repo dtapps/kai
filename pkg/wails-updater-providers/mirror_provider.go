@@ -391,11 +391,6 @@ func (m *MirrorProvider) Download(ctx context.Context, rel *updater.Release, dst
 	}
 }
 
-// t 以当前包全局 locale 渲染 i18n 文案的便捷方法。
-func (m *MirrorProvider) t(key string, data ...any) string {
-	return T(key, data...)
-}
-
 // buildStableRelease 构造稳定版 release（源无关）。
 func buildStableRelease(rel *updater.Release, tag, name, notes, htmlURL string, publishedAt time.Time, filename string, size int64) (*updater.Release, error) {
 	if tag == "" {

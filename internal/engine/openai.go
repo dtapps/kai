@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"strings"
@@ -20,7 +21,7 @@ import (
 // Endpoint 填 base URL 即可（与 DeepSeek/硅基流动等兼容平台一致），SDK 自动拼 /chat/completions。
 type openaiTranslator struct {
 	apiKey  string
-	model   string
+	model   shared.ChatModel
 	timeout time.Duration
 	client  openai.Client
 }
@@ -44,7 +45,7 @@ func normalizeOpenAIBaseURL(raw string) string {
 // NewOpenAI 创建 OpenAI 兼容翻译引擎。
 func NewOpenAI(cfg *EngineConfig, client *http.Client) Translator {
 	ex := parseLLMExtra(cfg.Extra)
-	modelName := ex.Model
+	modelName := shared.ChatModel(ex.Model) // nolint:unconvert // 类型转换提供编译期类型安全
 	if modelName == "" {
 		modelName = "gpt-4o-mini"
 	}
@@ -98,7 +99,7 @@ func (o *openaiTranslator) Translate(ctx context.Context, req model.TranslateReq
 	)
 
 	params := openai.ChatCompletionNewParams{
-		Model: shared.ChatModel(o.model),
+		Model: o.model,
 		Messages: []openai.ChatCompletionMessageParamUnion{
 			openai.SystemMessage(i18n.T("engine.openai_system")),
 			openai.UserMessage(prompt),
@@ -107,8 +108,9 @@ func (o *openaiTranslator) Translate(ctx context.Context, req model.TranslateReq
 
 	completion, err := o.client.Chat.Completions.New(ctx, params)
 	if err != nil {
-		// SDK 错误类型可给出状态码与 message，给出更清晰的报错
-		if apiErr, ok := err.(*openai.Error); ok {
+		// SDK 错误类型可给出状态码与 message，给出更清晰的报错。
+		// 使用 errors.As 兼容 wrapped errors（errorlint）。
+		if apiErr, ok := errors.AsType[*openai.Error](err); ok {
 			// 410 Gone：OpenAI 官方对「已下线/废弃模型」的标准响应；但自托管兼容服务
 			// （vLLM / ollama 等）也可能返回 410，语义不固定。故不再武断说「模型下线」，
 			// 而是把接口真实返回的 message 透传，并提示检查 endpoint/模型是否匹配。

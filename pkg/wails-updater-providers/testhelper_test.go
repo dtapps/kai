@@ -23,6 +23,8 @@ func redirectClient(srv *httptest.Server) *http.Client {
 		u.Host = host
 		r := req.Clone(req.Context())
 		r.URL = &u
+		// 测试专用：URL 由测试代码显式构造（重定向到 mock server），无 SSRF 风险。
+		//nolint:gosec // URL 由测试代码显式构造，非外部输入，无 SSRF 风险。
 		return http.DefaultClient.Do(r)
 	})}
 }

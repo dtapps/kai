@@ -8,7 +8,7 @@ import (
 // 内建多语言表：locale -> key -> 模板（模板支持 {{.X}} 占位符）。
 // 不依赖外部 JSON 或项目 i18n，第三方库自包含。
 var i18nMessages = map[Locale]map[string]string{
-	LocaleZhCN: {
+	LocaleZhCN: { //nolint:gosec // 此处含 "token" 字样仅为 i18n 文案，非真实凭证
 		"updater_check_done":                       "检查更新完成",
 		"updater_check_nightly_channel":            "已订阅 nightly 渠道，预发布与稳定版一起参与比较",
 		"updater_prerelease_no_update":             "预发布与稳定版检查均出错，按官方契约返回错误",
@@ -155,7 +155,7 @@ var i18nMessages = map[Locale]map[string]string{
 		"window_install_update":                    "安装更新",
 		"window_try_again":                         "重试",
 	},
-	LocaleEnUS: {
+	LocaleEnUS: { //nolint:gosec // 此处含 "token" 字样仅为 i18n 文案，非真实凭证
 		"updater_check_done":                       "update check done",
 		"updater_check_nightly_channel":            "subscribed to nightly channel, comparing prerelease and stable together",
 		"updater_prerelease_no_update":             "both prerelease and stable checks failed, returning error per provider contract",

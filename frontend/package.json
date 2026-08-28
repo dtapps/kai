@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "packageManager": "pnpm@11.23.0",
+  "packageManager": "pnpm@11.24.0",
   "scripts": {
     "dev": "vite",
     "build:dev": "vite build --minify false --mode development",
@@ -15,13 +15,13 @@
     "format:check": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\""
   },
   "dependencies": {
-    "@wailsio/runtime": "3.0.0-beta.12"
+    "@wailsio/runtime": "3.0.0-beta.14"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",
     "@tailwindcss/vite": "^4.3.3",
     "@tsconfig/svelte": "^5.0.8",
-    "@types/node": "^26.3.0",
+    "@types/node": "^26.4.0",
     "@typescript/native": "npm:typescript@^7.0.2",
     "prettier": "^3.9.6",
     "prettier-plugin-svelte": "^4.1.1",

@@ -720,7 +720,7 @@ jobs:
           API="${CNB_API_ENDPOINT%/}"
           REPO="dtapp/kai"
           EVENT="api_trigger_nightly"
-          TITLE="GitHub 每日构建同步 ${{ needs.prepare.outputs.version }}"
+          TITLE="GitHub 每日构建同步 v${{ needs.prepare.outputs.version }}"
 
           echo "触发 CNB 同步构建: ${API}/${REPO}/-/build/start (event=${EVENT})"
           HTTP=$(curl -s -o /tmp/cnb_start.json -w "%{http_code}" -X POST \

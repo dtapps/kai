@@ -368,6 +368,10 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
+		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
+		MinimiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonEnabled,
+		CloseButtonState:    application.ButtonEnabled,
 	})
 	_ = settingsWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
@@ -391,6 +395,10 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
+		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
+		MinimiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonEnabled,
+		CloseButtonState:    application.ButtonEnabled,
 	})
 	// 禁用 Hidden:true 创建，改为创建后即 Hide()，避免 Windows 上
 	// WebView2 controller 延迟创建引发的 80010108 COM 竞态崩溃。
@@ -416,6 +424,10 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
 		},
+		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
+		MinimiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonEnabled,
+		CloseButtonState:    application.ButtonEnabled,
 	})
 	// 创建即 Hide：完成真实初始化（建 impl + 加载 WebView + 设 Shadow/AlwaysOnTop）后隐藏，
 	// 等效于预建。之后截图路径 Show() 走轻量 orderFront，不再卡 Hidden 状态机。

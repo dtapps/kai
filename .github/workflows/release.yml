@@ -708,7 +708,12 @@ jobs:
           API="${CNB_API_ENDPOINT%/}"
           REPO="dtapp/kai"
           EVENT="api_trigger_release"
-          TITLE="GitHub 正式发版同步 v${{ inputs.version }}"
+          PRERELEASE="${{ inputs.prerelease }}"
+          if [ "$PRERELEASE" = "true" ]; then
+            TITLE="同步预发布版 v${{ inputs.version }}"
+          else
+            TITLE="同步正式版 v${{ inputs.version }}"
+          fi
 
           echo "触发 CNB 同步构建: ${API}/${REPO}/-/build/start (event=${EVENT})"
           HTTP=$(curl -s -o /tmp/cnb_start.json -w "%{http_code}" -X POST \

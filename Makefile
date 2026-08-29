@@ -64,18 +64,27 @@ sqlc: ## 生成 sqlc 代码（internal/historystore internal/configstore interna
 
 i18n: i18n-go i18n-frontend ## 合并所有 i18n 拆分文件到主文件
 
+# 检测操作系统（Windows 用 cmd 脚本，*nix 用 sh 脚本）
+ifeq ($(OS),Windows_NT)
+  I18N_GO_CMD   = scripts\\merge-go-i18n.cmd
+  I18N_FE_CMD   = scripts\\merge-frontend-i18n.cmd
+else
+  I18N_GO_CMD   = ./scripts/merge-go-i18n.sh
+  I18N_FE_CMD   = ./scripts/merge-frontend-i18n.sh
+endif
+
 i18n-go: ## 合并 Go 后端 i18n 拆分文件
-	./scripts/merge-go-i18n.sh
+	$(I18N_GO_CMD)
 
 i18n-frontend: ## 合并前端 i18n 拆分文件
-	./scripts/merge-frontend-i18n.sh
+	$(I18N_FE_CMD)
 
 swift-build: ## 手动编译 Swift 桥接动态库（libkai_bridge.dylib，含翻译与辅助功能）
 	cd pkg/swiftbridge/scripts && bash ./build.sh
 
 code-generate: sqlc i18n swift-build ##  代码生成 sqlc i18n swift
 
-dev: i18n ## 运行 Wails 开发模式
+dev: ## 运行 Wails 开发模式
 	VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) GITHUB_TOKEN=$(GITHUB_TOKEN) CNB_TOKEN=$(CNB_TOKEN) DEV=$(DEV) wails3 dev -port $(PORT)
 
 # ==================== 格式化 / 修复 ====================

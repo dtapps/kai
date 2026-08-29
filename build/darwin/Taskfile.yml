@@ -28,8 +28,14 @@ tasks:
     internal: true
     dir: '{{.ROOT_DIR}}'
     cmds:
-      - bash ./scripts/merge-go-i18n.sh
-      - bash ./scripts/merge-frontend-i18n.sh
+      - cmd: scripts\merge-go-i18n.cmd
+        platforms: [windows]
+      - cmd: bash ./scripts/merge-go-i18n.sh
+        platforms: [linux, darwin]
+      - cmd: scripts\merge-frontend-i18n.cmd
+        platforms: [windows]
+      - cmd: bash ./scripts/merge-frontend-i18n.sh
+        platforms: [linux, darwin]
 
   build:swiftbridge:
     summary: 编译 Swift 桥接动态库 libkai_bridge.dylib（纯 Go purego 运行时加载，含翻译与辅助功能）

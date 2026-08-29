@@ -366,7 +366,7 @@ func main() {
 		Height: 800,
 		URL:    "/settings.html",
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
+			HiddenOnTaskbar: false,
 		},
 		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
 		MinimiseButtonState: application.ButtonEnabled,
@@ -382,18 +382,16 @@ func main() {
 
 	// 输入翻译窗口
 	translateWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Name:          model.WindowTranslate,
-		Title:         i18n.T("window.translate_title"),
-		Width:         420,
-		Height:        560,
-		MinWidth:      420,
-		MaxWidth:      420,
-		MinHeight:     520,
-		MaxHeight:     2000,
-		DisableResize: true,
-		URL:           "/translate.html",
+		Name:      model.WindowTranslate,
+		Title:     i18n.T("window.translate_title"),
+		Width:     420,
+		Height:    560,
+		MinWidth:  420,
+		MaxWidth:  420,
+		MinHeight: 520,
+		URL:       "/translate.html",
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
+			HiddenOnTaskbar: false,
 		},
 		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
 		MinimiseButtonState: application.ButtonEnabled,
@@ -422,7 +420,7 @@ func main() {
 		MinHeight: 400,
 		URL:       "/screenshot.html",
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true, // 窗口不在 Windows 任务栏显示，只在托盘
+			HiddenOnTaskbar: false,
 		},
 		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
 		MinimiseButtonState: application.ButtonEnabled,

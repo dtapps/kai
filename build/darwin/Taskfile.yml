@@ -28,11 +28,11 @@ tasks:
     internal: true
     dir: '{{.ROOT_DIR}}'
     cmds:
-      - cmd: scripts\merge-go-i18n.cmd
+      - cmd: cmd.exe /c "scripts/merge-go-i18n.cmd"
         platforms: [windows]
       - cmd: bash ./scripts/merge-go-i18n.sh
         platforms: [linux, darwin]
-      - cmd: scripts\merge-frontend-i18n.cmd
+      - cmd: cmd.exe /c "scripts/merge-frontend-i18n.cmd"
         platforms: [windows]
       - cmd: bash ./scripts/merge-frontend-i18n.sh
         platforms: [linux, darwin]

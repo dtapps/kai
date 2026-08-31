@@ -15,7 +15,7 @@
     "format:check": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\""
   },
   "dependencies": {
-    "@wailsio/runtime": "3.0.0-beta.14"
+    "@wailsio/runtime": "3.0.0-beta.15"
   },
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^7.3.0",

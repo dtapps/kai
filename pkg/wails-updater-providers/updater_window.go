@@ -80,11 +80,11 @@ func createUpdaterWindow(app *application.App) *updaterWindow {
 // 创建时 Wails 会正确注入原生桥接 window._wails.invoke 与 inline event shim，
 // 因此 JS 的 Events.Emit（关闭/安装/跳过按钮、resize 自适应）均可用。
 func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
-	// 配色统一跟随应用主题 GetTheme()（dark/light，auto 已由 main.go 的
-	// resolveUpdaterTheme 解析后通过 SetTheme 灌入，这里拿到的已是 dark/light）：
-	//   底色 BackgroundColour：深 (30,30,30) / 浅 (255,255,255)
-	//   macOS 原生标题栏 Mac.Appearance：深 DarkAqua / 浅 Aqua（标题栏跟随应用主题）
-	//   Windows 标题栏 CustomTheme：深/浅两套 ThemeSettings（标题栏跟随应用主题）
+	// 底色 BackgroundColour：仅作 webview 加载前的底色闪现，深 (30,30,30) / 浅 (255,255,255)，
+	// 跟随应用主题 GetTheme()（dark/light，auto 已由 main.go 的 resolveUpdaterTheme 解析后
+	// 通过 SetTheme 灌入）。
+	// 标题栏外观（macOS Appearance / Windows CustomTheme）一律不自定义，
+	// 与主窗口（settings）保持一致，走系统默认标题栏。
 	dark := GetTheme() == ThemeDark
 	bg := application.NewRGB(255, 255, 255)
 	appearance := application.NSAppearanceNameAqua
@@ -92,12 +92,9 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 		bg = application.NewRGB(30, 30, 30)
 		appearance = application.NSAppearanceNameDarkAqua
 	}
-	mac := application.MacWindow{
-		Appearance: appearance,
-	}
-	winTheme := lightTitleTheme()
+	winTheme := application.Light
 	if dark {
-		winTheme = darkTitleTheme()
+		winTheme = application.Dark
 	}
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:                 globalWindowName,
@@ -109,12 +106,17 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 		Hidden:               true, // 一律隐藏创建，显示由调用方双 Show() 完成（规避 80010108）
 		AllowSimpleEventEmit: true, // 关键：允许 JS Events.Emit 直接驱动 Go 监听
 		BackgroundColour:     bg,
-		Mac:                  mac,
+		// 标题栏主题跟随应用内主题（dark/light）：使用 Wails3 原生主题 API
+		// （macOS 的 Mac.Appearance / Windows 的 WindowsWindow.Theme），
+		// 不依赖 CustomTheme 颜色自定义。这样应用内切换深/浅时标题栏随之变化。
+		Mac: application.MacWindow{
+			Appearance: appearance,
+		},
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: true,
-			CustomTheme:     winTheme,
+			Theme:           winTheme,
 		},
-		// 标题栏 最小化/最大化/关闭按钮
+		// 标题栏 最小化/最大化/关闭按钮：与主窗口（settings）完全一致
 		MinimiseButtonState: application.ButtonHidden,
 		MaximiseButtonState: application.ButtonHidden,
 		CloseButtonState:    application.ButtonEnabled,
@@ -128,33 +130,6 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 	})
 
 	h.win = win
-}
-
-// darkTitleTheme / lightTitleTheme 返回 Windows 标题栏 CustomTheme 配色，
-// 与内容区配色对齐（CSS --bg 深 #15161a / 浅 #eef0f4），由应用主题 GetTheme() 选择。
-// WindowTheme 颜色为 *uint32，hex 格式 0x00BBGGRR。
-func darkTitleTheme() application.ThemeSettings {
-	titleBar := uint32(0x001A1615) // #15161a
-	text := uint32(0x00E9E6E6)     // 浅色标题文字 #e6e6e9
-	wt := &application.WindowTheme{TitleBarColour: &titleBar, TitleTextColour: &text}
-	return application.ThemeSettings{
-		DarkModeActive:    wt,
-		DarkModeInactive:  wt,
-		LightModeActive:   wt,
-		LightModeInactive: wt,
-	}
-}
-
-func lightTitleTheme() application.ThemeSettings {
-	titleBar := uint32(0x00F4F0EE) // #eef0f4
-	text := uint32(0x001D1816)     // 深色标题文字 #16181d
-	wt := &application.WindowTheme{TitleBarColour: &titleBar, TitleTextColour: &text}
-	return application.ThemeSettings{
-		DarkModeActive:    wt,
-		DarkModeInactive:  wt,
-		LightModeActive:   wt,
-		LightModeInactive: wt,
-	}
 }
 
 // getLiveUpdaterWindow 返回存活的更新窗口句柄：若窗口尚未创建、或已被用户

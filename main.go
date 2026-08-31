@@ -358,6 +358,19 @@ func main() {
 		}()
 	})
 
+	// 三个常驻窗口（设置 / 翻译 / 截图）原生标题栏基调：
+	// 创建时按“应用内主题”设置，与更新窗口（pkg/wails-updater-providers）保持一致。
+	// beta.15 的 Wails 在 Go/前端 runtime 均无“运行时切换常驻窗口主题”的公开 API，
+	// 故这里只保证“启动时跟随应用内主题”；运行时实时跟随由前端 theme store 尝试调用
+	// window.runtime.Window.SetDarkTheme 等完成（若运行时支持）。
+	startupDark := resolveUpdaterTheme(settingsService.Get().Theme, app) == "dark"
+	macAppearance := application.NSAppearanceNameAqua
+	winTheme := application.Light
+	if startupDark {
+		macAppearance = application.NSAppearanceNameDarkAqua
+		winTheme = application.Dark
+	}
+
 	// 主窗口（设置页作为主界面，启动即显示）
 	settingsWindow = app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:   model.WindowSettings,
@@ -365,8 +378,12 @@ func main() {
 		Width:  1280,
 		Height: 800,
 		URL:    "/settings.html",
+		Mac: application.MacWindow{
+			Appearance: macAppearance,
+		},
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
+			Theme:           winTheme,
 		},
 		// 标题栏 最小化/最大化/关闭按钮
 		MinimiseButtonState: application.ButtonHidden,
@@ -390,8 +407,12 @@ func main() {
 		MaxWidth:  420,
 		MinHeight: 520,
 		URL:       "/translate.html",
+		Mac: application.MacWindow{
+			Appearance: macAppearance,
+		},
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
+			Theme:           winTheme,
 		},
 		// 标题栏 最小化/最大化/关闭按钮
 		MinimiseButtonState: application.ButtonEnabled,
@@ -419,8 +440,12 @@ func main() {
 		MinWidth:  600,
 		MinHeight: 400,
 		URL:       "/screenshot.html",
+		Mac: application.MacWindow{
+			Appearance: macAppearance,
+		},
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
+			Theme:           winTheme,
 		},
 		// 标题栏 最小化/最大化/关闭按钮
 		MinimiseButtonState: application.ButtonEnabled,

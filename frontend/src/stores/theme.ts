@@ -1,5 +1,5 @@
 import { writable, derived, get } from 'svelte/store';
-import { onEvent, System } from '../runtime';
+import { onEvent, System, Window } from '../runtime';
 import { EventLocaleChanged, EventThemeChanged, type ThemeChangedPayload } from '../utils/events';
 import { GetTheme, SetTheme } from '@bindings/cnb.cool/dtapp/kai/internal/service/configwrapper.ts';
 import { THEME, type ThemeMode, type ResolvedTheme } from '../constants/theme';
@@ -53,6 +53,7 @@ export async function initTheme(): Promise<void> {
   }
 
   applyClass();
+  applyNativeTheme();
 
   unregister.forEach((u) => u());
   unregister = [];
@@ -67,6 +68,7 @@ export async function initTheme(): Promise<void> {
         systemDark.set(data.theme === THEME.Dark);
       }
       applyClass();
+      applyNativeTheme();
     }),
   );
   unregister.push(onEvent(EventLocaleChanged, () => applyClass()));
@@ -82,6 +84,30 @@ export async function setTheme(mode: ThemeMode): Promise<void> {
   applyClass();
   try {
     await SetTheme(mode);
+  } catch {
+    // ignore
+  }
+}
+
+// 将应用内主题应用到原生标题栏（macOS 红绿灯/标题、Windows 标题栏）。
+// 注意：beta.15 的 Wails 在 Go 与前端 runtime 均未声明“运行时切换常驻窗口主题”的公开 API，
+// 这里尝试调用 window.runtime.Window 的主题方法；若运行时支持则实时跟随，
+// 不支持则静默跳过（窗口创建时的初始 Theme 兜底）。
+function applyNativeTheme(): void {
+  const mode = get(themeMode);
+  const w = Window as unknown as {
+    SetSystemDefaultTheme?: () => void | Promise<void>;
+    SetDarkTheme?: () => void | Promise<void>;
+    SetLightTheme?: () => void | Promise<void>;
+  };
+  try {
+    if (mode === THEME.Auto) {
+      w.SetSystemDefaultTheme?.();
+    } else if (mode === THEME.Dark) {
+      w.SetDarkTheme?.();
+    } else if (mode === THEME.Light) {
+      w.SetLightTheme?.();
+    }
   } catch {
     // ignore
   }

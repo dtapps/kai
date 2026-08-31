@@ -368,9 +368,9 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
 		},
-		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
-		MinimiseButtonState: application.ButtonEnabled,
-		MaximiseButtonState: application.ButtonEnabled,
+		// 标题栏 最小化/最大化/关闭按钮
+		MinimiseButtonState: application.ButtonHidden,
+		MaximiseButtonState: application.ButtonHidden,
 		CloseButtonState:    application.ButtonEnabled,
 	})
 	_ = settingsWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
@@ -393,9 +393,9 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
 		},
-		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
+		// 标题栏 最小化/最大化/关闭按钮
 		MinimiseButtonState: application.ButtonEnabled,
-		MaximiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonHidden,
 		CloseButtonState:    application.ButtonEnabled,
 	})
 	// 禁用 Hidden:true 创建，改为创建后即 Hide()，避免 Windows 上
@@ -422,9 +422,9 @@ func main() {
 		Windows: application.WindowsWindow{
 			HiddenOnTaskbar: false,
 		},
-		// Windows 标题栏三个按钮全部启用（最小化/最大化/关闭）
+		// 标题栏 最小化/最大化/关闭按钮
 		MinimiseButtonState: application.ButtonEnabled,
-		MaximiseButtonState: application.ButtonEnabled,
+		MaximiseButtonState: application.ButtonHidden,
 		CloseButtonState:    application.ButtonEnabled,
 	})
 	// 创建即 Hide：完成真实初始化（建 impl + 加载 WebView + 设 Shadow/AlwaysOnTop）后隐藏，

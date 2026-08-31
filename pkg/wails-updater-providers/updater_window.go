@@ -114,9 +114,9 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 			HiddenOnTaskbar: true,
 			CustomTheme:     winTheme,
 		},
-		// 红绿灯按钮：禁用（灰显不可点）最小化/最大化，保留关闭（可见可用）。
-		MinimiseButtonState: application.ButtonDisabled,
-		MaximiseButtonState: application.ButtonDisabled,
+		// 标题栏 最小化/最大化/关闭按钮
+		MinimiseButtonState: application.ButtonHidden,
+		MaximiseButtonState: application.ButtonHidden,
 		CloseButtonState:    application.ButtonEnabled,
 		// 始终保持在应用其他窗口之上（不抢占其他前台 app）。
 		AlwaysOnTop: true,

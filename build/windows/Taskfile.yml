@@ -75,14 +75,8 @@ tasks:
     internal: true
     dir: '{{.ROOT_DIR}}'
     cmds:
-      - cmd: scripts\merge-go-i18n.cmd
-        platforms: [windows]
-      - cmd: bash ./scripts/merge-go-i18n.sh
-        platforms: [linux, darwin]
-      - cmd: scripts\merge-frontend-i18n.cmd
-        platforms: [windows]
-      - cmd: bash ./scripts/merge-frontend-i18n.sh
-        platforms: [linux, darwin]
+      - cmd: powershell -Command "& './scripts/merge-go-i18n.cmd'"
+      - cmd: powershell -Command "& './scripts/merge-frontend-i18n.cmd'"
 
   build:docker:
     summary: Cross-compiles for Windows using Docker with Zig (for CGO builds on non-Windows)

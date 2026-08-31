@@ -16,15 +16,19 @@ for %%L in (zh-CN en-US) do (
         echo error: directory not found: !SPLIT_LOCALE_DIR!
         exit /b 1
     )
-    
+
+    REM Windows 下 jq 不展开 glob，用 for 收集所有 json 文件路径
+    set "FILES="
+    for %%F in ("!SPLIT_LOCALE_DIR!\*.json") do set "FILES=!FILES! %%F"
+
     REM 用 jq 合并 split 目录下的所有 json
-    jq -s "reduce .[] as $f ({}; . * $f)" "!SPLIT_LOCALE_DIR!\*.json" > "%TEMP%\i18n-%%L-merged.json"
-    
+    jq -s "reduce .[] as $f ({}; . * $f)" !FILES! > "%TEMP%\i18n-%%L-merged.json"
+
     REM 添加注释头并按键排序
     jq "to_entries | ([{\"key\":\"_comment\",\"value\":\"⚠️ 此文件由 scripts/merge-go-i18n.cmd 自动生成，请勿手动编辑！修改请编辑 split/ 目录下的文件后重新合并。\"}] + .) | sort_by(.key) | from_entries" "%TEMP%\i18n-%%L-merged.json" > "!LOCALES_DIR!\%%L.json"
-    
+
     del "%TEMP%\i18n-%%L-merged.json" 2>nul
-    
+
     for /f %%A in ('jq "length" "!LOCALES_DIR!\%%L.json"') do (
         echo   -^> internal\i18n\locales\%%L.json %%A keys
     )

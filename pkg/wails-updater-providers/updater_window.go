@@ -113,7 +113,10 @@ func recreateNativeWindow(app *application.App, h *updaterWindow, show bool) {
 			Appearance: appearance,
 		},
 		Windows: application.WindowsWindow{
-			HiddenOnTaskbar: true,
+			// 与 settings/translate/screenshot 一致设为 false。Windows 上
+			// true 会让窗口带上 WS_EX_TOOLWINDOW（工具窗口），其原生标题栏
+			// 高度与关闭按钮样式与别的普通窗口不一致；false 使标题栏表现对齐主窗口。
+			HiddenOnTaskbar: false,
 			Theme:           winTheme,
 		},
 		// 标题栏 最小化/最大化/关闭按钮：与主窗口（settings）完全一致

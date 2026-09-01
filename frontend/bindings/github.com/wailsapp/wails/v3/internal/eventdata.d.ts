@@ -15,6 +15,7 @@ import type * as model$0 from "../../../../../cnb.cool/dtapp/kai/internal/model/
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "kai:auto-clipboard:changed": boolean;
             "kai:hotkeys:changed": string[] | null;
             "kai:input:fill": string;
             "kai:locale:changed": events$0.LocaleChangedPayload;
@@ -23,6 +24,7 @@ declare module "@wailsio/runtime" {
             "kai:screenshot:retranslate": events$0.ScreenshotRetranslatePayload;
             "kai:theme:changed": events$0.ThemeChangedPayload;
             "kai:translate:result": model$0.TranslateResult;
+            "kai:window:closing": string;
             "kai:window:screenshot": {};
             "kai:window:show": string;
         }

@@ -91,13 +91,24 @@ func (h *Manager) TriggerInput() {
 	if w == nil {
 		return
 	}
+	cfg := h.settingsSvc.Get()
 	switch {
-	case h.settingsSvc.Get().ExecKeys.Copy.Key != "" && h.settingsSvc.Get().ExecKeys.Copy.Enabled:
+	case cfg.AutoClipboard:
+		// 自动剪贴板模式：用户已自行复制，按下快捷键（即「输入翻译」键）直接读剪贴板内容并翻译。
+		// 不模拟复制、不动选区、不破坏用户剪贴板，避免与原复制键双重触发。
+		text := h.execKeyCtrl.ReadClipboard()
+		h.log.Info(i18n.T("log.hotkey_read_clipboard"), slog.String(i18n.T("log.field_source"), i18n.T("log.source_auto_clipboard")), slog.Int(i18n.T("log.field_length"), len(text)), slog.String(i18n.T("log.field_content"), text))
+		w.Show()
+		w.Focus()
+		if text != "" {
+			h.app.Event.Emit(events.EventInputFill, text)
+		}
+	case cfg.ExecKeys.Copy.Key != "" && cfg.ExecKeys.Copy.Enabled:
 		// 复制键分支：顺序严格为「先模拟 Cmd+C 复制 → 再 Show/Focus」。
 		// 若先 Focus，焦点切到 Kai，模拟的 Cmd+C 落在 Kai 窗口（无选中内容），
 		// 剪贴板仍是旧值，导致取到错误内容。
 		sel := h.execKeyCtrl.CopySelection()
-		h.log.Info(i18n.T("log.hotkey_read_clipboard"), slog.String(i18n.T("log.field_source"), "唤起主窗口模拟复制"), slog.Int(i18n.T("log.field_length"), len(sel)), slog.String(i18n.T("log.field_content"), sel))
+		h.log.Info(i18n.T("log.hotkey_read_clipboard"), slog.String(i18n.T("log.field_source"), i18n.T("log.source_copy_key")), slog.Int(i18n.T("log.field_length"), len(sel)), slog.String(i18n.T("log.field_content"), sel))
 		w.Show()
 		w.Focus()
 		if sel != "" {

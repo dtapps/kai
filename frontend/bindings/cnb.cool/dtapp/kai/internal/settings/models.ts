@@ -189,6 +189,18 @@ export interface Settings {
     "execkeys": ExecKeyConfig;
 
     /**
+     * AutoClipboard 输入翻译窗口「自动读取剪贴板并翻译」开关。开启时前端轮询系统剪贴板，
+     * 内容变化即填入输入框翻译；同时自动关闭复制键（避免双重触发），原复制键状态存 CopyKeySnapshot。
+     */
+    "auto_clipboard": boolean;
+
+    /**
+     * CopyKeySnapshot 开启 AutoClipboard 时记录的复制键原状态（enabled/fallback），
+     * 关闭 AutoClipboard 时据此恢复；未开启时为 nil。
+     */
+    "copy_key_snapshot": ExecKeyEntry | null;
+
+    /**
      * TTS 语音合成配置。
      */
     "tts": TTSConfig;

@@ -84,6 +84,8 @@ func init() {
 	application.RegisterEvent[kevents.LocaleChangedPayload](kevents.EventLocaleChanged)
 	application.RegisterEvent[kevents.ThemeChangedPayload](kevents.EventThemeChanged)
 	application.RegisterEvent[string](kevents.EventWindowShow)
+	application.RegisterEvent[string](kevents.EventWindowClosing)
+	application.RegisterEvent[bool](kevents.EventAutoClipboardChanged)
 	application.RegisterEvent[[]string](kevents.EventHotkeysChanged)
 	application.RegisterEvent[string](kevents.EventInputFill)
 	application.RegisterEvent[model.TranslateResult](kevents.EventTranslateResult)
@@ -427,6 +429,11 @@ func main() {
 	// 窗口不被销毁，随时可再次 Show。
 	_ = translateWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
+		// 红 X = 隐藏窗口（不退出）：先广播 kai:window:closing 让前端清空翻译输入/结果，
+		// 再 Hide。窗口不销毁（Svelte 组件仍挂载），下次唤出时是干净状态。
+		if app != nil {
+			app.Event.Emit(kevents.EventWindowClosing, model.WindowTranslate)
+		}
 		translateWindow.Hide()
 	})
 	translateWindow.Center()
@@ -457,6 +464,11 @@ func main() {
 	screenshotWindow.Hide()
 	_ = screenshotWindow.RegisterHook(events.Common.WindowClosing, func(event *application.WindowEvent) {
 		event.Cancel()
+		// 红 X = 隐藏窗口（不退出）：先广播 kai:window:closing 让前端清空截图与译文，
+		// 再 Hide。窗口不销毁（Svelte 组件仍挂载），下次唤出时是干净状态。
+		if app != nil {
+			app.Event.Emit(kevents.EventWindowClosing, model.WindowScreenshot)
+		}
 		screenshotWindow.Hide()
 	})
 	registerTray(app, hm, configSvc, settingsService)

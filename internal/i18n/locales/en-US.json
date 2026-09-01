@@ -261,6 +261,8 @@
   "log.service_load_engine_list_fallback": "Failed to load engine list, falling back to registry order",
   "log.service_read_engine_config_failed": "Failed to read engine config",
   "log.single_instance_second_launch": "Another Kai instance detected, brought its main window to front",
+  "log.source_auto_clipboard": "Auto clipboard hotkey",
+  "log.source_copy_key": "Show main window (simulated copy)",
   "log.swiftbridge_loaded": "[dynamic-bridge] Swift bridge loaded",
   "log.swiftbridge_unavailable": "[dynamic-bridge] Swift bridge unavailable (dylib not loaded), feature degraded",
   "log.translate_engine_cost": "[translate] engine cost engine={{.Engine}} ms={{.Ms}} ok={{.Ok}} err={{.Err}}",

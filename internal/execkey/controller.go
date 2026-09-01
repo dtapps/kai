@@ -75,3 +75,10 @@ func (e *ExecKeyController) CopySelection() string {
 	}
 	return text
 }
+
+// ReadClipboard 直接读取系统剪贴板当前内容（不经过模拟复制 / 备份还原）。
+// 供「自动剪贴板」模式下的快捷键分支使用：用户已自行复制，按下快捷键即读剪贴板翻译，
+// 不动选区、不破坏用户剪贴板。
+func (e *ExecKeyController) ReadClipboard() string {
+	return e.selection.ReadClipboardText()
+}

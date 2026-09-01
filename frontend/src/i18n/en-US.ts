@@ -63,6 +63,7 @@ export const en: Dict = {
     history: 'History',
     pin: 'Pin window',
     unpin: 'Unpin window',
+    autoClipboard: 'Translate clipboard via hotkey',
   },
   settings: {
     title: 'Settings',
@@ -184,6 +185,9 @@ export const en: Dict = {
     hkScreenshot: 'Screenshot translate',
     hkCopy: 'Copy key',
     hkCopyFallback: 'Fall back to system default copy key on failure',
+    hkCopyEnable: 'Enable',
+    hkCopyFallbackShort: 'Fallback',
+    copyKeyDisabledHint: 'Auto clipboard translate is on; copy key is auto-disabled',
     hkFormatHint:
       'Example: Alt+A, Cmd+Shift+S (join modifiers with +). Or click "Record" then press the combo.',
     hkRecord: 'Record',
@@ -293,6 +297,7 @@ export const en: Dict = {
   log: {
     restorePinFailed: '[input] Failed to restore pin state',
     readDefaultLangFailed: '[input] Failed to read default language',
+    autoClipboardLoadFailed: '[auto-clipboard] Failed to load toggle state',
     persistLangPrefFailed: '[input] Failed to persist language preference',
     loadEngineListFailed: '[input] Failed to load engine list',
     loadLangListFailed: '[input] Failed to load language list',

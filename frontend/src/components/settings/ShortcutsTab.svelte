@@ -13,6 +13,8 @@
   } from '@bindings/cnb.cool/dtapp/kai/internal/service/appservice.ts';
   import { Dialogs } from '@wailsio/runtime';
   import { isMac as detectMac } from '../../runtime/platform';
+  import { onEvent } from '../../runtime';
+  import { EventAutoClipboardChanged } from '../../utils/events';
 
   // 单个注册类快捷键的表单形态（按键 + 启用状态），与后端 HotkeyEntry 对齐。
   type HotkeyEntry = { key: string; enabled: boolean };
@@ -49,6 +51,9 @@
   // 录制态：正在捕获按键的快捷键字段名（null 表示未录制）。注册键与执行键分两个分类。
   type RecordableKey = keyof HotkeyForm | keyof ExecKeyForm;
   let recordingKey = $state<RecordableKey | null>(null);
+
+  // 自动剪贴板翻译开启时，复制键被自动关闭（避免双重触发），此处禁止在设置页修改复制键。
+  let copyDisabled = $state(false);
 
   // 授权卡片仅 macOS 需要（辅助功能 / 屏幕录制均为 macOS TCC 权限）。
   // Windows 复制键走 makc 调用 user32.dll、全局热键走 RegisterHotKey，均无需用户授权；
@@ -167,13 +172,32 @@
   }
 
   function startRecord(key: keyof HotkeyForm | 'copy') {
+    // 复制键被自动剪贴板锁定（copyDisabled）时禁止录制，作为 disabled 属性的兜底，
+    // 防止极端情况下点击穿透导致复制键被修改。
+    if (key === 'copy' && copyDisabled) return;
     recordingKey = key;
   }
 
   onMount(() => {
     loadShortcuts();
     loadShortcutPermissions();
+    // 翻译窗口切换自动剪贴板开关时，实时禁用/恢复本页复制键控件。
+    const offAuto = onEvent(EventAutoClipboardChanged, (enabled: boolean) => {
+      copyDisabled = enabled;
+    });
+    return () => offAuto();
   });
+
+  // 仅靠跨窗口事件可能收不到（多窗口隔离），故窗口重新获得焦点时（如从翻译窗切回设置页）
+  // 再读一次 GetConfig，确保自动剪贴板状态已同步，复制键控件正确进入/退出禁用态。
+  async function refreshCopyDisabled() {
+    try {
+      const cfg = await GetConfig();
+      if (cfg) copyDisabled = !!cfg.auto_clipboard;
+    } catch (e) {
+      console.error(t('log.shortcutLoadConfigFailed'), e);
+    }
+  }
 
   async function loadShortcuts() {
     try {
@@ -192,6 +216,7 @@
             fallback: ek.copy?.fallback ?? true,
           },
         };
+        copyDisabled = !!cfg.auto_clipboard;
       }
     } catch (e) {
       console.error(t('log.shortcutLoadConfigFailed'), e);
@@ -226,7 +251,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onHotkeyKeydown} />
+<svelte:window onkeydown={onHotkeyKeydown} onfocus={refreshCopyDisabled} />
 
 <header class="mb-6">
   <h1 class="text-2xl font-semibold">{t('settings.shortcutsTitle')}</h1>
@@ -352,7 +377,7 @@
   {/each}
   <div class="flex items-center justify-between gap-4 border-t pt-4">
     <label class="text-sm font-medium" for="hk-copy">{t('settings.hkCopy')}</label>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       {#if recordingKey === 'copy'}
         <span class="u-field w-56 px-3 py-1.5 text-sm u-text-warn">{t('settings.hkRecording')}</span
         >
@@ -362,24 +387,39 @@
           class="u-field w-56 px-3 py-1.5 text-sm"
           placeholder={defaultExecKeys.copy.key}
           bind:value={execKeyForm.copy.key}
+          disabled={copyDisabled}
         />
       {/if}
       <button
         type="button"
         class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
         class:is-active={recordingKey === 'copy'}
+        disabled={copyDisabled}
         onclick={() => startRecord('copy')}>{t('settings.hkRecord')}</button
       >
-      <label class="u-switch" aria-label={t('settings.enabled')}>
-        <input type="checkbox" bind:checked={execKeyForm.copy.enabled} />
+      <label
+        class="u-switch"
+        class:is-disabled={copyDisabled}
+        aria-label={t('settings.hkCopyEnable')}
+      >
+        <input type="checkbox" bind:checked={execKeyForm.copy.enabled} disabled={copyDisabled} />
         <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
+        <span class="text-xs">{t('settings.hkCopyEnable')}</span>
       </label>
-      <label class="u-switch" aria-label={t('settings.hkCopyFallback')}>
-        <input type="checkbox" bind:checked={execKeyForm.copy.fallback} />
+      <label
+        class="u-switch"
+        class:is-disabled={copyDisabled}
+        aria-label={t('settings.hkCopyFallback')}
+      >
+        <input type="checkbox" bind:checked={execKeyForm.copy.fallback} disabled={copyDisabled} />
         <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
+        <span class="text-xs">{t('settings.hkCopyFallbackShort')}</span>
       </label>
     </div>
   </div>
+  {#if copyDisabled}
+    <p class="u-muted -mt-2 text-xs">{t('settings.copyKeyDisabledHint')}</p>
+  {/if}
   <p class="u-muted text-xs">{t('settings.hkFormatHint')}</p>
   <div class="flex justify-end pt-1">
     <button class="u-btn u-btn--primary px-4 py-1.5 text-sm" onclick={saveShortcuts}>

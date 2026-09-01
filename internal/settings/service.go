@@ -30,6 +30,12 @@ type Settings struct {
 	Hotkeys RegisteredHotkeyConfig `json:"hotkeys" mapstructure:"hotkeys"`
 	// ExecKeys 执行类快捷键（程序主动模拟按下，用于完成动作）。
 	ExecKeys ExecKeyConfig `json:"execkeys" mapstructure:"execkeys"`
+	// AutoClipboard 输入翻译窗口「自动读取剪贴板并翻译」开关。开启时前端轮询系统剪贴板，
+	// 内容变化即填入输入框翻译；同时自动关闭复制键（避免双重触发），原复制键状态存 CopyKeySnapshot。
+	AutoClipboard bool `json:"auto_clipboard" mapstructure:"auto_clipboard"`
+	// CopyKeySnapshot 开启 AutoClipboard 时记录的复制键原状态（enabled/fallback），
+	// 关闭 AutoClipboard 时据此恢复；未开启时为 nil。
+	CopyKeySnapshot *ExecKeyEntry `json:"copy_key_snapshot" mapstructure:"copy_key_snapshot"`
 	// TTS 语音合成配置。
 	TTS TTSConfig `json:"tts" mapstructure:"tts"`
 	// HttpLog HTTP 请求日志配置（暂不同步到前端 UI）。
@@ -327,6 +333,8 @@ func (s *Service) writeConfig() error {
 	w.Set("default_from", s.cfg.DefaultFrom)
 	w.Set("hotkeys", s.cfg.Hotkeys)
 	w.Set("execkeys", s.cfg.ExecKeys)
+	w.Set("auto_clipboard", s.cfg.AutoClipboard)
+	w.Set("copy_key_snapshot", s.cfg.CopyKeySnapshot)
 	w.Set("tts", s.cfg.TTS)
 	w.Set("http_log", s.cfg.HttpLog)
 	w.Set("log", s.cfg.Log)

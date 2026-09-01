@@ -5,7 +5,7 @@
   import { currentLang } from '../stores/ui';
   import { persisted, pinKey } from '../stores/persisted';
   import { rootStyleToStyle } from '../utils/style';
-  import { onEvent } from '../runtime';
+  import { onEvent, emitEvent } from '../runtime';
   import { Window, Clipboard } from '@wailsio/runtime';
 
   // 置顶状态持久化到 localStorage，重开窗口后保留。
@@ -20,12 +20,49 @@
       console.error('toggle pin failed', e);
     }
   }
+
+  // 自动读取剪贴板并翻译：开启后经 SaveConfig 把复制键（execkeys.copy.enabled/fallback）
+  // 置 false 并记录快照，关闭时恢复，避免与复制键双重触发。开关状态持久化在 settings.json
+  // （auto_clipboard）。开启后按下「输入翻译」快捷键即由后端直接读取系统剪贴板并翻译，
+  // 不再由前端轮询。
+  let autoClipboard = $state(false);
+
+  async function applyAutoClipboard(next: boolean) {
+    // 必须用完整 Settings 保存，否则 SaveConfig 会把其它字段清零。
+    const cfg = (await GetConfig()) ?? ({} as any);
+    if (next) {
+      // 仅在尚无快照时记录（防重复快照），并关闭复制键两个开关。
+      if (!cfg.copy_key_snapshot && cfg.execkeys?.copy) {
+        cfg.copy_key_snapshot = { ...cfg.execkeys.copy };
+      }
+      if (cfg.execkeys?.copy) {
+        cfg.execkeys.copy.enabled = false;
+        cfg.execkeys.copy.fallback = false;
+      }
+      cfg.auto_clipboard = true;
+    } else {
+      // 恢复复制键原状态并清掉快照。
+      if (cfg.copy_key_snapshot && cfg.execkeys?.copy) {
+        cfg.execkeys.copy.enabled = cfg.copy_key_snapshot.enabled;
+        cfg.execkeys.copy.fallback = cfg.copy_key_snapshot.fallback;
+      }
+      cfg.copy_key_snapshot = null;
+      cfg.auto_clipboard = false;
+    }
+    await SaveConfig(cfg as any);
+    autoClipboard = next;
+    // 广播给设置页，实时禁用/恢复复制键开关。
+    emitEvent(EventAutoClipboardChanged, next);
+  }
+
   import {
     EventTranslateResult,
     EventInputFill,
     EventWindowClosing,
     EventEnginesChanged,
+    EventAutoClipboardChanged,
   } from '../utils/events';
+  import { WindowTranslate } from '../constants/window';
   import type { TranslateResult } from '@bindings/cnb.cool/dtapp/kai/internal/model/models.ts';
   import type {
     EngineListItem,
@@ -208,7 +245,9 @@
       input = text;
       doTranslate();
     });
-    const offClosing = onEvent(EventWindowClosing, () => {
+    const offClosing = onEvent(EventWindowClosing, (name: string) => {
+      // 全局广播：只处理本窗口（translate）的关闭，避免关闭别的窗口误清空翻译。
+      if (name !== WindowTranslate) return;
       results = {};
       input = '';
       loading = false;
@@ -238,6 +277,15 @@
       // 必须先等引擎/语言/默认值加载完（影响结果区占位卡片数量），否则首屏测量时
       // activeEngines 为空会走 RESULT_MIN 算出一个过矮的窗口，之后不一定能纠正。
       await Promise.all([loadDefaults(), loadEngines(), loadLanguages()]);
+      // 载入「自动读取剪贴板翻译」开关（持久化在 settings.json），开启后由后端快捷键触发读剪贴板。
+      try {
+        const cfg = await GetConfig();
+        if (cfg?.auto_clipboard) {
+          autoClipboard = true;
+        }
+      } catch (e) {
+        console.error(t('log.autoClipboardLoadFailed'), e);
+      }
       // 首屏主动计算一次高度：等引擎列表渲染进结果区后，用真实测量得到准确窗口高。
       tick().then(async () => {
         await tick();
@@ -451,6 +499,28 @@
                 <path
                   d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"
                 />
+              </svg>
+            </button>
+            <button
+              class="u-icon-btn u-icon-btn--sm u-no-drag"
+              class:u-icon-btn--active={autoClipboard}
+              onclick={() => applyAutoClipboard(!autoClipboard)}
+              aria-label={t('translate.autoClipboard')}
+              title={t('translate.autoClipboard')}
+            >
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              >
+                <rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect>
+                <path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"
+                ></path>
               </svg>
             </button>
           </div>

@@ -60,6 +60,7 @@ export const zh = {
     history: '历史',
     pin: '窗口置顶',
     unpin: '取消置顶',
+    autoClipboard: '按快捷键读取剪贴板翻译',
   },
   settings: {
     title: '设置',
@@ -177,6 +178,9 @@ export const zh = {
     hkScreenshot: '截图翻译',
     hkCopy: '复制键',
     hkCopyFallback: '复制失败时回退使用系统默认复制键',
+    hkCopyEnable: '启用',
+    hkCopyFallbackShort: '兜底',
+    copyKeyDisabledHint: '自动剪贴板翻译已开启，复制键已自动关闭',
     hkFormatHint:
       '格式示例：Alt+A、Cmd+Shift+S（多个修饰键用 + 连接）。也可点击「录制」后直接按下组合键。',
     hkRecord: '录制',
@@ -283,6 +287,7 @@ export const zh = {
   log: {
     restorePinFailed: '[输入翻译] 恢复置顶状态失败',
     readDefaultLangFailed: '[输入翻译] 读取默认语言失败',
+    autoClipboardLoadFailed: '[自动剪贴板] 载入开关状态失败',
     persistLangPrefFailed: '[输入翻译] 持久化语言偏好失败',
     loadEngineListFailed: '[输入翻译] 加载引擎列表失败',
     loadLangListFailed: '[输入翻译] 加载语言列表失败',

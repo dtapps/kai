@@ -7,8 +7,10 @@
     EventScreenshotOCR,
     EventScreenshotRecapture,
     EventScreenshotRetranslate,
+    EventWindowClosing,
     ScreenshotSessionScreenshot,
   } from '../utils/events';
+  import { WindowScreenshot } from '../constants/window';
   import TranslateCard from './TranslateCard.svelte';
   import {
     TRANSLATE_LANG,
@@ -213,6 +215,14 @@
     }
   });
 
+  // 监听本窗口（screenshot）关闭事件：原生红 X → 后端 WindowClosing hook 广播
+  // EventWindowClosing，这里按窗口名过滤后清空截图与译文，下次打开是干净窗口。
+  const offClosing = onEvent(EventWindowClosing, (name: string) => {
+    if (name !== WindowScreenshot) return;
+    result = null;
+    if (imgEl) imgEl.src = '';
+  });
+
   onMount(async () => {
     console.debug(t('log.screenshotLogMounted'));
     loadDefaults().then(() => {
@@ -234,6 +244,7 @@
     }
     return () => {
       off();
+      offClosing();
     };
   });
 </script>

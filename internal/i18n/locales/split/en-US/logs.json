@@ -72,6 +72,8 @@
   "log.copykey_exec_makc_done": "[CopyKey] Execute hotkey done (makc injected combo)",
   "log.copykey_exec_makc_default_done": "[CopyKey] Default copy key executed (makc Ctrl+C)",
   "log.hotkey_read_clipboard": "[Hotkey] Copy key read clipboard content",
+  "log.source_auto_clipboard": "Auto clipboard hotkey",
+  "log.source_copy_key": "Show main window (simulated copy)",
   "log.hotkey_trigger": "[Hotkey] Hotkey triggered",
   "log.hotkey_register_failed": "[Hotkey] Failed to register hotkey",
   "log.hotkey_registered": "[Hotkey] Hotkey registered",

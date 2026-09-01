@@ -7,6 +7,12 @@ const (
 	// EventWindowShow 前端呼出窗口，payload: string（"settings" | "main"）
 	EventWindowShow = "kai:window:show"
 
+	// EventWindowClosing 窗口关闭（原生红 X / 自定义标题栏关闭）被触发时广播，
+	// 各窗口按需清理自身状态（如翻译窗口清空输入与结果）。payload: 窗口名（model.WindowTranslate 等），
+	// 各窗口只处理自身关闭，避免关闭别的窗口误清空。
+	// 与前端 frontend/src/utils/events.ts 的 EventWindowClosing 对齐，是单一真相源。
+	EventWindowClosing = "kai:window:closing"
+
 	// EventLocaleChanged 界面语言变更后广播，payload: LocaleChangedPayload
 	EventLocaleChanged = "kai:locale:changed"
 
@@ -40,6 +46,11 @@ const (
 	// 重新拉取引擎列表。payload: EngineChangedPayload（变更引擎 ID + 启用态）。
 	// 与前端 frontend/src/utils/events.ts 的 EventEnginesChanged 对齐，是单一真相源。
 	EventEnginesChanged = "kai:engines:changed"
+
+	// EventAutoClipboardChanged 输入翻译窗口「自动读取剪贴板翻译」开关状态变化后广播。
+	// payload: bool（开启=true / 关闭=false）。设置页据此实时禁用/恢复复制键两个开关。
+	// 与前端 frontend/src/utils/events.ts 的 EventAutoClipboardChanged 对齐，是单一真相源。
+	EventAutoClipboardChanged = "kai:auto-clipboard:changed"
 )
 
 // 截图/OCR 缓存的 session 标识：区分不同入口，避免互相覆盖。

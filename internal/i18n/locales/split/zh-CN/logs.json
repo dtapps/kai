@@ -72,6 +72,8 @@
   "log.copykey_exec_makc_done": "[复制键] 执行快捷键完成（makc 注入组合键）",
   "log.copykey_exec_makc_default_done": "[复制键] 执行默认复制键完成（makc Ctrl+C）",
   "log.hotkey_read_clipboard": "[快捷键] 复制键读取剪贴板内容",
+  "log.source_auto_clipboard": "自动剪贴板快捷键",
+  "log.source_copy_key": "唤起主窗口模拟复制",
   "log.hotkey_trigger": "[快捷键] 快捷键触发",
   "log.hotkey_register_failed": "[快捷键] 注册快捷键失败",
   "log.hotkey_registered": "[快捷键] 已注册快捷键",

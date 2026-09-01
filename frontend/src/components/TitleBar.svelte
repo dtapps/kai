@@ -5,7 +5,7 @@
   import { EventWindowClosing } from '../utils/events';
   import { isMac } from '../runtime/platform';
 
-  let { onClose }: { onClose?: () => void } = $props();
+  let { onClose, windowName }: { onClose?: () => void; windowName?: string } = $props();
 
   // 平台判断统一走 runtime/platform（Wails v3 多窗口下 _wails 可能丢失，需 UA 兜底）。
   const isMacPlatform = isMac();
@@ -23,7 +23,7 @@
       onClose();
       return;
     }
-    emitEvent(EventWindowClosing);
+    emitEvent(EventWindowClosing, windowName);
     Window.Close();
   }
 </script>

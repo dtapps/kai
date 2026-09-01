@@ -90,6 +90,8 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	cur.Hotkeys = cfg.Hotkeys
 	cur.TTS = cfg.TTS
 	cur.ExecKeys = cfg.ExecKeys
+	cur.AutoClipboard = cfg.AutoClipboard
+	cur.CopyKeySnapshot = cfg.CopyKeySnapshot
 	if err := w.settingsSvc.Save(); err != nil {
 		return err
 	}

@@ -38,6 +38,10 @@ export const EventTranslateResult = 'kai:translate:result';
 // 无 payload（纯前端窗口间通知，各窗口自行重新拉取 GetEngines）。
 export const EventEnginesChanged = 'kai:engines:changed';
 
+// EventAutoClipboardChanged 输入翻译窗口「自动读取剪贴板翻译」开关状态变化后广播。
+// payload: boolean（开启=true / 关闭=false）。设置页据此实时禁用/恢复复制键两个开关。
+export const EventAutoClipboardChanged = 'kai:auto-clipboard:changed';
+
 // 事件 payload 类型定义（对齐 internal/events/events.go 的 Go 端结构体）
 
 // LocaleChangedPayload 语言变更事件参数。

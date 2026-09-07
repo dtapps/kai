@@ -6,7 +6,7 @@ ignore ./frontend
 
 require (
 	github.com/aiwaki/makc v0.2.0
-	github.com/anthropics/anthropic-sdk-go v1.68.0
+	github.com/anthropics/anthropic-sdk-go v1.70.1
 	github.com/ebitengine/purego v0.11.0
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0

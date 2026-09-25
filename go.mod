@@ -11,7 +11,7 @@ require (
 	github.com/ebitengine/purego v0.11.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0
-	github.com/go-vgo/robotgo v1.0.2
+	github.com/go-vgo/robotgo v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/openai/openai-go/v3 v3.64.0
@@ -80,6 +80,7 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
+	github.com/vcaesar/go-wayland v0.40.0 // indirect
 	github.com/vcaesar/gops v0.42.0 // indirect
 	github.com/vcaesar/imgo v0.42.0 // indirect
 	github.com/vcaesar/keycode v0.20.0 // indirect

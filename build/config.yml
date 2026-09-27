@@ -9,7 +9,7 @@ info:
   productName: "Kai" # The name of the application
   productIdentifier: "net.dtapp.kai" # The unique product identifier
   description: "常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。" # The application description
-  copyright: "(c) 2026, DTApp" # Copyright text
+  copyright: "(c) 2026, liguangchun" # Copyright text
   comments: "A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR." # Comments
   version: "0.0.1" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)

@@ -226,7 +226,7 @@ export interface Settings {
     "updater": UpdaterConfig;
 
     /**
-     * AnalyticsEnabled 匿名使用统计开关（默认开启）。关闭后不初始化 PostHog client、不上报任何数据。
+     * AnalyticsEnabled 匿名使用统计开关（默认关闭，opt-in）。开启后不初始化 PostHog client、不上报任何数据。
      * 配置文件与前端 UI 共用此字段（Go 读 settings.json，前端经 GetConfig/SaveConfig 读写）。
      */
     "analytics_enabled": boolean;

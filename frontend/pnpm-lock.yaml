@@ -167,8 +167,8 @@ importers:
   .:
     dependencies:
       '@wailsio/runtime':
-        specifier: 3.0.0-beta.24
-        version: 3.0.0-beta.24
+        specifier: 3.0.0-beta.25
+        version: 3.0.0-beta.25
     devDependencies:
       '@sveltejs/vite-plugin-svelte':
         specifier: ^7.3.0
@@ -569,8 +569,8 @@ packages:
     cpu: [x64]
     os: [win32]
 
-  '@wailsio/runtime@3.0.0-beta.24':
-    resolution: {integrity: sha512-lm4AjsohsTn6jheQ1QYCT3+7WG3QZM15R5mKVabSp2GyptjKFNLcOxCdp1+lbdQTxi0qEdTfEsjNezNQFNtjGw==}
+  '@wailsio/runtime@3.0.0-beta.25':
+    resolution: {integrity: sha512-VjymRlaTJWQULr94R4XivNypJUrWWxsNA+vi8aBhREri2JWg4UUJdMhBM9vzPC0cFWH3tioHNJgxpne36OynyA==}
 
   acorn@8.18.0:
     resolution: {integrity: sha512-lGq+9yr1/GuAWaVYIHRjvvySG5/4VfKIvC8EWxStPdcDh/Ka7FG3twP6v4d5BkravUilhIAsG4Qj83t02LWUPQ==}
@@ -1162,7 +1162,7 @@ snapshots:
   '@typescript/typescript-win32-x64@7.0.2':
     optional: true
 
-  '@wailsio/runtime@3.0.0-beta.24': {}
+  '@wailsio/runtime@3.0.0-beta.25': {}
 
   acorn@8.18.0: {}
 

@@ -17,7 +17,7 @@ require (
 	github.com/openai/openai-go/v3 v3.66.0
 	github.com/posthog/posthog-go v1.26.0
 	github.com/spf13/viper v1.21.0
-	github.com/wailsapp/wails/v3 v3.0.0-beta.24
+	github.com/wailsapp/wails/v3 v3.0.0-beta.27
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.48.0
 	golang.org/x/text v0.42.0

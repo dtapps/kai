@@ -11,7 +11,7 @@ require (
 	github.com/ebitengine/purego v0.11.1
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0
-	github.com/go-vgo/robotgo v1.1.0
+	github.com/go-vgo/robotgo v1.2.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
 	github.com/openai/openai-go/v3 v3.71.1
@@ -67,7 +67,7 @@ require (
 	github.com/power-devops/perfstat v0.0.0-20260916203055-22a1a467d9f0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
-	github.com/shirou/gopsutil/v4 v4.26.8 // indirect
+	github.com/shirou/gopsutil/v4 v4.26.9 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
@@ -81,10 +81,10 @@ require (
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
 	github.com/vcaesar/go-wayland v0.40.0 // indirect
-	github.com/vcaesar/gops v0.42.0 // indirect
-	github.com/vcaesar/imgo v0.42.0 // indirect
+	github.com/vcaesar/gops v0.43.0 // indirect
+	github.com/vcaesar/imgo v0.43.0 // indirect
 	github.com/vcaesar/keycode v0.20.0 // indirect
-	github.com/vcaesar/screenshot v0.11.1 // indirect
+	github.com/vcaesar/screenshot v0.30.0 // indirect
 	github.com/vcaesar/tt v0.40.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect

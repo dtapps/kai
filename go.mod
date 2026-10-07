@@ -14,7 +14,7 @@ require (
 	github.com/go-vgo/robotgo v1.1.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
-	github.com/openai/openai-go/v3 v3.70.0
+	github.com/openai/openai-go/v3 v3.71.1
 	github.com/posthog/posthog-go v1.32.0
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.27

@@ -1,11 +1,11 @@
 {
   "lang.auto": "Auto",
-  "lang.zh": "Chinese",
+  "lang.de": "German",
   "lang.en": "English",
+  "lang.es": "Spanish",
+  "lang.fr": "French",
   "lang.ja": "Japanese",
   "lang.ko": "Korean",
-  "lang.fr": "French",
-  "lang.de": "German",
-  "lang.es": "Spanish",
-  "lang.ru": "Russian"
+  "lang.ru": "Russian",
+  "lang.zh": "Chinese"
 }

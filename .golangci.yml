@@ -53,18 +53,18 @@ linters:
         text: 'G305|G110'
       # gosec G404 弱随机：基准/测试文件用 math/rand 是合理的
       - linters: [gosec]
-        path: "_test\\.go$"
+        path: '_test\.go$'
         text: 'G404'
       # gosec 弱加密：翻译引擎 API 签名强制要求（百度 md5 签名 + 有道随机 salt），不可改用强加密
       - linters: [gosec]
-        path: "internal/engine/baidu\\.go$"
+        path: 'internal/engine/baidu\.go$'
         text: 'G501|G401'
       - linters: [gosec]
-        path: "internal/engine/youdao\\.go$"
+        path: 'internal/engine/youdao\.go$'
         text: 'G404'
       # gosec G404 弱随机：启动更新检查的随机延迟抖动，无安全影响
       - linters: [gosec]
-        path: "main\\.go$"
+        path: 'main\.go$'
         text: 'G404'
       # errcheck: defer Close / 文件操作 / 日志写入忽略错误是常见写法
       - linters: [errcheck]
@@ -77,8 +77,8 @@ linters:
         text: 'must not be called'
       # ldflags 注入的变量，运行时使用
       - linters: [unused]
-        path: "main\\.go$"
+        path: 'main\.go$'
         text: 'buildTime|gitCommit'
       # wrapper 层把 Go error 转为 result.Error 返回给前端，不传播 error
       - linters: [nilerr]
-        path: "cert_service\\.go$"
+        path: 'cert_service\.go$'

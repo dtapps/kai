@@ -93,7 +93,7 @@ dev: ## 运行 Wails 开发模式
 
 # ==================== 格式化 / 修复 ====================
 
-format: format-go format-go-fix format-swift format-frontend format-i18n-go format-i18n-frontend format-json format-yaml format-markdown format-shell ## 格式化和修复（全部）
+format: format-go format-go-fix format-swift format-frontend format-i18n-go format-i18n-frontend format-json format-yaml format-markdown format-shell format-docker ## 格式化和修复（全部）
 
 format-go: ## 格式化 Go 代码
 	gofmt -w -s .
@@ -132,30 +132,38 @@ format-i18n-frontend: ## 格式化前端 i18n JSON 文件
 .PHONY: format-json
 format-json:
 	@echo "[Format] 格式化 JSON 文件..."
-	@command -v jq >/dev/null 2>&1 && { \
-		echo "[Format] 使用 jq 格式化 JSON..."; \
-		for f in frontend/tsconfig.json $(shell find internal/i18n/locales -type f -name '*.json'); do \
-			[ -f "$$f" ] && jq . "$$f" > "$$f.tmp" && mv "$$f.tmp" "$$f"; \
-		done; \
-		echo "[Format] JSON 格式化完成（jq）。" ; \
-	} || echo "⚠️  jq 未安装，跳过 JSON 格式化。"
+	@command -v gojq >/dev/null 2>&1 || { \
+		echo "⚠️  gojq 未安装，跳过 JSON 格式化。" ; \
+		echo "   提示: 可通过运行 'go install github.com/itchyny/gojq/cmd/gojq@latest' 安装" ; \
+		exit 0 ; \
+	}
+	@echo "[Format] 使用 gojq 格式化 JSON..."
+	@for f in frontend/tsconfig.json $(shell find internal/i18n/locales -type f -name '*.json'); do \
+		[ -f "$$f" ] || continue; \
+		if gojq . "$$f" > "$$f.tmp" 2>/dev/null; then \
+			mv "$$f.tmp" "$$f"; \
+		else \
+			echo "❌ gojq 格式化失败: $$f"; rm -f "$$f.tmp"; exit 1; \
+		fi; \
+	done
+	@echo "[Format] JSON 格式化完成（gojq）。"
 
 # 格式化 YAML 文件（.yaml/.yml）
 .PHONY: format-yaml
 format-yaml:
 	@echo "[Format] 格式化配置文件 (YAML)…"
-	@npx --yes prettier@latest \
-		--write \
-		--tab-width 2 \
-		--single-quote true \
-		--trailing-comma all \
-		--print-width 120 \
-		".cnb/**/*.{yaml,yml}" \
+	@command -v yamlfmt >/dev/null 2>&1 || { \
+		echo "⚠️  yamlfmt 未安装，跳过 YAML 格式化。" ; \
+		echo "   提示: 可通过运行 'go install github.com/google/yamlfmt/cmd/yamlfmt@latest' 安装" ; \
+		exit 0 ; \
+	}
+	@echo "[Format] 使用 yamlfmt 格式化 YAML..."
+	@yamlfmt -conf .yamlfmt \
+		".cnb" \
+		".github" \
 		".cnb.yml" \
-		".github/**/*.{yaml,yml}" \
-		".golangci.yml" \
-		|| echo "⚠️  prettier 格式化失败，请确认 npx 可用"
-	@echo "[Format] YAML 格式化完成。"
+		".golangci.yml" || { echo "❌ yamlfmt 格式化失败"; exit 1; }
+	@echo "[Format] YAML 格式化完成（yamlfmt）。"
 
 # 格式化 Markdown 文件（.md）
 .PHONY: format-markdown
@@ -167,20 +175,34 @@ format-markdown:
 		--print-width 120 \
 		--prose-wrap preserve \
 		"**/*.md" \
-		|| echo "⚠️  prettier 格式化失败，请确认 npx 可用"
+		|| { echo "❌ prettier 格式化 Markdown 失败，请确认 npx 可用"; exit 1; }
 	@echo "[Format] Markdown 格式化完成。"
 
 # 格式化 Shell 脚本（.sh）
 .PHONY: format-shell
 format-shell:
 	@echo "[Format] 格式化脚本 (Shell)…"
-	@command -v shfmt >/dev/null 2>&1 && { \
-		shfmt -w -i 2 -ci -bn -s -ln bash scripts/ pkg/swiftbridge/scripts/ ; \
-		echo "[Format] Shell 格式化完成（shfmt）。" ; \
-	} || { \
-		echo "⚠️  shfmt 未安装，跳过 Shell 格式化。"; \
-		echo "   提示: 可通过运行 'go install mvdan.cc/sh/v3/cmd/shfmt@latest' 安装"; \
+	@command -v shfmt >/dev/null 2>&1 || { \
+		echo "⚠️  shfmt 未安装，跳过 Shell 格式化。" ; \
+		echo "   提示: 可通过运行 'go install mvdan.cc/sh/v3/cmd/shfmt@latest' 安装" ; \
+		exit 0 ; \
 	}
+	@echo "[Format] 使用 shfmt 格式化 Shell..."
+	@shfmt -w -i 2 -ci -bn -s -ln bash scripts/ pkg/swiftbridge/scripts/ || { echo "❌ shfmt 格式化失败"; exit 1; }
+	@echo "[Format] Shell 格式化完成（shfmt）。"
+
+# 格式化 Dockerfile
+.PHONY: format-docker
+format-docker:
+	@echo "[Format] 格式化 Dockerfile..."
+	@command -v dockerfmt >/dev/null 2>&1 || { \
+		echo "⚠️  dockerfmt 未安装，跳过 Dockerfile 格式化。" ; \
+		echo "   提示: 可通过运行 'go install github.com/reteps/dockerfmt@latest' 安装" ; \
+		exit 0 ; \
+	}
+	@echo "[Format] 使用 dockerfmt 格式化 Dockerfile..."
+	@find .cnb -type f -name "Dockerfile*" -exec dockerfmt -w {} + || { echo "❌ dockerfmt 格式化失败"; exit 1; }
+	@echo "[Format] Dockerfile 格式化完成（dockerfmt）。"
 
 # ==================== 检查 / 测试 ====================
 
@@ -268,6 +290,26 @@ tool-deps: ## 工具依赖
 	go install golang.org/x/vuln/cmd/govulncheck@latest
 	-govulncheck version
 	@echo "==> govulncheck 工具安装或更新完成"
+
+	gojq --version || true
+	go install github.com/itchyny/gojq/cmd/gojq@latest
+	-gojq --version
+	@echo "==> gojq 工具安装或更新完成"
+
+	yamlfmt -version || true
+	go install github.com/google/yamlfmt/cmd/yamlfmt@latest
+	-yamlfmt -version
+	@echo "==> yamlfmt 工具安装或更新完成"
+
+	shfmt -version || true
+	go install mvdan.cc/sh/v3/cmd/shfmt@latest
+	-shfmt -version
+	@echo "==> shfmt 工具安装或更新完成"
+
+	dockerfmt version || true
+	go install github.com/reteps/dockerfmt@latest
+	-dockerfmt version
+	@echo "==> dockerfmt 工具安装或更新完成"
 
 deps: ## 安装所有依赖
 	@echo "==> 安装所有依赖..."

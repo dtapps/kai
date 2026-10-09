@@ -1,32 +1,32 @@
 {
-  "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
-    "target": "ESNext",
-    "useDefineForClassFields": true,
-    "module": "ESNext",
-    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "allowJs": true,
     "checkJs": true,
     "isolatedModules": true,
-    "moduleResolution": "bundler",
-    "strict": true,
-    "noEmit": true,
-    "skipLibCheck": true,
-    "allowImportingTsExtensions": true,
-    "types": [
-      "node"
-    ],
     "lib": [
       "ESNext",
       "DOM",
       "DOM.Iterable"
     ],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "noEmit": true,
     "paths": {
       "@bindings/*": [
         "./bindings/*"
       ]
-    }
+    },
+    "resolveJsonModule": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "target": "ESNext",
+    "types": [
+      "node"
+    ],
+    "useDefineForClassFields": true
   },
+  "extends": "@tsconfig/svelte/tsconfig.json",
   "include": [
     "src/**/*.ts",
     "src/**/*.js",

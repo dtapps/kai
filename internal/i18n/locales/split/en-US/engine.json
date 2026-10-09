@@ -1,14 +1,14 @@
 {
-  "engine.system": "System",
+  "engine.anthropic": "Anthropic",
+  "engine.baidu": "Baidu",
   "engine.deepl": "DeepL",
+  "engine.gemini": "Gemini",
   "engine.google": "Google",
   "engine.openai": "OpenAI",
-  "engine.anthropic": "Anthropic",
-  "engine.gemini": "Gemini",
-  "engine.baidu": "Baidu",
-  "engine.tencent": "Tencent",
-  "engine.youdao": "Youdao",
-  "engine.tesseract": "Tesseract",
   "engine.openai_prompt": "You are a translation engine. Translate the following text from %s to %s. Output only the translation, no explanation, no original text.\n\n%s",
-  "engine.openai_system": "You are a precise translation engine. Output only the translation."
+  "engine.openai_system": "You are a precise translation engine. Output only the translation.",
+  "engine.system": "System",
+  "engine.tencent": "Tencent",
+  "engine.tesseract": "Tesseract",
+  "engine.youdao": "Youdao"
 }

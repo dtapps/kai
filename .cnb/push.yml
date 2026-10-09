@@ -1,0 +1,43 @@
+'**':
+  push:
+    - runner:
+        tags: cnb:arch:amd64 # 指定 Runner 必须有这个标签
+      services:
+        - docker # 启用 Docker 服务（用于 docker build/push）
+      docker:
+        build: .cnb/Dockerfile # 使用自定义 Dockerfile
+        volumes:
+          - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
+          - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
+          - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具（wails3 等）
+      stages:
+        - name: 安装所有依赖
+          script: make deps
+
+        - name: 生成 Wails TypeScript 绑定
+          script: make bindings
+
+        - name: 生成图标资源
+          script: make icons
+
+        - name: 同步版本号/应用名到构建资源
+          script: make build-assets
+
+        - name: 生成 sqlc 代码
+          script: make sqlc
+
+        - name: 合并所有 i18n 拆分文件到主文件
+          script: make i18n
+
+        # main.go 用 `//go:embed all:frontend/dist` 嵌入前端构建产物；该目录被 .gitignore 忽略、
+        # 不进仓库，且检查类 CI 不执行 pnpm build，全新检出时不存在，会导致 go fix / go build /
+        # golangci-lint / go test 编译 main 包时因找不到嵌入目录而报错。这里创建占位目录（含一个
+        # 文件让 embed 的 all: 模式能匹配），仅用于让编译通过，不构建真实前端。
+        - name: 创建 frontend/dist 占位（供 //go:embed 解析）
+          script: mkdir -p frontend/dist && touch frontend/dist/index.html
+
+        - name: 格式化和修复（Go + Vue + TypeScript）
+          script: make format
+
+        - name: 检查和测试（Go + Vue + TypeScript）
+          script: make check

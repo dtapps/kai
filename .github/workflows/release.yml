@@ -30,7 +30,7 @@ on:
         type: boolean
         default: false
       nsis_version:
-        description: 'NSIS 版本号（例如 3.12，留空用默认 3.12）'
+        description: 'NSIS 版本号（例如 3.13，留空用默认 3.13）'
         required: false
         type: string
 
@@ -91,8 +91,9 @@ jobs:
       # 注入到 -ldflags。未配置对应 secret 时为空，生产包不注入 token（analytics 自动 no-op）。
       POSTHOG_TOKEN: ${{ secrets.POSTHOG_TOKEN }}
       POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
-      # NSIS 官方便携版版本号：引用 input，留空兜底默认 3.12；脚本只读此 env，单一真值来源。
-      NSIS_VERSION: ${{ inputs.nsis_version || '3.12' }}
+      # NSIS 官方便携版版本号：引用 input，留空兜底默认 3.13；脚本只读此 env，单一真值来源。
+      # https://nsis.sourceforge.io/Download
+      NSIS_VERSION: ${{ inputs.nsis_version || '3.13' }}
       # Windows Authenticode 签名所需的证书（未配置对应 secret 时签名步骤自动跳过）
       SIGN_CERTIFICATE: ${{ secrets.WINDOWS_SIGN_CERTIFICATE }}
       SIGN_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_SIGN_CERTIFICATE_PASSWORD }}
@@ -169,7 +170,8 @@ jobs:
       - name: 缓存 Go build 缓存
         uses: actions/cache@v6
         with:
-          path: ${{ runner.os == 'Windows' && format('{0}\\AppData\\Local\\go-build', env.HOME) || runner.os == 'macOS' && format('{0}/Library/Caches/go-build', env.HOME) || format('{0}/.cache/go-build', env.HOME) }}
+          path: ${{ runner.os == 'Windows' && format('{0}\\AppData\\Local\\go-build', env.HOME) || runner.os == 'macOS' &&
+            format('{0}/Library/Caches/go-build', env.HOME) || format('{0}/.cache/go-build', env.HOME) }}
           key: ${{ runner.os }}-${{ matrix.goarch }}-go-build-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-build-
@@ -403,7 +405,7 @@ jobs:
       #   run: |
       #     wails3 task ${{ matrix.goos }}:build ARCH=${{ matrix.goarch }} $BUILD_ARGS
 
-      - name: 打包（go-task / {{ matrix.goos }}）
+      - name: 打包（go-task / ${{ matrix.goos }}）
         shell: bash
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}

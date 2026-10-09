@@ -1,8 +1,27 @@
 # Kai
 
+[English](README_EN.md) | 中文
+
 常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。
 
-[English](./README_EN.md) | [中文](./README.md)
+<div align="center">
+
+[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases)
+[![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases)
+[![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers)
+[![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members)
+[![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai)
+[![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml)
+![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+
+[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link)
+[![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai)
+[![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai)
+[![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai)
+![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+
+</div>
 
 ## 1. 产品功能
 
@@ -79,5 +98,9 @@
 - **自定义标题栏需点击才能激活**：macOS 上自绘标题栏（frameless + 透明标题栏，用于跟随应用内浅/深主题）在窗口刚唤起时，红绿灯（关闭/最小化/全屏）偶尔需多点击一次才响应。这是 accessory 应用窗口激活时机的平台行为，激活后交互正常。
 
 ## 7. 致谢
+
+<a href="https://wails.io">
+  <img src="https://wails.io/img/wails-button-light.svg" width="90" height="24" alt="Built with Wails">
+</a>
 
 设计灵感参考 [Bob](https://github.com/ripperhe/Bob) 与 [Easydict](https://github.com/tisfeng/Easydict)。

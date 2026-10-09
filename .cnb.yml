@@ -1,5 +1,5 @@
-# include:
-#   - .cnb/push_request.yml
+include:
+  - .cnb/workflows/push.yml
 
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
 # 支持预发布：通过页面/API 传入 pre_release=true 即发布为预发布版本（原 nightly 能力已合并到此）。

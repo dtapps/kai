@@ -1,8 +1,27 @@
 # Kai
 
+English | [中文](README.md)
+
 A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR.
 
-[English](./README_EN.md) | [中文](./README.md)
+<div align="center">
+
+[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases)
+[![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases)
+[![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers)
+[![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members)
+[![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai)
+[![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml)
+![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+
+[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link)
+[![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai)
+[![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai)
+[![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai)
+![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+
+</div>
 
 ## 1. Features
 
@@ -79,5 +98,9 @@ See the `LICENSE` file in the repository.
 - **Custom title bar needs a click to activate**: On macOS, the custom-drawn title bar (frameless + transparent, used to follow the in-app light/dark theme) occasionally requires one extra click on the traffic lights (close/minimize/fullscreen) right after the window appears. This is platform behavior of an accessory app's window activation timing; interaction is normal once activated.
 
 ## 7. Acknowledgements
+
+<a href="https://wails.io">
+  <img src="https://wails.io/img/wails-button-light.svg" width="90" height="24" alt="Built with Wails">
+</a>
 
 Design inspired by [Bob](https://github.com/ripperhe/Bob) and [Easydict](https://github.com/tisfeng/Easydict).

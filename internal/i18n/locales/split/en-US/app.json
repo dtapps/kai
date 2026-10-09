@@ -1,10 +1,10 @@
 {
-  "app.name_version": "Kai {{.Version}}",
   "app.description": "Cross-platform Translate & OCR tool",
-  "window.translate_title": "Kai Translate",
-  "window.settings_title": "Kai Settings",
-  "window.selection_title": "Kai Selection",
-  "window.screenshot_title": "Kai Screenshot Translate",
+  "app.name_version": "Kai {{.Version}}",
+  "notification.update_available_subtitle": "New version {{.version}} found, click \"Check for Updates\" to install",
   "notification.update_available_title": "Kai update available",
-  "notification.update_available_subtitle": "New version {{.version}} found, click \"Check for Updates\" to install"
+  "window.screenshot_title": "Kai Screenshot Translate",
+  "window.selection_title": "Kai Selection",
+  "window.settings_title": "Kai Settings",
+  "window.translate_title": "Kai Translate"
 }

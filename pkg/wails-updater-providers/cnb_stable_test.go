@@ -2,6 +2,7 @@ package wails_updater_providers
 
 import (
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -71,7 +72,7 @@ func TestCNBStableNeedsUpdate(t *testing.T) {
 	if rel.Artifact.Filename != "updater-darwin-arm64.zip" {
 		t.Fatalf("期望选中 updater-darwin-arm64.zip，实际 %s", rel.Artifact.Filename)
 	}
-	if rel.Verification == nil || string(rel.Verification.Digest) != "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" {
+	if rel.Verification == nil || hex.EncodeToString(rel.Verification.Digest) != "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890" {
 		t.Fatalf("校验和未正确解析: %+v", rel.Verification)
 	}
 }

@@ -154,6 +154,10 @@ var i18nMessages = map[Locale]map[string]string{
 		"window_remind_later":                      "稍后提醒我",
 		"window_install_update":                    "安装更新",
 		"window_try_again":                         "重试",
+		"updater_download_proxy_fallback":          "下载中转失败，回退源站直连：{{.URL}}（{{.Error}}）",
+		"updater_download_done":                    "下载完成：{{.URL}}（{{.Size}} 字节）",
+		"updater_err_download_tmpdir":              "创建下载临时目录失败",
+		"updater_err_download_tmpfile":             "创建下载临时文件失败",
 	},
 	LocaleEnUS: { //nolint:gosec // 此处含 "token" 字样仅为 i18n 文案，非真实凭证
 		"updater_check_done":                       "update check done",
@@ -301,6 +305,10 @@ var i18nMessages = map[Locale]map[string]string{
 		"window_remind_later":                      "Remind Me Later",
 		"window_install_update":                    "Install Update",
 		"window_try_again":                         "Try Again",
+		"updater_download_proxy_fallback":          "download mirror failed, falling back to direct source: {{.URL}} ({{.Error}})",
+		"updater_download_done":                    "download complete: {{.URL}} ({{.Size}} bytes)",
+		"updater_err_download_tmpdir":              "failed to create download temp dir",
+		"updater_err_download_tmpfile":             "failed to create download temp file",
 	},
 }
 

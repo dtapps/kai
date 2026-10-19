@@ -341,7 +341,9 @@ setup: deps bindings sqlc ## 完整项目初始化
 
 # ==================== 更新 / 拉取 ====================
 
-sync: ## 拉取 GitHub 最新并以 fast-forward 合并（保留本地未提交改动）
+sync: sync-github sync-cnb push-force ## 拉取所有远程最新（先 GitHub，后 CNB 镜像）然后强制推送
+
+sync-github: ## 拉取 GitHub 最新并以 fast-forward 合并（保留本地未提交改动）
 	git fetch origin
 	git merge --ff-only origin/master
 	@echo "已同步 origin/master 最新代码，本地未提交改动已保留"
@@ -350,8 +352,6 @@ sync-cnb: ## 拉取 CNB 最新并以 fast-forward 合并（保留本地未提交
 	git fetch cnb
 	git merge --ff-only cnb/master
 	@echo "已同步 cnb/master 最新代码，本地未提交改动已保留"
-
-pull: sync sync-cnb ## 拉取所有远程最新（先 GitHub，后 CNB 镜像）
 
 # ==================== 推送 ====================
 

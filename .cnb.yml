@@ -1,4 +1,5 @@
 include:
+  - .cnb/workflows/pull.yml
   - .cnb/workflows/push.yml
 
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）

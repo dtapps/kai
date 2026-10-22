@@ -1,0 +1,68 @@
+# Codecov 配置
+# 文档：https://docs.codecov.com/docs/codecov-yaml
+#
+# 本仓库覆盖率报告由 GitHub Actions 的 Coverage 工作流生成并上传
+# （.github/workflows/coverage.yml，使用 codecov/codecov-action@v5）：
+#   - Go 后端    → coverage.out              （flag: go）
+#   - 前端 Svelte → frontend/coverage/lcov.info（flag: node）
+# 两份报告用不同 flag 区分，各自独立统计、互不覆盖。
+# 注意：CNB 流水线（.cnb/workflows）另有自己的 testing:coverage 硬性红线门禁，与 Codecov 相互独立。
+#
+# 注意：状态检查默认设为 informational（不阻塞 PR）。因为本仓库已在 CNB 的
+# testing:coverage 内置任务里设了硬性红线（lines / diffLines）。若想在 GitHub 侧
+# 也强约束覆盖率，把对应 status 块的 `informational: true` 去掉即可。
+#
+# flag 命名沿用本项目 CNB 约定：Go 侧 go、前端侧 node（对应 CNB testing:coverage 的 key: go / key: node）。
+
+coverage:
+  # 状态检查：提交/PR 的覆盖率门槛
+  status:
+    project:
+      default:
+        informational: true
+        target: auto # 以每次提交前的覆盖率为基线，自动对比
+        threshold: 5% # 允许相对基线下降 5%，超过则状态变红
+      go:
+        informational: true
+        flags: go # 只看 Go 后端报告
+        target: auto
+        threshold: 5%
+      node:
+        informational: true
+        flags: node # 只看前端（Svelte）报告
+        target: auto
+        threshold: 5%
+    patch:
+      default:
+        informational: true
+        target: auto # PR 增量代码覆盖率门槛
+        threshold: 5%
+
+  # 标志（flag）：按语言拆分，便于分别看趋势、分别设门槛
+  flags:
+    go:
+      paths:
+        - internal/
+        - pkg/
+      carryforward: true # PR 只跑部分测试时，沿用历史 flag 覆盖率算总项目覆盖
+    node:
+      paths:
+        - frontend/src/
+      carryforward: true
+
+  # 忽略不参与覆盖率统计的文件
+  ignore:
+    - '**/*.test.go'
+    - '**/*.test.ts'
+    - 'frontend/dist/**' # 前端构建产物（embed 进 Go 二进制），非源码
+    - 'frontend/src/bindings/**' # wails 生成的前端绑定，非手写
+    - 'internal/ent/**' # 本项目未引入 ent，保留为占位；如需排除生成代码在此加
+    - '**/mock_*.go'
+    - 'docs/**'
+
+  # PR 评论：展示总体覆盖、增量、各 flag 与文件明细
+  comment:
+    layout: 'reach,diff,flags,files'
+    behavior: default
+    require_changes: false
+    hide_project_coverage: false

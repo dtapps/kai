@@ -81,3 +81,33 @@
         - name: 输出覆盖率
           script: 'echo "coverage: lines=$COVERAGE_LINES diff=$COVERAGE_DIFF_PCT"'
 
+    # 流水线 4：前端（Node/Svelte）单元测试覆盖率（全量红线）。与流水线 1/2/3 并行执行。
+    # 复用同一 Dockerfile 构建环境与 pnpm 缓存（Dockerfile 已预装 Node + pnpm）。
+    # 方案见 docs/coverage-node.md：CNB testing:coverage 内置任务 + vitest v8 覆盖率（lcov.info）。
+    - runner:
+        tags: cnb:arch:amd64
+      docker:
+        build: .cnb/Dockerfile # 使用自定义 Dockerfile
+        volumes:
+          - /root/.local/share/pnpm/store:copy-on-write # pnpm 存储缓存
+      stages:
+        - name: 安装前端依赖
+          script: pnpm --dir ./frontend install --frozen-lockfile
+
+        - name: 生成前端测试覆盖率
+          script: pnpm --dir ./frontend test:coverage # 产出 frontend/coverage/lcov.info
+
+        - name: 上报覆盖率（全量红线）
+          # https://docs.cnb.cool/zh/build/internal-steps/testing/coverage.html
+          type: testing:coverage
+          options:
+            lines: 1 # 全量覆盖率红线（%），初始基线极低（视图/组件尚无测试），留余量后逐步上调
+            pattern: 'frontend/coverage/lcov.info'
+            breakIfNoCoverage: true # 找不到覆盖率报告则报错终止，避免静默通过
+          exports:
+            lines: NODE_COVERAGE_LINES
+            diff_pct: NODE_COVERAGE_DIFF_PCT
+
+        - name: 输出覆盖率
+          script: 'echo "node coverage: lines=$NODE_COVERAGE_LINES diff=$NODE_COVERAGE_DIFF_PCT"'
+

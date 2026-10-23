@@ -11,17 +11,17 @@ require (
 	github.com/ebitengine/purego v0.11.2
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0
-	github.com/go-vgo/robotgo v1.3.6
+	github.com/go-vgo/robotgo v1.3.7
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/nicksnyder/go-i18n/v2 v2.6.1
-	github.com/openai/openai-go/v3 v3.85.0
-	github.com/posthog/posthog-go v1.35.1
+	github.com/openai/openai-go/v3 v3.85.1
+	github.com/posthog/posthog-go v1.36.0
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.0.0-beta.34
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
-	google.golang.org/genai v1.75.0
+	google.golang.org/genai v1.76.0
 	modernc.org/sqlite v1.61.0
 )
 
@@ -81,7 +81,7 @@ require (
 	github.com/tidwall/sjson v1.2.5 // indirect
 	github.com/tklauser/go-sysconf v0.4.0 // indirect
 	github.com/tklauser/numcpus v0.12.0 // indirect
-	github.com/vcaesar/go-wayland v0.40.0 // indirect
+	github.com/vcaesar/go-wayland v0.50.0 // indirect
 	github.com/vcaesar/gops v0.43.0 // indirect
 	github.com/vcaesar/imgo v0.44.0 // indirect
 	github.com/vcaesar/keycode v0.20.0 // indirect
@@ -101,7 +101,7 @@ require (
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
-	google.golang.org/api v0.307.0 // indirect
+	google.golang.org/api v0.308.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261019180522-ce908d29299b // indirect
 	google.golang.org/grpc v1.84.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect

@@ -50,6 +50,72 @@ coverage:
         - frontend/src/
       carryforward: true
 
+  # 组件（Components 面板）：按"职责域"把覆盖率拆成 6 个逻辑组件。
+  # 拆法说明：按职责域而非每个文件夹拆——太粗（2 个）看不出具体哪块退化，
+  # 太碎（每目录一个）则各组件数据稀疏、面板难读。6 个职责域信息量与可读性平衡最好。
+  # `name` 是展示名（支持中文），`component_id` 必须 ASCII slug。
+  # 状态检查沿用 informational，不与 CNB 门禁双重阻塞。
+  component_management:
+    default_rules:
+      informational: true
+      target: auto # 以各组件自身基线自动对比
+      threshold: 5% # 允许相对基线下降 5%
+      if_ci_failed: false # CI 未上报时该组件状态不因缺失而变红
+    individual_components:
+      # 核心运行时：服务编排、翻译引擎、划词选择、全局快捷键、单实例守卫
+      - component_id: backend-core
+        name: 后端核心
+        paths:
+          - 'internal/service/**'
+          - 'internal/engine/**'
+          - 'internal/selection/**'
+          - 'internal/hotkey/**'
+          - 'internal/singleinstance/**'
+
+      # 持久化层：配置、历史、HTTP 日志、SQLite、设置
+      - component_id: backend-data
+        name: 数据与存储
+        paths:
+          - 'internal/configstore/**'
+          - 'internal/historystore/**'
+          - 'internal/httplogstore/**'
+          - 'internal/sqlite/**'
+          - 'internal/settings/**'
+
+      # 外部交互：翻译服务、网络、UA 策略
+      - component_id: backend-io
+        name: 翻译与网络
+        paths:
+          - 'internal/translate/**'
+          - 'internal/network/**'
+          - 'internal/useragent/**'
+
+      # 平台适配：WebView、macOS Swift 桥、wails 更新器提供者
+      - component_id: backend-platform
+        name: 平台桥接
+        paths:
+          - 'internal/webview/**'
+          - 'pkg/swiftbridge/**'
+          - 'pkg/wails-updater-providers/**'
+
+      # 横切基础能力：埋点、构建信息、事件总线、执行密钥、i18n、日志、模型
+      - component_id: backend-infra
+        name: 基础设施
+        paths:
+          - 'internal/analytics/**'
+          - 'internal/buildinfo/**'
+          - 'internal/events/**'
+          - 'internal/execkey/**'
+          - 'internal/i18n/**'
+          - 'internal/logutil/**'
+          - 'internal/model/**'
+
+      # 前端界面（Svelte 组件 / 状态 / 窗口）
+      - component_id: frontend
+        name: 前端界面
+        paths:
+          - 'frontend/src/**'
+
   # 忽略不参与覆盖率统计的文件
   ignore:
     - '**/*.test.go'

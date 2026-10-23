@@ -73,6 +73,21 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
   3. 上传步骤用 `codecov/test-results-action@v1` 合并上传 `frontend/test-report.xml,./go-test-report.xml`。
 - 最终 Codecov 的 **Tests** 面板同时包含 Go 与 Svelte 的测试结果。
 
+### 3.4 组件（Components）
+
+`.github/codecov.yml` 的 `component_management` 按**职责域**把覆盖率拆成 6 个组件，在 Codecov **Components** 面板各自看趋势 / 设门槛。`name` 为中文展示名，`component_id` 为 ASCII slug：
+
+| component_id       | 展示名     | 覆盖路径                                                                                                                           |
+| ------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| `backend-core`     | 后端核心   | `internal/service` `internal/engine` `internal/selection` `internal/hotkey` `internal/singleinstance`                              |
+| `backend-data`     | 数据与存储 | `internal/configstore` `internal/historystore` `internal/httplogstore` `internal/sqlite` `internal/settings`                       |
+| `backend-io`       | 翻译与网络 | `internal/translate` `internal/network` `internal/useragent`                                                                       |
+| `backend-platform` | 平台桥接   | `internal/webview` `pkg/swiftbridge` `pkg/wails-updater-providers`                                                                 |
+| `backend-infra`    | 基础设施   | `internal/analytics` `internal/buildinfo` `internal/events` `internal/execkey` `internal/i18n` `internal/logutil` `internal/model` |
+| `frontend`         | 前端界面   | `frontend/src/**`                                                                                                                  |
+
+拆法说明：按职责域而非每个文件夹拆——2 个组件太粗（看不出具体哪块退化），每个目录一个又太碎（数据稀疏、面板难读），6 个职责域的粒度信息量与可读性平衡最好。组件状态检查沿用 `informational`（不阻塞 PR），`if_ci_failed: false` 表示某次 CI 没上报时该组件不因缺失而变红。
+
 ## 4. 必需的密钥
 
 - `CODECOV_TOKEN`：在 GitHub 仓库 **Settings → Secrets → Actions** 中配置（Codecov 项目页获取）。覆盖率、Bundle、测试结果三个动作共用此 token。

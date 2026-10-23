@@ -36,17 +36,17 @@
 ```yaml
 - PKGS=$(go list ./internal/... ./pkg/... | paste -sd, -)
 - go test -vet=off -coverpkg="$PKGS" -coverprofile=coverage.out ./internal/... ./pkg/...
-- go tool cover -func=coverage.out | tail -1        # total:	(statements)	14.1%
+- go tool cover -func=coverage.out | tail -1        # total:	(statements)	52.8%
 - gocover-cobertura < coverage.out > coverage-go.xml   # 预装在 CI 镜像里，见 §4.1
 coverage: '/^total:\s+\(statements\)\s+([0-9.]+)%$/'
 ```
 
 - `-vet=off`：`i18n.T()` 作 printf 参数会触发 vet 的 non-constant format 报错。
-- **范围必须带上 `./pkg/...`**。只测 `./internal/...` 会漏掉 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例（`cnb_stable_test.go` / `github_*.go` 等，另有 1 个 `testhelper_test.go`）， 本仓库实测两者差 4 倍多：**3.2% → 14.1%**。 这条与 `.github/workflows/coveralls.yml`、`.cnb/workflows/push-coverage.yml` 的命令逐字一致。
-- **本仓库语句覆盖率：14.1%**（本地实测，22 个包 —— `internal/` 20 个 + `pkg/` 2 个， 其中只有 `internal/configstore` 与 `pkg/wails-updater-providers` 有测试，其余 20 包 0.0%）。 数字随测试增长变化，别把 14.1% 当基线写死。
+- **范围必须带上 `./pkg/...`**。只测 `./internal/...` 会漏掉 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例（`cnb_stable_test.go` / `github_*.go` 等，另有 1 个 `testhelper_test.go`）。 补测试前两者差 4 倍多（3.2% vs 14.1%）；现在 `internal/` 已被大量测试拉起（54.9%），`pkg/` 侧只有 50%， 所以两个口径反而接近（仅 internal 54.9% vs 全量 52.8%）——**但这不代表可以去掉 `./pkg/...`**：去掉后那 16 个用例根本不跑， 覆盖率再准也是漏测。这条与 `.github/workflows/coveralls.yml`、`.cnb/workflows/push-coverage.yml` 的命令逐字一致。
+- **本仓库语句覆盖率：52.8%**（本地实测：`./internal/... ./pkg/...` 22 个包、3426 条语句，其中 1812 条被执行）。 补测试前是 14.1%，当时只有 `internal/configstore` 与 `pkg/wails-updater-providers` 有测试。 现在已有测试的包：buildinfo / useragent / i18n / logutil / settings / sqlite / network / analytics / engine / translate / configstore / historystore / httplogstore / hotkey（仅 nil 安全兜底）。 仍为 0%：`internal/service`、`internal/selection`、`internal/webview`、`internal/updater`、`internal/execkey`、`internal/events`、`pkg/swiftbridge` —— 全部绑 Wails 运行时 / 系统 API，需真实窗口或 macOS 框架才能测。 数字随测试增长变化，别把 52.8% 当基线写死。
 - **本项目没有 `internal/ent`**，也不存在需要排除的 sqlc 生成代码目录（`go list ./internal/... ./pkg/...` 的 22 个包全部参与度量）。所以命令里**不要**加 `grep -v`：从别的项目照抄过来时带的 `grep -v '/internal/ent'` 在本仓库是空转，已删除。
 - `gocover-cobertura` 钉 `v1.5.0`，且**装进 CI 镜像**（`ARG GOCOVER_COBERTURA_VERSION`），不在 job 里 `go install`——本流水线把 `GOBIN` 指到了 `$CI_PROJECT_DIR/.cache/bin`，job 里 `go install` 会装到那儿， 而 PATH 上只有镜像构建期的 `/go/bin`，结果就是 `command not found`（exit 127）。
-- **实测（v1.5.0 + 本模块路径）：输出的 `filename` 已是仓库相对路径**，共 127 个 `<class>` / 61 个文件， 形如 `filename="internal/configstore/db.go"`、`filename="pkg/wails-updater-providers/cnb_provider.go"`， 模块路径只出现在 `<package name="cnb.cool/dtapp/kai/...">` 上。 **不需要**剥模块前缀——这里没有任何环节需要在磁盘上反查源文件，路径相对化是 gocover-cobertura 自己做完的；多剥一次反而会把 `internal/...` 变成非法路径。`sed` 剥前缀是 GOPATH 时代的老配方， 在模块模式下一律不要加。
+- **实测（v1.5.0 + 本模块路径）：输出的 `filename` 已是仓库相对路径**，本次 profile 含 59 个源文件 / 436 个函数（`<class>` 条目数随函数数增长，本地无 gocover-cobertura 未复核具体条数）， 形如 `filename="internal/configstore/db.go"`、`filename="pkg/wails-updater-providers/cnb_provider.go"`， 模块路径只出现在 `<package name="cnb.cool/dtapp/kai/...">` 上。 **不需要**剥模块前缀——这里没有任何环节需要在磁盘上反查源文件，路径相对化是 gocover-cobertura 自己做完的；多剥一次反而会把 `internal/...` 变成非法路径。`sed` 剥前缀是 GOPATH 时代的老配方， 在模块模式下一律不要加。
 
 ### 2.3 `node-coverage`
 
@@ -61,11 +61,11 @@ coverage: '/^total:\s+\(statements\)\s+([0-9.]+)%$/'
 
 - reporter 用 **CLI 覆盖**，不改 `frontend/vitest.config.ts`：本地仍是 `['lcov','text']`， CI 多要 cobertura / json-summary。这样本地开发产物不变。
 - **实测产物名** `frontend/coverage/cobertura-coverage.xml`；里面的 `filename="src/App.vue"` 是 **frontend 相对路径**，GitLab 按仓库根匹配，所以要补 `frontend/` 前缀。 **实测本仓库 17 个文件全部以 `src/` 开头**（共 25 个 `<class>` 条目，含重复包）， `sed` 一条即可全覆盖，无残留。
-- 前端实测覆盖率 **2.87% 行 / 2.67% 语句**（`frontend/vitest.config.ts` 里 `all: true` 把未测文件按 0% 计入分母，口径刻意不虚高）。比 Go 侧的 14.1% 低一个数量级——Go 那边 `pkg/wails-updater-providers` 的 5 个测试文件把均值拉起来了，前端还没有对应体量的测试。
+- 前端实测覆盖率 **14.38% 行 / 14% 语句**（11 个测试文件 / 67 个用例；`frontend/vitest.config.ts` 里 `all: true` 把未测文件按 0% 计入分母，口径刻意不虚高）。 除 Svelte 组件与 3 个窗口入口 `main.ts` 外，`src/` 下所有逻辑模块（constants / i18n / runtime / stores / utils）均已 100% 或接近 100%。 组件为 0% 是因为没引入 jsdom + `@testing-library/svelte`——要动组件再补依赖，别用 alias 把组件排除出度量来刷数字。
 
 ## 3. 为什么只有 `go-coverage` 配了 `coverage:`
 
-**GitLab 会把同一次流水线里所有带 `coverage:` 的 job 的百分比取算术平均**，显示在 MR 小部件和徽章上。 Go 是**语句**覆盖率（14.1%）、前端是**行**覆盖率（2.87%），两个口径差 5 倍，平均出来是一个既非 A 也非 B 的数， 趋势变化也解释不清，所以默认只让 Go 提供这个数（与 CNB / GitHub 侧「go 做红线」的判断一致）。
+**GitLab 会把同一次流水线里所有带 `coverage:` 的 job 的百分比取算术平均**，显示在 MR 小部件和徽章上。 Go 是**语句**覆盖率（52.8%）、前端是**行**覆盖率（14.38%），两个口径差近 4 倍，平均出来是一个既非 A 也非 B 的数， 趋势变化也解释不清，所以默认只让 Go 提供这个数（与 CNB / GitHub 侧「go 做红线」的判断一致）。
 
 要改显示前端：把 `node-coverage` 里的 `# coverage:` 取消注释，同时注释掉 `go-coverage` 的，二选一， 别两个都开。
 
@@ -171,7 +171,7 @@ coverage: '/^total:\s+\(statements\)\s+([0-9.]+)%$/'
 
 ## 6. 怎么验证
 
-1. 推一次默认分支，打开 **Build → Pipelines**：`image` stage 三个 job（`check-image` → `build-image` → `merge-image`）绿，`go-coverage` / `node-coverage` 绿，`Coverage` 列有数字（本仓库当前约 `14.1%`）。 镜像建好后在 **Deployments → Container Registry** 里能看到 `ci:latest` 与 `ci:sha-<hash>`。
+1. 推一次默认分支，打开 **Build → Pipelines**：`image` stage 三个 job（`check-image` → `build-image` → `merge-image`）绿，`go-coverage` / `node-coverage` 绿，`Coverage` 列有数字（本仓库当前约 `52.8%`）。 镜像建好后在 **Deployments → Container Registry** 里能看到 `ci:latest` 与 `ci:sha-<hash>`。
 2. 打开 `go-coverage` job 日志，搜 `total:`；`node-coverage` 日志搜 `Total lines:`。
 3. 徽章：`https://gitlab.com/dtapps/kai/badges/main/coverage.svg`（私有项目需 token）。
 4. 趋势：**Analyze → Repository analytics / CI/CD analytics** 里的覆盖率曲线。
@@ -180,13 +180,13 @@ coverage: '/^total:\s+\(statements\)\s+([0-9.]+)%$/'
 本地复现（不需要 GitLab），两条命令各自跑完就能看到与 CI 同一份输出：
 
 ```bash
-# Go：14.1% 与 127 个 class 的 Cobertura
+# Go：52.8% 与全量 class 的 Cobertura
 PKGS=$(go list ./internal/... ./pkg/... | paste -sd, -)
 go test -vet=off -coverpkg="$PKGS" -coverprofile=coverage.out ./internal/... ./pkg/...
 go tool cover -func=coverage.out | tail -1
 go run github.com/boumenot/gocover-cobertura@v1.5.0 < coverage.out > coverage-go.xml
 
-# 前端：2.87% 行覆盖 + 17 个文件的 Cobertura
+# 前端：14.38% 行覆盖 + 全部 src 文件的 Cobertura
 pnpm --dir frontend exec vitest run --coverage \
   --coverage.reporter=lcov --coverage.reporter=text \
   --coverage.reporter=cobertura --coverage.reporter=json-summary
@@ -205,7 +205,7 @@ sed -i 's#filename="src/#filename="frontend/src/#g' frontend/coverage/cobertura-
 
 从别的项目复制这三份配置时踩过的两个坑，已在本仓库修正，改动时别退回去：
 
-1. **`go-coverage` 必须带 `./pkg/...`**。原配置只跑 `./internal/...`，把 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例整个漏掉了，百分比从 14.1% 掉到 3.2%（差 4 倍多）。
+1. **`go-coverage` 必须带 `./pkg/...`**。原配置只跑 `./internal/...`，把 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例整个漏掉了（补测试前这 16 个用例直接决定 3.2% 还是 14.1%，差 4 倍多）。
 2. **前端产物路径是 `frontend/coverage/lcov.info`**。原 CNB 配置写的是 `cmd/frontend/coverage/lcov.info`（那是另一个项目的布局，产物在 Go 侧 `cmd/` 目录下）。 本仓库没有 `cmd/`，写错时 `breakIfNoCoverage: true` 会让 node 那条流水线直接报错。
 
 `pkg/swiftbridge` 也在度量范围内：它没有 cgo（purego），`embed.go` 走 `//go:build darwin`、 `load_other.go` 兜其它平台，`GOOS=linux go list ./pkg/...` 能正常列出，Linux runner 上测过没问题。

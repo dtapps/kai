@@ -340,7 +340,11 @@ func StartCleanup(retentionDays int, logger *slog.Logger) {
 		mu.Unlock()
 		return
 	}
-	cleanupDone = make(chan struct{})
+	// 必须把 channel 捕获到局部变量再交给 goroutine：
+	// Close() 会在持锁时把 cleanupDone 置为 nil，若 goroutine 直接读包级变量，
+	// 既构成数据竞争，又可能在 Close 之后读到 nil 而永久阻塞（goroutine 泄漏）。
+	done := make(chan struct{})
+	cleanupDone = done
 	mu.Unlock()
 	ticker := time.NewTicker(1 * time.Hour)
 	go func() {
@@ -354,7 +358,7 @@ func StartCleanup(retentionDays int, logger *slog.Logger) {
 				} else if n > 0 {
 					logger.Info(i18n.T("log.httplog_cleaned"), slog.Int("count", n))
 				}
-			case <-cleanupDone:
+			case <-done:
 				return
 			}
 		}

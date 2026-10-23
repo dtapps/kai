@@ -223,10 +223,10 @@ go-coverage:
     # 不要各平台各写一版：
     #   -vet=off —— i18n.T() 作 printf 参数会触发 vet 的 non-constant format 报错
     #   范围 ./internal/... ./pkg/... —— 只测 internal/ 会漏掉 pkg/wails-updater-providers 的 6 个测试文件、
-    #   实测差 4 倍多（3.2% vs 14.1%）。本项目无 ent 生成代码，不需要任何 grep -v 排除。
+    #   实测差 4 倍多（补测试前 3.2% vs 14.1%）。本项目无 ent 生成代码，不需要任何 grep -v 排除。
     - PKGS=$(go list ./internal/... ./pkg/... | paste -sd, -)
     - go test -vet=off -coverpkg="$PKGS" -coverprofile=coverage.out ./internal/... ./pkg/...
-    # 最后一行形如 `total:	(statements)	14.1%`，被下面 coverage: 的正则抓走
+    # 最后一行形如 `total:	(statements)	52.8%`，被下面 coverage: 的正则抓走
     - go tool cover -func=coverage.out | tail -1
     # GitLab 不认 coverprofile，转 Cobertura（GitLab 只认 Cobertura / JaCoCo）
     - gocover-cobertura < coverage.out > coverage-go.xml
@@ -273,7 +273,7 @@ node-coverage:
     - >-
       node -e "const t=require('./frontend/coverage/coverage-summary.json').total; console.log('Total lines: '+t.lines.pct+'%')"
   # ⚠️ 这里默认**不配** coverage:。原因：GitLab 对同一次流水线里所有带 coverage: 的 job 取**算术平均**
-  # 展示在 MR 小部件和徽章上；Go 是语句覆盖率（实测 14.1%）、前端是行覆盖率（实测 2.87%，all:true 把
+  # 展示在 MR 小部件和徽章上；Go 是语句覆盖率（实测 52.8%）、前端是行覆盖率（实测 14.38%，all:true 把
   # 未测文件计入分母），两个口径平均出来是一个既非 A 也非 B 的数，趋势变化也解释不清。
   # 所以要显示前端覆盖率时：把这行取消注释、并把 go-coverage 的 coverage: 注释掉，二选一。
   # coverage: '/^Total lines:\s+([0-9.]+)%$/'

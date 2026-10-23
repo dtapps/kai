@@ -59,6 +59,11 @@ linters:
       - linters: [gosec]
         path: 'internal/engine/baidu\.go$'
         text: 'G501|G401'
+      # 同上：测试要独立复算 md5(appid+q+salt+key) 才能验证百度签名实现，
+      # 用强哈希反而测不出真实签名，与 baidu.go 同一豁免理由
+      - linters: [gosec]
+        path: 'internal/engine/engine_http_test\.go$'
+        text: 'G501|G401'
       - linters: [gosec]
         path: 'internal/engine/youdao\.go$'
         text: 'G404'

@@ -7,34 +7,26 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 
 // 说明：未直接 mergeConfig(vite.config.ts)，因为 vite.config 注入了 @wailsio/runtime 的 wails 插件，
 // 该插件依赖 wails 构建期生成的 bindings 目录（测试环境不存在），会导致 vitest 启动失败。
-// 这里仅保留测试必需的 svelte 插件与 @bindings 别名，并排除所有依赖 bindings/runtime 的模块，
-// 避免 coverage 的 all:true 在加载这些文件时因缺失 bindings 而报错。
+// 这里仅保留测试必需的 svelte 插件与 @bindings 别名。
+// @bindings 指向仓库内真实生成的 bindings 目录（../bindings，随 git 提交），
+// 因此 i18n / stores / runtime 等依赖 bindings 的模块都能被直接引入并测试；
+// 其中会真正发起 RPC 的函数在用例内用 vi.mock 替换。
 export default defineConfig({
   plugins: [svelte()],
   resolve: {
     alias: {
-      '@bindings': resolve(__dirname, 'src/bindings'),
+      '@bindings': resolve(__dirname, 'bindings'),
     },
   },
   test: {
-    environment: 'node', // 纯函数/store 测试无需 DOM；组件测试后再切 jsdom
+    environment: 'node', // 纯函数/store 测试无需 DOM；需要 DOM 的模块在用例内自行打桩
     setupFiles: ['./src/test/setup.ts'],
     coverage: {
       provider: 'v8',
       reporter: ['lcov', 'text'], // lcov 供 CNB 插件解析，text 供本地阅读
       reportsDirectory: './coverage',
       include: ['src/**/*.{ts,svelte}'],
-      exclude: [
-        'src/test/**', // 测试自身不计入
-        'src/bindings/**', // wails 生成，非源码
-        'src/runtime/**', // 依赖 @wailsio/runtime
-        'src/i18n/**', // 间接依赖 @bindings
-        'src/constants/lang.ts', // 依赖 @bindings（待 bindings 就绪后可纳入）
-        'src/stores/theme.ts', // 依赖 @bindings + DOM
-        'src/stores/ui.ts', // 依赖 @bindings + runtime
-        'src/utils/analytics.ts', // 依赖 runtime
-        'src/**/*.d.ts',
-      ],
+      exclude: ['src/test/**', 'src/**/*.d.ts'],
       all: true, // 全量度量：未测试文件按 0% 计入分母，指标不虚高
     },
   },

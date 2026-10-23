@@ -6,27 +6,16 @@ A translation tool that lives in the system tray, with selection, screenshot and
 
 <div align="center">
 
-[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases)
-[![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases)
-[![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers)
-[![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members)
-[![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai)
-[![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml)
-![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
 
-[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link)
-[![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai)
-[![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai)
-[![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai)
-![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
 
 </div>
 
 ## 1. Features
 
 | Feature                | Default Shortcut          | Enabled by Default               | Notes                                                                                |
-| ---------------------- | ------------------------- | -------------------------------- | ------------------------------------------------------------------------------------ |
+|------------------------|---------------------------|----------------------------------|--------------------------------------------------------------------------------------|
 | Input Translation      | mac: `⌥+A` / win: `Alt+A` | Yes                              | Opens the translation window; type text to translate                                 |
 | Screenshot Translation | mac: `⌥+S` / win: `Alt+S` | No (enable manually in Settings) | Capture a region → recognize text → translate; result shown in the screenshot window |
 
@@ -46,7 +35,7 @@ Kai includes optional anonymous usage analytics (**disabled by default**; enable
 - **App identifier (app_name)**: always `kai`, used to distinguish this app/build within a shared PostHog instance.
 
 | Event                  | When                              | Properties (all non-sensitive)                                    |
-| ---------------------- | --------------------------------- | ----------------------------------------------------------------- |
+|------------------------|-----------------------------------|-------------------------------------------------------------------|
 | `app_installed`        | First launch after install (once) | version, channel                                                  |
 | `app_started`          | Every launch                      | version, OS, UI language, channel                                 |
 | `translate_input`      | Input translation                 | engines used, source/target language, text-length bucket, trigger |
@@ -72,7 +61,7 @@ Notes:
 ### Repositories
 
 | Platform | URL                           |
-| -------- | ----------------------------- |
+|----------|-------------------------------|
 | CNB      | https://cnb.cool/dtapp/kai    |
 | GitHub   | https://github.com/dtapps/kai |
 | Gitea    | https://gitea.com/dtapps/kai  |

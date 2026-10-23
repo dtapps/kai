@@ -5,7 +5,7 @@
 ## 1. 总览：三个支柱 + 职责分离
 
 | 支柱                     | 内容            | 本仓库实现                                                                                                   | Codecov 里看什么                      |
-| ------------------------ | --------------- | ------------------------------------------------------------------------------------------------------------ | ------------------------------------- |
+|--------------------------|-----------------|--------------------------------------------------------------------------------------------------------------|---------------------------------------|
 | 覆盖率 Coverage          | 代码行覆盖率    | `codecov/codecov-action` 上传 Go `coverage.out` 与前端 `lcov.info`                                           | Coverage 面板、PR 评论、patch 状态    |
 | 打包体积 Bundle Analysis | 前端 chunk 体积 | `@codecov/vite-plugin`（构建时上传）                                                                         | Bundle 面板（体积趋势 / 回归）        |
 | 测试结果 Test Analytics  | 单测运行结果    | Go：`gotestsum --junitfile`；Svelte：Vitest `json` → 脚本转 JUnit；合并由 `codecov/test-results-action` 上传 | Tests 面板（时长 / flaky / 失败分析） |
@@ -17,7 +17,7 @@
 ## 2. 涉及文件清单
 
 | 文件                                        | 作用                                                                                         |
-| ------------------------------------------- | -------------------------------------------------------------------------------------------- |
+|---------------------------------------------|----------------------------------------------------------------------------------------------|
 | `.github/codecov.yml`                       | Codecov 规则：忽略生成代码、`flags`（go / node）、`status: informational`                    |
 | `.github/workflows/coverage.yml`            | GitHub Actions 流水线：装依赖 → 跑 Go/前端测试 → 构建前端 → 上传覆盖率 / 测试结果 / 打包体积 |
 | `frontend/vite.config.ts`                   | 条件加载 `@codecov/vite-plugin`（仅当 `CODECOV_TOKEN` 存在时实例化）                         |
@@ -30,6 +30,7 @@
 ### 3.1 覆盖率（Coverage）
 
 - Go：复用 CNB 的同款口径
+
   ```
   gotestsum --junitfile go-test-report.xml -- -vet=off -coverpkg=$(go list ./internal/... ./pkg/... | paste -sd, -) -coverprofile=coverage.out ./internal/... ./pkg/...
   ```
@@ -43,6 +44,7 @@
 ### 3.2 打包体积（Bundle Analysis）
 
 - 插件 `@codecov/vite-plugin@2.0.1` 在 `frontend/vite.config.ts` 中**条件加载**：
+
   ```ts
   ...(process.env.CODECOV_TOKEN
     ? [codecovVitePlugin({ enableBundleAnalysis: true, bundleName: "kai-frontend", uploadToken: process.env.CODECOV_TOKEN })]
@@ -57,6 +59,7 @@
 Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上传到同一个 `codecov/test-results-action@v1`（其 `files` 已合并两份报告：`frontend/test-report.xml,./go-test-report.xml`）：
 
 - **Go**：`go test` 不原生产 JUnit，用 `gotestsum` 包裹（参数原样透传，`coverage.out` 照常产出），额外生成 `go-test-report.xml`：
+
   ```
   go install gotest.tools/gotestsum@v1.13.0
   export PATH="$(go env GOPATH)/bin:$PATH"
@@ -65,9 +68,11 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
   - ⚠️ `gotestsum` 必须固定为 **v1.13.0**：v1.12.0 依赖的旧版 `golang.org/x/tools@v0.19.0` 无法在 Go 1.27 上编译（`invalid array length`），v1.13.0 升到 x/tools v0.36.0 后正常。
 - **Svelte（Vitest 3.2.7）**：无内置 junit reporter（社区 `@vitest/junit` 包在 npm 也已不可得），改用内置 `json` reporter 产出 `test-results.json`，再由零依赖脚本转 JUnit：
   1. 测试步骤额外挂内置 `json` reporter 产出 `test-results.json`：
+
      ```
      pnpm test:coverage --reporter=default --reporter=json --outputFile=test-results.json
      ```
+
      （`coverage/lcov.info` 仍正常产出，不受影响。）
   2. 转换步骤用 `node scripts/vitest-json-to-junit.mjs` 把 JSON 转成 `test-report.xml`（JUnit 格式）。
   3. 上传步骤用 `codecov/test-results-action@v1` 合并上传 `frontend/test-report.xml,./go-test-report.xml`。
@@ -78,7 +83,7 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
 `.github/codecov.yml` 的 `component_management` 按**职责域**把覆盖率拆成 6 个组件，在 Codecov **Components** 面板各自看趋势 / 设门槛。`name` 为中文展示名，`component_id` 为 ASCII slug：
 
 | component_id       | 展示名     | 覆盖路径                                                                                                                           |
-| ------------------ | ---------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+|--------------------|------------|------------------------------------------------------------------------------------------------------------------------------------|
 | `backend-core`     | 后端核心   | `internal/service` `internal/engine` `internal/selection` `internal/hotkey` `internal/singleinstance`                              |
 | `backend-data`     | 数据与存储 | `internal/configstore` `internal/historystore` `internal/httplogstore` `internal/sqlite` `internal/settings`                       |
 | `backend-io`       | 翻译与网络 | `internal/translate` `internal/network` `internal/useragent`                                                                       |

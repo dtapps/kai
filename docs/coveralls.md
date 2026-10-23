@@ -10,7 +10,7 @@
 ## 1. 涉及文件
 
 | 文件                              | 作用                                                                                    |
-| --------------------------------- | --------------------------------------------------------------------------------------- |
+|-----------------------------------|-----------------------------------------------------------------------------------------|
 | `.github/workflows/coveralls.yml` | 唯一入口：装依赖 → 跑 Go/前端测试 → 分别上报 `flag=go` / `flag=node`                    |
 | `.github/ci/Dockerfile`           | 提供 `ghcr.io/<repo>/ci:latest` 镜像（Go/Node/pnpm/GTK4/WebKit6，含 goveralls v0.0.12） |
 | `Makefile`（`deps` 目标）         | `go mod download` + `pnpm --dir ./frontend install`                                     |
@@ -38,8 +38,7 @@ concurrency:
 Coveralls 以 **build** 为单位聚合报告。go / node 两份数据必须落进**同一个 build**，才能靠 flag 合并成一份总覆盖率。
 
 - **单 job**：两次上传天然同 build、同 commit、同 job id，flag 直接合并，确定性最高。
-- **多 job + parallel**：需要 `parallel: true` + 最后一个 `parallel-finished: true` 收尾，goveralls 侧还要
-  `-parallel -jobid`。两套工具混用 parallel 协议，容易出现「build 一直不 finalize」或「两份报告各算各的」。
+- **多 job + parallel**：需要 `parallel: true` + 最后一个 `parallel-finished: true` 收尾，goveralls 侧还要 `-parallel -jobid`。两套工具混用 parallel 协议，容易出现「build 一直不 finalize」或「两份报告各算各的」。
 
 当前用单 job 顺序执行，用一点时间换确定性。将来真要拆（比如 Go 测试太慢），写法是：
 
@@ -64,19 +63,17 @@ container:
 镜像基于 `golang:1.27.3-trixie`，内置 Node `26.12.1`、pnpm `12.15.0`、GTK4 / WebKit6，以及钉好版本的 Go 工具链：
 
 | 工具      | 版本                        | 来源                     |
-| --------- | --------------------------- | ------------------------ |
+|-----------|-----------------------------|--------------------------|
 | gotestsum | `GOTESTSUM_VERSION=v1.13.0` | `go install ...@版本`    |
 | gojq      | `GOJQ_VERSION=v0.12.19`     | 同上                     |
 | goveralls | `GOVERALLS_VERSION=v0.0.12` | 同上，装到 `$GOPATH/bin` |
 
-`ENV PATH="$GOPATH/bin:$PATH"` 已经包含 `/go/bin`，所以工作流里可以直接调 `goveralls`，
-**不需要** `setup-go`、`setup-node`、`apt-get install`——Wails 的 CGO 链接依赖（GTK4/WebKit6）也齐了。
-镜像由 `ci-image.yml` 推送，**首次运行前必须已存在**，否则容器起不来。
+`ENV PATH="$GOPATH/bin:$PATH"` 已经包含 `/go/bin`，所以工作流里可以直接调 `goveralls`， **不需要** `setup-go`、`setup-node`、`apt-get install`——Wails 的 CGO 链接依赖（GTK4/WebKit6）也齐了。 镜像由 `ci-image.yml` 推送，**首次运行前必须已存在**，否则容器起不来。
 
 ### 2.4 缓存
 
 | 缓存           | 路径                        | key                                    |
-| -------------- | --------------------------- | -------------------------------------- |
+|----------------|-----------------------------|----------------------------------------|
 | Go module      | `/go/pkg/mod`               | `hashFiles('**/go.sum')`               |
 | Go build cache | `$HOME/.cache/go-build`     | `hashFiles('**/go.sum')`               |
 | pnpm store     | `pnpm config get store-dir` | `hashFiles('frontend/pnpm-lock.yaml')` |
@@ -85,8 +82,7 @@ container:
 
 ### 3.1 为什么不用 action
 
-`coverallsapp/github-action@v2` 的 `action.yml` 只有 `path-to-lcov` 一个覆盖率输入，**没有** `file`，
-也**没有** `format`。所以不存在 `format: golang`——Go 的 `coverage.out` 不能直接喂给它。
+`coverallsapp/github-action@v2` 的 `action.yml` 只有 `path-to-lcov` 一个覆盖率输入，**没有** `file`， 也**没有** `format`。所以不存在 `format: golang`——Go 的 `coverage.out` 不能直接喂给它。
 
 ### 3.2 步骤（两步，没有安装步骤）
 
@@ -106,12 +102,9 @@ container:
       -flagname=go
 ```
 
-**goveralls 来自镜像，工作流里不要 `go install`。** 镜像用 `GOVERALLS_VERSION=v0.0.12` 预装，
-v0.0.12 实测支持本次用到的全部参数：`-coverprofile` / `-service` / `-repotoken` / `-flagname`
-/ `-parallel` / `-jobid` / `-shallow` / `-endpoint`。
+**goveralls 来自镜像，工作流里不要 `go install`。** 镜像用 `GOVERALLS_VERSION=v0.0.12` 预装， v0.0.12 实测支持本次用到的全部参数：`-coverprofile` / `-service` / `-repotoken` / `-flagname` / `-parallel` / `-jobid` / `-shallow` / `-endpoint`。
 
-在工作流里 `go install ...@latest` 是负优化：每次跑都要下载编译、拖慢 CI，还会把镜像钉死的版本
-覆盖成某个不确定的 latest，破坏可重现性。升级 goveralls 改的是 Dockerfile 的 ARG，重推镜像。
+在工作流里 `go install ...@latest` 是负优化：每次跑都要下载编译、拖慢 CI，还会把镜像钉死的版本 覆盖成某个不确定的 latest，破坏可重现性。升级 goveralls 改的是 Dockerfile 的 ARG，重推镜像。
 
 ### 3.3 三个必须知道的细节
 
@@ -121,10 +114,7 @@ v0.0.12 实测支持本次用到的全部参数：`-coverprofile` / `-service` /
   cnb.cool/dtapp/kai/internal/useragent/useragent.go:18.2,21.1 3 0
   ```
 
-  goveralls v0.0.12 自己就能还原：`gocover.go` 的 `findRootPackage()` 读 `go.mod` 拿到模块路径，
-  `findFile()` 用 `filepath.Rel(rootPackage, file)` 剥成 `internal/useragent/useragent.go`，
-  再 `Join(rootDir, relPath)` 落到工作区真实文件；上传前 `getCoverallsSourceFileName()` 再按
-  `.git` 根裁成仓库相对路径。所以 `coverage.out` **原样**喂进去就是对的。
+  goveralls v0.0.12 自己就能还原：`gocover.go` 的 `findRootPackage()` 读 `go.mod` 拿到模块路径， `findFile()` 用 `filepath.Rel(rootPackage, file)` 剥成 `internal/useragent/useragent.go`， 再 `Join(rootDir, relPath)` 落到工作区真实文件；上传前 `getCoverallsSourceFileName()` 再按 `.git` 根裁成仓库相对路径。所以 `coverage.out` **原样**喂进去就是对的。
 
   反过来，先用 `sed` 剥掉前缀会**直接失败**（真实 CI 报错）：
 
@@ -133,10 +123,7 @@ v0.0.12 实测支持本次用到的全部参数：`-coverprofile` / `-service` /
     can't find "analytics.go": package internal/analytics is not in std (/usr/local/go/src/internal/analytics)
   ```
 
-  原因：剥完后 `filepath.Rel` 得到 `../..` 开头的路径，`findFile` 落到
-  `build.Import("internal/analytics", ".", build.FindOnly)`——模块模式下，相对模块根的裸路径
-  不是合法 import path（`internal/analytics` 又不是 std），于是整份报告解析失败。
-  `sed "s|^$(go list -m)/||"` 是 GOPATH 时代的老配方，模块模式下必须去掉。
+  原因：剥完后 `filepath.Rel` 得到 `../..` 开头的路径，`findFile` 落到 `build.Import("internal/analytics", ".", build.FindOnly)`——模块模式下，相对模块根的裸路径 不是合法 import path（`internal/analytics` 又不是 std），于是整份报告解析失败。 `sed "s|^$(go list -m)/||"` 是 GOPATH 时代的老配方，模块模式下必须去掉。
 
 - **`-service=github`**：让 goveralls 从 `GITHUB_*` 环境变量取分支 / commit / PR 元数据。
 
@@ -144,11 +131,7 @@ v0.0.12 实测支持本次用到的全部参数：`-coverprofile` / `-service` /
 
 ### 3.4 统计口径
 
-统计 `./internal/... ./pkg/...`：含全部有测试的包（含 `pkg/wails-updater-providers`、`pkg/swiftbridge`），
-**不含根 main 包**——它的 `//go:embed all:frontend/dist` 在无前端产物时会编译失败。
-本项目未引入 ent，无需排除生成代码。`-vet=off` 因为 `swiftbridge`/`selection`/`engine` 存在
-`fmt.Errorf` 非常量格式串，vet 会挂。`gotestsum` 产出的 `go-test-report.xml` 只用于命令对齐与本地排查，
-Coveralls **不接收** JUnit。
+统计 `./internal/... ./pkg/...`：含全部有测试的包（含 `pkg/wails-updater-providers`、`pkg/swiftbridge`）， **不含根 main 包**——它的 `//go:embed all:frontend/dist` 在无前端产物时会编译失败。 本项目未引入 ent，无需排除生成代码。`-vet=off` 因为 `swiftbridge`/`selection`/`engine` 存在 `fmt.Errorf` 非常量格式串，vet 会挂。`gotestsum` 产出的 `go-test-report.xml` 只用于命令对齐与本地排查， Coveralls **不接收** JUnit。
 
 ## 4. 前端覆盖率：coveralls action
 
@@ -173,22 +156,19 @@ Coveralls **不接收** JUnit。
 
 ## 5. 密钥
 
-- `COVERALLS_REPO_TOKEN`：GitHub 仓库 **Settings → Secrets → Actions** 添加。
-  取值路径：Coveralls → 选择仓库 → **Settings / Tokens**。
+- `COVERALLS_REPO_TOKEN`：GitHub 仓库 **Settings → Secrets → Actions** 添加。 取值路径：Coveralls → 选择仓库 → **Settings / Tokens**。
 
 行为约定：
 
-- **fork PR**：GitHub 不向 fork 的 PR 传递 secrets，token 为空 → 上传步骤被
-  `if: env.COVERALLS_REPO_TOKEN != ''` 跳过，不会因为缺 token 而红。
-- **上传失败不阻断 CI**：两个上传步骤都有 `continue-on-error: true`。Coveralls 是观测工具，
-  不该成为合并的阻塞项。
+- **fork PR**：GitHub 不向 fork 的 PR 传递 secrets，token 为空 → 上传步骤被 `if: env.COVERALLS_REPO_TOKEN != ''` 跳过，不会因为缺 token 而红。
+- **上传失败不阻断 CI**：两个上传步骤都有 `continue-on-error: true`。Coveralls 是观测工具， 不该成为合并的阻塞项。
 
 ## 6. 验证与排错
 
 跑完后到 Coveralls 仓库页确认：**最新 build 下同时有 `go` 与 `node` 两个 flag，且合并出一个总覆盖率**。
 
 | 现象                                                                   | 原因 / 处理                                                                                         |
-| ---------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+|------------------------------------------------------------------------|-----------------------------------------------------------------------------------------------------|
 | 上传步骤显示 skipped                                                   | `COVERALLS_REPO_TOKEN` 为空（fork PR 正常；主仓 PR 则是 secret 没配）                               |
 | `goveralls: command not found`                                         | 镜像里 `GOVERALLS_VERSION` 那步没装成功，或 `/go/bin` 不在 PATH；**改镜像，别用 `go install` 兜底** |
 | `cannot find file "internal/x.go"`、`package internal/x is not in std` | profile 被剥过模块前缀。删掉 `sed`，`coverage.out` 原样喂给 goveralls（见 3.3）                     |
@@ -216,7 +196,6 @@ go run github.com/mattn/goveralls@v0.0.12 -coverprofile=coverage.out \
 
 - `flag` 名一旦定了别乱改，改了等于新建一条趋势线，历史会断档。
 - 文档命名：`docs/*-*-*.md`（双横线）被 `.gitignore` 忽略，本文档用单横线（`docs/coveralls.md`）。
-- goveralls 版本由 `.github/ci/Dockerfile` 的 `GOVERALLS_VERSION`（当前 `v0.0.12`）钉死；
-  升级改 ARG 后重推镜像，**不要**在工作流里 `go install`。
+- goveralls 版本由 `.github/ci/Dockerfile` 的 `GOVERALLS_VERSION`（当前 `v0.0.12`）钉死； 升级改 ARG 后重推镜像，**不要**在工作流里 `go install`。
 - Coveralls 后台需先授权该仓库，否则上传返回 401。
 - 本工作流与 Codecov 的 `coverage.yml` 各自独立：Coveralls 故障不影响 Codecov，反之亦然。

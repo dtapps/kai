@@ -6,27 +6,16 @@
 
 <div align="center">
 
-[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases)
-[![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases)
-[![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers)
-[![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members)
-[![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai)
-[![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml)
-![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) ![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
 
-[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link)
-[![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai)
-[![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai)
-[![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai)
-![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) ![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
 
 </div>
 
 ## 1. 产品功能
 
 | 功能     | 默认快捷键                | 默认启用                 | 说明                                           |
-| -------- | ------------------------- | ------------------------ | ---------------------------------------------- |
+|----------|---------------------------|--------------------------|------------------------------------------------|
 | 输入翻译 | mac: `⌥+A` / win: `Alt+A` | 是                       | 唤起翻译主窗口，手动输入文本翻译               |
 | 截图翻译 | mac: `⌥+S` / win: `Alt+S` | 否（需在设置中手动开启） | 框选区域 → 识别文字 → 翻译，结果在截图窗口展示 |
 
@@ -46,7 +35,7 @@
 - **应用标识（app_name）**：固定为 `kai`，用于在同一 PostHog 实例区分不同应用 / 构建。
 
 | 事件                   | 触发时机               | 附带属性（均非敏感）                            |
-| ---------------------- | ---------------------- | ----------------------------------------------- |
+|------------------------|------------------------|-------------------------------------------------|
 | `app_installed`        | 首次安装启动（仅一次） | 版本、渠道                                      |
 | `app_started`          | 每次启动               | 版本、操作系统、界面语言、渠道                  |
 | `translate_input`      | 输入翻译               | 使用的引擎、源/目标语言、文本长度分桶、触发方式 |
@@ -72,7 +61,7 @@
 ### 仓库
 
 | 平台    | 地址                          |
-| ------- | ----------------------------- |
+|---------|-------------------------------|
 | CNB     | https://cnb.cool/dtapp/kai    |
 | GitHub  | https://github.com/dtapps/kai |
 | Gitea   | https://gitea.com/dtapps/kai  |

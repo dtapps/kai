@@ -1,23 +1,14 @@
 # wails-updater-providers
 
-Wails v3 自更新器的多源 Provider 实现包。封装 CNB / GitHub 双源，对外只暴露官方
-`github.com/wailsapp/wails/v3/pkg/updater` 的类型，调用方 `import` 后直接
-`updater.Config{Providers: []updater.Provider{...}}` 即可使用，无需引入 GitHub 私有类型。
+Wails v3 自更新器的多源 Provider 实现包。封装 CNB / GitHub 双源，对外只暴露官方 `github.com/wailsapp/wails/v3/pkg/updater` 的类型，调用方 `import` 后直接 `updater.Config{Providers: []updater.Provider{...}}` 即可使用，无需引入 GitHub 私有类型。
 
 ## 特性
 
 - 双源支持：`cnb` / `github` / `auto`（按可达性自动选择）。
-- 注入项与全局配置分离：`Options` 只承载调用方注入项（`Logger`、`Client`、
-  `CnbRepo`、`GithubRepo`、`Token`、`BuildTime`、`GitCommit`、`Prerelease`、
-  `AssetMatcher`、`ChecksumFile` 等）；**语言/主题/主源为包级全局**，由 `SetLocale` /
-  `SetTheme` / `SetSource` 设置，库内部（`matcher` / `provider` / 更新窗口）直接读取，
-  运行时调用 `SetXxx` 即可实时跟随，无需重新构造 provider。
-- 内建 i18n：日志语言由包全局 `GetLocale()` 驱动（`LocaleZhCN` / `LocaleEnUS`），默认
-  `LocaleZhCN`（中文），不写死。
-- 自定义资源匹配器：默认回退官方 `github.DefaultAssetMatcher`，亦可启用库内置的
-  `NewUpdaterAssetMatcher`（仅匹配 `updater-` 前缀的升级专用压缩包）。
-- 双判定通道：稳定版按版本号比较；预发布（nightly）按发布源附带的 `GIT_COMMIT` /
-  `BUILD_TIME` 独立文件判定（优先 commit 相等跳过，回退 build time 对比）。
+- 注入项与全局配置分离：`Options` 只承载调用方注入项（`Logger`、`Client`、 `CnbRepo`、`GithubRepo`、`Token`、`BuildTime`、`GitCommit`、`Prerelease`、 `AssetMatcher`、`ChecksumFile` 等）；**语言/主题/主源为包级全局**，由 `SetLocale` / `SetTheme` / `SetSource` 设置，库内部（`matcher` / `provider` / 更新窗口）直接读取， 运行时调用 `SetXxx` 即可实时跟随，无需重新构造 provider。
+- 内建 i18n：日志语言由包全局 `GetLocale()` 驱动（`LocaleZhCN` / `LocaleEnUS`），默认 `LocaleZhCN`（中文），不写死。
+- 自定义资源匹配器：默认回退官方 `github.DefaultAssetMatcher`，亦可启用库内置的 `NewUpdaterAssetMatcher`（仅匹配 `updater-` 前缀的升级专用压缩包）。
+- 双判定通道：稳定版按版本号比较；预发布（nightly）按发布源附带的 `GIT_COMMIT` / `BUILD_TIME` 独立文件判定（优先 commit 相等跳过，回退 build time 对比）。
 
 ## 安装
 
@@ -76,17 +67,12 @@ func main() {
 
 ### 自带更新窗口（BYO 模式，推荐）
 
-内置的 `provider.Window()` 走官方 Builtin 模式：框架负责创建/显示/隐藏窗口，
-尺寸为写死常量、不随 release notes 内容自适应，且 HTML 侧无法直接调 `Window.SetSize`。
-本包额外提供 **BYO（Bring-Your-Own）窗口**，由库自建并管理原生窗口，解决上述限制：
+内置的 `provider.Window()` 走官方 Builtin 模式：框架负责创建/显示/隐藏窗口， 尺寸为写死常量、不随 release notes 内容自适应，且 HTML 侧无法直接调 `Window.SetSize`。 本包额外提供 **BYO（Bring-Your-Own）窗口**，由库自建并管理原生窗口，解决上述限制：
 
-- 窗口尺寸由 JS 驱动的 `ResizeObserver` → `wails:updater:resize` 事件 → `win.SetSize`
-  实现内容自适应（notes 变长时窗口自动加高）。
+- 窗口尺寸由 JS 驱动的 `ResizeObserver` → `wails:updater:resize` 事件 → `win.SetSize` 实现内容自适应（notes 变长时窗口自动加高）。
 - 语言/主题实时跟随：`SetUpdaterLocaleTheme(app)` 在原窗口上原地刷新 HTML。
-- 启动不弹窗（默认 `Hidden`）；菜单点击检查更新时调 `kupdater.ShowUpdaterWindow(app)`
-  强制重建可见窗口（含双 `Show()` + `Focus()` 兜底 Wails 已知首次 Show 不显示的 bug）。
-- 当前版本号由 Go 模板在渲染时注入（`app.Updater.CurrentVersion()`），不依赖
-  `EventMeta` 的时序，避免 BYO 模式下收不到 snapshot 而显示「—」。
+- 启动不弹窗（默认 `Hidden`）；菜单点击检查更新时调 `kupdater.ShowUpdaterWindow(app)` 强制重建可见窗口（含双 `Show()` + `Focus()` 兜底 Wails 已知首次 Show 不显示的 bug）。
+- 当前版本号由 Go 模板在渲染时注入（`app.Updater.CurrentVersion()`），不依赖 `EventMeta` 的时序，避免 BYO 模式下收不到 snapshot 而显示「—」。
 
 ```go
 // 1. Init 时挂载 BYO 窗口选项（而非 provider.Window()）。
@@ -107,29 +93,19 @@ kupdater.SetUpdaterLocaleTheme(app)
 
 #### BYO 窗口用户事件契约
 
-BYO 模式下框架**不**在用户关闭窗口时 show/hide 我们的窗口，而是靠本包监听以下
-自定义事件自行处理显隐（见 `updater_window.go` 的 `registerCloseHandler`）：
+BYO 模式下框架**不**在用户关闭窗口时 show/hide 我们的窗口，而是靠本包监听以下 自定义事件自行处理显隐（见 `updater_window.go` 的 `registerCloseHandler`）：
 
 | 事件名                      | 触发时机             | 库行为       |
-| --------------------------- | -------------------- | ------------ |
+|-----------------------------|----------------------|--------------|
 | `wails:updater:user:cancel` | 用户点「取消」       | 隐藏更新窗口 |
 | `wails:updater:user:skip`   | 用户点「跳过此版本」 | 隐藏更新窗口 |
 | `wails:updater:user:remind` | 用户点「稍后提醒我」 | 隐藏更新窗口 |
 
-窗口名/尺寸等可通过 `SetWindowName` / `SetWindowSize` 覆盖（包级全局，默认
-`kai-updater-window`、520×660）。
+窗口名/尺寸等可通过 `SetWindowName` / `SetWindowSize` 覆盖（包级全局，默认 `kai-updater-window`、520×660）。
 
-> 注意：框架在 `WindowClosing` 时有一个内部监听器会**无条件销毁**窗口并从注册表
-> 移除（不读 `event.Cancelled`），因此 `Close()` 被实现为 no-op——窗口显隐完全由
-> 本包控制（显示走 `ShowUpdaterWindow`、隐藏走用户关闭事件或 `WindowClosing →
-Hide`），避免「重开 session 误藏窗口」导致一闪而过。
-> // 监听更新就绪事件。
-> app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
-> slog.Info("update ready")
-> })
-> }
+> 注意：框架在 `WindowClosing` 时有一个内部监听器会**无条件销毁**窗口并从注册表 移除（不读 `event.Cancelled`），因此 `Close()` 被实现为 no-op——窗口显隐完全由 本包控制（显示走 `ShowUpdaterWindow`、隐藏走用户关闭事件或 `WindowClosing → Hide`），避免「重开 session 误藏窗口」导致一闪而过。 // 监听更新就绪事件。 app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) { slog.Info("update ready") }) }
 
-````
+```
 
 ## Options 字段说明
 
@@ -173,12 +149,11 @@ Hide`），避免「重开 session 误藏窗口」导致一闪而过。
 
 ```go
 updOpts.AssetMatcher = kupdater.NewUpdaterAssetMatcher()
-````
+```
 
 ## 校验和
 
-下载产物默认用 `SHA256SUMS` 校验。若你的发布使用其他文件名（如 `checksums.txt`），
-可通过 `Options.ChecksumFile` 覆盖。
+下载产物默认用 `SHA256SUMS` 校验。若你的发布使用其他文件名（如 `checksums.txt`）， 可通过 `Options.ChecksumFile` 覆盖。
 
 ## 更新判定逻辑
 
@@ -186,8 +161,7 @@ updOpts.AssetMatcher = kupdater.NewUpdaterAssetMatcher()
 
 ### 关闭预发布（`Prerelease=false`）
 
-只查稳定版，唯一判定依据是 `updater.CheckRequest.CurrentVersion` 走 `isNewer`
-比较版本号。无候选即视为已是最新（`nil,nil`）。
+只查稳定版，唯一判定依据是 `updater.CheckRequest.CurrentVersion` 走 `isNewer` 比较版本号。无候选即视为已是最新（`nil,nil`）。
 
 ### 开启预发布（`Prerelease=true`）
 
@@ -200,12 +174,8 @@ updOpts.AssetMatcher = kupdater.NewUpdaterAssetMatcher()
 - **最新一条是稳定版**：直接 `isNewer(tag, CurrentVersion)` 比版本号，需要更新才返回。
 - 资产不匹配本机平台/架构：该候选不适用，视为已是最新（`nil,nil`）。
 
-> `GitCommitFile` / `BuildTimeFile` 由 CI 在发布预览版（nightly）时作为独立文件随
-> release 资产一起发布（文件名默认 `GIT_COMMIT` / `BUILD_TIME`）。稳定版 release
-> 不发布这两个文件，也不依赖此判定。
+> `GitCommitFile` / `BuildTimeFile` 由 CI 在发布预览版（nightly）时作为独立文件随 release 资产一起发布（文件名默认 `GIT_COMMIT` / `BUILD_TIME`）。稳定版 release 不发布这两个文件，也不依赖此判定。
 
 ### 当前版本来源
 
-nightly 不把版本号纳入新旧判定，但会如实记录并打印 `updater.CheckRequest.CurrentVersion`；
-稳定版的 `CheckRequest.CurrentVersion` 是真正参与比较的依据。两者统一从
-`updater.CheckRequest.CurrentVersion` 取得，不另设 Options 字段。
+nightly 不把版本号纳入新旧判定，但会如实记录并打印 `updater.CheckRequest.CurrentVersion`； 稳定版的 `CheckRequest.CurrentVersion` 是真正参与比较的依据。两者统一从 `updater.CheckRequest.CurrentVersion` 取得，不另设 Options 字段。

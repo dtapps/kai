@@ -32,3 +32,4 @@ pkg/swiftbridge/internal/swift/libkai_bridge.dylib
 coverage.out
 coverage.html
 frontend/coverage
+coverage-go.xml

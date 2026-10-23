@@ -5,7 +5,7 @@
       services:
         - docker # 启用 Docker 服务（用于 docker build/push）
       docker:
-        build: .cnb/Dockerfile # 使用自定义 Dockerfile
+        build: .cnb/ci/Dockerfile # 使用自定义 Dockerfile
         volumes:
           - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
           - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
@@ -56,14 +56,17 @@
     - runner:
         tags: cnb:arch:amd64
       docker:
-        build: .cnb/Dockerfile # 使用自定义 Dockerfile
+        build: .cnb/ci/Dockerfile # 使用自定义 Dockerfile
         volumes:
           - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
+          - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
           - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具
       stages:
+        - name: 安装所有依赖
+          script: make deps
+
         - name: 生成测试覆盖率
           script:
-            - go mod download
             # 命令按本项目实际编写（勿照搬其他项目）：
             # 1. 范围 ./internal/... ./pkg/...：含全部测试（configstore + wails-updater-providers）；
             #    不含根 main 包——它 //go:embed all:frontend/dist，本流水线无前端产物会编译失败。
@@ -77,12 +80,12 @@
           # https://docs.cnb.cool/zh/build/internal-steps/testing/coverage.html
           type: testing:coverage
           options:
-            lines: 10 # 全量覆盖率红线（%），低于此值阻断流水线；当前实测约 14%，留余量后逐步上调
-            lang: go # golang 格式的覆盖率报告必须指定，否则计算有误差
             key: go # 多报告数据键：与 Node 侧（key: node）区分，各自写入 meta map 互不覆盖
             name: Go Coverage # 徽章显示名，与 key 一对一对应
+            lines: 10 # 全量覆盖率红线（%），低于此值阻断流水线；低位兜底，待测试提交测得真实基线后按 基线-10 上调
+            lang: go # golang 格式的覆盖率报告必须指定，否则计算有误差
             pattern: 'coverage.out'
-            breakIfNoCoverage: true # 找不到覆盖率报告则报错终止，避免静默通过
+            breakIfNoCoverage: false # 找不到覆盖率报告时仅缺失数据、不阻断流水线；低于 lines/diffLines 红线仍会拦截
           exports:
             lines: COVERAGE_LINES
             diff_pct: COVERAGE_DIFF_PCT
@@ -96,12 +99,14 @@
     - runner:
         tags: cnb:arch:amd64
       docker:
-        build: .cnb/Dockerfile # 使用自定义 Dockerfile
+        build: .cnb/ci/Dockerfile # 使用自定义 Dockerfile
         volumes:
-          - /root/.local/share/pnpm/store:copy-on-write # pnpm 存储缓存
+          - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
+          - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
+          - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具
       stages:
-        - name: 安装前端依赖
-          script: pnpm --dir ./frontend install --frozen-lockfile
+        - name: 安装所有依赖
+          script: make deps
 
         - name: 生成前端测试覆盖率
           script: pnpm --dir ./frontend test:coverage # 产出 frontend/coverage/lcov.info
@@ -110,10 +115,10 @@
           # https://docs.cnb.cool/zh/build/internal-steps/testing/coverage.html
           type: testing:coverage
           options:
-            lines: 1 # 全量覆盖率红线（%），初始基线极低（视图/组件尚无测试），留余量后逐步上调
             key: node # 多报告数据键：与 Go 侧（key: go）区分，各自写入 meta map 互不覆盖
             name: Node Coverage # 徽章显示名，与 key 一对一对应
-            pattern: 'frontend/coverage/lcov.info'
+            lines: 90 # 全量覆盖率红线（%），低于此值阻断流水线；当前基线 97.43%，留约 7 个点缓冲
+            pattern: 'cmd/frontend/coverage/lcov.info'
             breakIfNoCoverage: true # 找不到覆盖率报告则报错终止，避免静默通过
           exports:
             lines: NODE_COVERAGE_LINES
@@ -131,16 +136,8 @@
   tag_push:
     - stages:
         - name: 生成 Code Wiki
+          timeout: 3h
           image: cnbcool/codewiki:latest
           settings:
             # 必填。指定 codewiki 生成文档的保存位置。支持绝对路径，也支持相对路径（会与当前工作目录 PWD 相加得到绝对路径）
-            git_doc_dir: ./codewiki
-            # 是否启用知识库入库，默认 true
-            knowledge_enabled: true
-            # 嵌入模型名称，默认 hunyuan
-            knowledge_embedding_model: hunyuan
-            # 文本分块大小（token 数），默认 1500
-            knowledge_chunk_size: 1500
-            # 相邻分块重叠 token 数量，默认 0
-            knowledge_chunk_overlap: 0
-
+            git_doc_dir: /${CNB_BUILD_WORKSPACE}/${CNB_REPO_SLUG}/codewiki

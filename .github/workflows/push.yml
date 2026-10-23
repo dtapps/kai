@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: read
+  packages: read # 拉取 GHCR 上的 CI 镜像（公开镜像亦可匿名拉，写上以防仓库转私有）
 
 # 同一分支的多次 push 取消旧的运行，避免排队浪费。
 concurrency:
@@ -24,51 +25,30 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
+    # 直接用预构建的 CI 镜像（含 Go/Node/pnpm + GTK/WebKit + 全部 Go 工具链），
+    # 免去每次重装系统库与 go install 工具。镜像由 ci-image.yml 在 Dockerfile 变动时
+    # 自动重建并推送到 GHCR；首次使用前需先跑一次 ci-image.yml 让镜像存在。
+    container:
+      image: ghcr.io/${{ github.repository }}/ci:latest
     steps:
       - name: 检出代码
         uses: actions/checkout@v7
 
-      - name: 安装 Go
-        uses: actions/setup-go@v7
-        with:
-          go-version-file: 'go.mod'
-
-      - name: 安装 Node.js
-        uses: pnpm/action-setup@v6
-        with:
-          package_json_file: 'frontend/package.json'
-
-      - name: 安装 Node.js
-        uses: actions/setup-node@v7
-        with:
-          node-version-file: 'frontend/.nvmrc'
-
-      # 缓存 apt 已下载的 .deb 包，避免每次 apt-get install 重新从源拉取
-      # libgtk-4-dev / libwebkitgtk-6.0-dev 等大依赖（ubuntu runner 有效）。
-      - name: 缓存 apt 包
-        if: ${{ runner.os == 'Linux' }}
-        uses: actions/cache@v6
-        with:
-          path: /var/cache/apt/archives
-          key: apt-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            apt-${{ runner.os }}-
-
-      # 安装系统依赖（Linux）：wails3 CLI 及后续 go build/test 需要 GTK4 / WebKit2GTK-6.0
-      # 开发库（提供 gtk4.pc / webkitgtk-6.0.pc），否则 make tool-deps 的 `go install wails3`
-      # 与 make check 的 `go test` 会因 pkg-config 找不到头文件而失败。与 release.yml 一致。
-      - name: 安装系统依赖
-        if: ${{ runner.os == 'Linux' }}
+      # 容器镜像已预装 Go 工具链（GOPATH=/go，工具在 /go/bin 且已在 PATH），
+      # 这里把路径常量写入 $GITHUB_ENV，供后续 make 步骤的 GOPATH/GOBIN 引用。
+      # 无需再 apt 装 GTK/WebKit、setup-go/node、make tool-deps——镜像里都已就绪。
+      - name: 设置 Go 工具链目录
+        shell: bash
         run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev jq
+          echo "GO_PATH_DIR=/go" >> "$GITHUB_ENV"
+          echo "GO_BIN_DIR=/go/bin" >> "$GITHUB_ENV"
 
       # 缓存 Go module 下载（GOMODCACHE），让 go mod download / go install
-      # 命中已下载模块，避免重复从 proxy 拉取。
+      # 命中已下载模块，避免重复从 proxy 拉取。镜像内 GOPATH=/go。
       - name: 缓存 Go module
         uses: actions/cache@v6
         with:
-          path: ${{ format('{0}/go/pkg/mod', env.HOME) }}
+          path: ${{ env.GO_PATH_DIR }}/pkg/mod
           key: ${{ runner.os }}-go-mod-${{ hashFiles('**/go.sum') }}
           restore-keys: |
             ${{ runner.os }}-go-mod-
@@ -97,33 +77,6 @@ jobs:
           key: pnpm-${{ runner.os }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
           restore-keys: |
             pnpm-${{ runner.os }}-
-
-      # 统一计算 Go 工具链目录并写入 $GITHUB_ENV，供后续步骤引用。
-      - name: 设置 Go 工具链目录
-        shell: bash
-        run: |
-          echo "GO_PATH_DIR=$HOME/go" >> "$GITHUB_ENV"
-          echo "GO_BIN_DIR=$HOME/go/bin" >> "$GITHUB_ENV"
-
-      # 缓存 Go bin 目录（含 wails3 / sqlc / ent / golangci-lint / govulncheck 等
-      # go install 工具），key 含 go.mod 哈希，依赖版本变化时自动失效重装。
-      - name: 缓存 Go bin 目录
-        uses: actions/cache@v6
-        with:
-          path: ${{ env.GO_BIN_DIR }}
-          key: gobin-${{ runner.os }}-${{ hashFiles('go.mod') }}
-          restore-keys: |
-            gobin-${{ runner.os }}-
-
-      # 把 GOBIN 加入 PATH，否则后续 wails3 / sqlc / golangci-lint / govulncheck 会 command not found。
-      - name: 将 GOBIN 加入 PATH
-        run: echo "${{ env.GO_BIN_DIR }}" >> "$GITHUB_PATH"
-
-      - name: 安装必要的工具
-        env:
-          GOPATH: ${{ env.GO_PATH_DIR }}
-          GOBIN: ${{ env.GO_BIN_DIR }}
-        run: make tool-deps
 
       - name: 安装所有依赖
         run: make deps

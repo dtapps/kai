@@ -1,9 +1,11 @@
 # 使用 golang 镜像作为基础
 FROM golang:1.27.3-trixie
 
+ARG GITHUB_MIRROR="https://files.m.daocloud.io"
 # ==========================================
 # 定义版本变量
 # https://github.com/nodejs/node/releases
+# https://github.com/pnpm/pnpm/releases
 # https://github.com/wailsapp/wails/releases
 # https://github.com/sqlc-dev/sqlc/releases
 # https://github.com/golangci/golangci-lint/releases
@@ -12,8 +14,10 @@ FROM golang:1.27.3-trixie
 # https://github.com/reteps/dockerfmt/releases
 # https://github.com/google/yamlfmt/releases
 # https://github.com/itchyny/gojq/releases
+# https://github.com/gotestyourself/gotestsum/releases
 # ==========================================
 ARG NODE_VERSION=26.12.1
+ARG PNPM_VERSION=12.15.0
 ARG WAILS3_VERSION=v3.0.0-beta.34
 ARG SQLC_VERSION=v1.31.1
 ARG GOLANGCI_LINT_VERSION=v2.15.0
@@ -22,6 +26,7 @@ ARG SHFMT_VERSION=v3.14.1
 ARG DOCKERFMT_VERSION=v0.5.4
 ARG YAMLFMT_VERSION=v0.21.0
 ARG GOJQ_VERSION=v0.12.19
+ARG GOTESTSUM_VERSION=v1.13.0
 
 # 1. 设置 Go 环境变量
 ENV GO111MODULE=on
@@ -47,6 +52,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     zip \
     unzip \
     pkg-config \
+    git \
+    make \
     libgtk-4-dev \
     libwebkitgtk-6.0-dev \
     jq
@@ -67,7 +74,7 @@ RUN ARCH=$(uname -m) && \
     \
     # 配置 npm/pnpm 使用腾讯云源
     npm config set registry https://mirrors.cloud.tencent.com/npm/ && \
-    npm install -g pnpm && \
+    npm install -g pnpm@${PNPM_VERSION} && \
     pnpm config set registry https://mirrors.cloud.tencent.com/npm/ && \
     pnpm config set ignore-scripts false && \
     \
@@ -94,6 +101,8 @@ RUN echo "==> 预安装 Go 工具链（版本已锁定）..." \
     && echo "==> yamlfmt 安装完成 (${YAMLFMT_VERSION})" \
     && go install github.com/itchyny/gojq/cmd/gojq@${GOJQ_VERSION} \
     && echo "==> gojq 安装完成 (${GOJQ_VERSION})" \
+    && go install gotest.tools/gotestsum@${GOTESTSUM_VERSION} \
+    && echo "==> gotestsum 安装完成 (${GOTESTSUM_VERSION})" \
     && echo "--- Go 工具链安装完成 ---" \
     && ls -l $GOPATH/bin
 

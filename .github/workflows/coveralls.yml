@@ -2,7 +2,7 @@
 #
 # 为什么独立：
 #   - 与 Codecov 解耦：Coveralls 侧故障 / token 失效不会拖垮 Codecov 上传与测试 job；
-#   - 凭证隔离：只用 COVERALLS_REPO_TOKEN，不扩散到 Codecov 流程；
+#   - 凭证隔离：只用内置 GITHUB_TOKEN，不扩散到 Codecov 流程；
 #   - Codecov 那条（.github/workflows/coverage.yml）已经跑通，不动它。
 #
 # 代价：本工作流会把测试再跑一遍（与 coverage.yml 重复）。这是「独立」换来的隔离性。
@@ -10,13 +10,11 @@
 # 为什么是单个 job（而不是 go / node 拆两个 job）：
 #   Coveralls 以 build 为单位聚合报告，go / node 两份报告必须落在同一个 build 里，
 #   再靠 flag 合并；同一个 job 上传天然同 build。拆成两个 job 需要完整的
-#   parallel + parallel-finished 协议，且 goveralls 与 coveralls-action 混用容易踩坑，
+#   parallel + parallel-finished 协议，两侧混用不同上传器容易踩坑，
 #   故这里保持单 job 顺序执行，换取确定性。
 #
-# 前提：仓库 secrets 里配置 COVERALLS_REPO_TOKEN（fork PR 无 secret 时跳过上传步骤）。
 # 参考：
 #   https://github.com/coverallsapp/github-action
-#   https://github.com/mattn/goveralls
 name: Coveralls
 
 on:
@@ -34,9 +32,7 @@ concurrency:
 jobs:
   coverage:
     runs-on: ubuntu-latest
-    # 复用预构建 CI 镜像（Go/Node/pnpm + GTK4/WebKit6 + Go 工具链，含
-    # goveralls v0.0.12 / gotestsum v1.13.0 / gojq v0.12.19），
-    # 与 coverage.yml 保持同一环境。镜像由 .github/workflows/ci-image.yml 推送。
+    # 复用预构建 CI 镜像
     container:
       image: ghcr.io/${{ github.repository }}/ci:latest
     env:
@@ -84,38 +80,24 @@ jobs:
         run: make deps
 
       - name: 生成 Go 测试覆盖率
-        # 范围与 coverage.yml / CNB 一致：./internal/... ./pkg/...（不含根 main 包，其 embed 前端产物）。
-        # 本项目未引入 ent，无需排除生成代码。
-        # -vet=off：swiftbridge / selection / engine 存在 fmt.Errorf 非常量格式串，vet 会挂。
         run: |
           gotestsum --junitfile go-test-report.xml -- -vet=off -coverpkg=$(go list ./internal/... ./pkg/... | paste -sd, -) -coverprofile=coverage.out ./internal/... ./pkg/...
 
       - name: 上传 Go 覆盖率到 Coveralls
-        # token 缺失（如 fork PR）时跳过，不让上传成为失败点。
         if: env.COVERALLS_REPO_TOKEN != ''
-        continue-on-error: true # Coveralls 故障不阻断 CI（对齐 Codecov 的 fail_ci_if_error: false）
-        shell: bash
-        run: |
-          # 不要剥模块前缀！goveralls 自己会处理：
-          #   gocover.go findRootPackage() 读 go.mod 得到模块路径，
-          #   findFile() 再用 filepath.Rel 把 cnb.cool/dtapp/kai/internal/x.go
-          #   还原成 <workdir>/internal/x.go，上传前再按 .git 根裁成仓库相对路径。
-          # 若先用 sed 去掉前缀，filepath.Rel 得到 "../.." 开头的路径，会落到
-          # build.Import("internal/x", ".")，模块模式下报
-          #   package internal/x is not in std
-          # 整个上传直接失败。
-          goveralls \
-            -coverprofile=coverage.out \
-            -service=github \
-            -repotoken="$COVERALLS_REPO_TOKEN" \
-            -flagname=go
+        continue-on-error: true
+        uses: coverallsapp/github-action@v2
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          file: coverage.out
+          format: golang
+          flag-name: go
 
       - name: 生成前端测试覆盖率
         working-directory: frontend
         run: pnpm test:coverage
 
       - name: 上传前端覆盖率到 Coveralls
-        # 与 Go 报告同一 job、同一 build，靠 flag 合并成一份总覆盖率。
         if: env.COVERALLS_REPO_TOKEN != ''
         continue-on-error: true
         uses: coverallsapp/github-action@v2

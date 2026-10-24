@@ -33,3 +33,6 @@ coverage.out
 coverage.html
 frontend/coverage
 coverage-go.xml
+go-test-report.xml
+frontend/test-report.xml
+frontend/test-results.json

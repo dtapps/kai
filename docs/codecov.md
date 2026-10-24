@@ -75,6 +75,14 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
 
      （`coverage/lcov.info` 仍正常产出，不受影响。）
   2. 转换步骤用 `node scripts/vitest-json-to-junit.mjs` 把 JSON 转成 `test-report.xml`（JUnit 格式）。
+     - ⚠️ 脚本必须把 `classname` 归一化成**相对仓库根 + `/` 分隔**。Codecov Test Analytics 只解析 JUnit，且**只用 `classname` 定位用例归属文件**（文件分组、跨 run 关联 / flaky 判定、失败跳转都靠它）；Vitest `json` reporter 的 `testResults[].name` 是**绝对路径**，原样写入就会变成 `/__w/<repo>/<repo>/frontend/src/...`（GitHub Actions 容器）、`/home/runner/work/<repo>/<repo>/...`（HA 非容器）、`/builds/<group>/<repo>/...`（GitLab）——同名用例在不同 CI 变成不同记录，flaky 关联与跳转全失效。
+     - 仓库根用**脚本自身位置**推（`path.resolve(dirname(fileURLToPath(import.meta.url)), '../..')`），**不能用 `process.cwd()`**：CI 里该步骤常设 `working-directory: frontend`，cwd 不是仓库根，会算出 `../src/...`。
+     - 归一化分**两层**，结果与绝对前缀是什么无关：
+       1. 常规：JSON 与脚本在同一份 checkout 树内，`path.relative(repoRoot, abs)` 直接相减，`/__w`、`/home/runner/work`、`/workspace`、`/builds` 全覆盖。
+       2. 兜底：路径不在这棵树里（测试在容器内跑、转换在宿主跑；或本机复现别的 CI 产出的 JSON）。从尾部取最长的「在仓库里真实存在」的后缀；最长为 1 段时放弃——避免误命中仓库根的同名单文件（`package.json` 之类）。取不到就**原样返回**，不编造路径。
+     - 兜底探测**必须用 `statSync().isFile()`，不能用 `existsSync()`**：`frontend/src` 这类同名目录会被 `existsSync` 命中，写出一个指向目录的 `classname`。
+     - 也别指望 `codecov.yml` 的 `fixes:` 兜底：它属于覆盖率侧路径修补，官方未声明对 Test Analytics 生效；即便生效也只能写死某一个 CI 的前缀，换 runner（容器 ↔ 裸 runner）就失效——这正是同一仓库出现两条记录的原因。
+     - 对比：`gotestsum`（Go）的 `classname` 是包导入路径（`cnb.cool/dtapp/kai/internal/...`），天然相对、跨环境一致，无需处理。
   3. 上传步骤用 `codecov/test-results-action@v1` 合并上传 `frontend/test-report.xml,./go-test-report.xml`。
 - 最终 Codecov 的 **Tests** 面板同时包含 Go 与 Svelte 的测试结果。
 
@@ -109,6 +117,9 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
 - **Go 测试 `ld` 报错 `cannot find -lwebkitgtk-6.0` 等**：系统库未装，确认 `apt-get install` 步骤在跑且为 `ubuntu-24.04`。
 - **Bundle 面板空白**：检查「构建前端」步骤是否真的上传成功；插件与 Vite 8 不兼容时该步骤会 `continue-on-error` 失败但不阻断。
 - **Tests 面板空白**：检查 `test-results.json` / `go-test-report.xml` 是否生成、`vitest-json-to-junit.mjs` 是否产出 `test-report.xml`、`codecov/test-results-action` 是否拿到 token。
+- **Tests 面板里用例名带 `/__w/...`、`/home/runner/work/...` 等绝对路径，同一条用例出现成两条记录**：`classname` 没归一化。自查： `grep -o 'classname="[^"]*"' frontend/test-report.xml | sort -u | head` —— 出现以 `/`（或 `C:\`）开头即是，应修生成脚本（见 3.3），不要在 `codecov.yml` 里打补丁。
+  - 两种前缀来自**两种执行形态**（容器 job `/__w/<repo>/<repo>` vs 裸 runner `/home/runner/work/<repo>/<repo>`），不是两次不同的 bug。
+  - 历史数据不会迁移：已上传的绝对路径记录保留到 Codecov 60 天保留期满才自然淘汰。**UI 上还能看到旧记录 ≠ 修复没生效**，要看最新一次 run。
 - **覆盖率双份/互相覆盖**：确认 `.github/codecov.yml` 的 `flags` 已区分 `go` / `node`，且 `status` 为 `informational`。
 
 ## 7. 注意事项

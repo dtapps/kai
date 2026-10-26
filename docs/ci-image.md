@@ -5,7 +5,7 @@
 - **CNB**：`.cnb/ci/Dockerfile`，流水线每次现场 `docker build`，层缓存靠 copy-on-write 卷。
 - **GitHub**：`.github/ci/Dockerfile`，由 `ci-image.yml` 预构建推到 GHCR，workflow 用 `container:` 拉取。
 
-两份文件的 `diff` 只有 **21 行**，差异全部集中在「用什么镜像源」和「装不装覆盖率 CLI」。
+两份文件的 `diff` 约 **60 行**，差异集中在「镜像源 / 代理」和「是否预装 gotestsum」。
 
 ## 1. 涉及文件
 
@@ -15,7 +15,7 @@
 | `.github/ci/Dockerfile`            | GitHub Actions 镜像定义，比 CNB 多 `gotestsum`                                   |
 | `.github/workflows/ci-image.yml`   | GitHub 侧唯一构建入口，推送到 `ghcr.io/<owner>/<repo>/ci`                        |
 | `.github/workflows/push.yml`       | 消费镜像：`container: ghcr.io/<repo>/ci:latest`                                  |
-| `.github/workflows/coverage.yml`   | 同上（Codecov 链路）                                                             |
+| `.github/workflows/codecov.yml`    | 同上（Codecov 链路）                                                             |
 | `.github/workflows/coveralls.yml`  | 同上（Coveralls 链路，上传用 `coverallsapp/github-action@v2`，不依赖镜像内 CLI） |
 | `.cnb/workflows/push.yml`          | 消费镜像：`docker: build: .cnb/ci/Dockerfile`（1 处）                            |
 | `.cnb/workflows/pull-coverage.yml` | 同上（2 处 job）                                                                 |
@@ -49,19 +49,19 @@
 
 ### 2.2 只有 `.cnb/ci/Dockerfile` 有
 
-| 内容                                                                         | 目的                                    |
-|------------------------------------------------------------------------------|-----------------------------------------|
-| `sed -i s                                                                    | deb.debian.org                          |
-| `ENV GO111MODULE=on`、`GOPROXY=https://mirrors.cloud.tencent.com/go/,direct` | Go 模块加速                             |
-| `npm config set registry` / `pnpm config set registry` 腾讯云                | 前端依赖加速                            |
-| `pnpm config set ignore-scripts false`                                       | 允许依赖执行 install 脚本（部分包需要） |
-| `ARG GITHUB_MIRROR="https://files.m.daocloud.io"`                            | **声明了但全文未使用**（死参数，见 §7） |
+| 内容                                                                                                                | 目的                                    |
+|---------------------------------------------------------------------------------------------------------------------|-----------------------------------------|
+| APT 源替换：把 `deb.debian.org` 换成 `mirrors.cloud.tencent.com`（`sed -i`，兼容 debian.sources 与旧 sources.list） | 国内构建加速                            |
+| `ENV GO111MODULE=on`、`GOPROXY=https://mirrors.cloud.tencent.com/go/,direct`                                        | Go 模块加速                             |
+| `npm config set registry` / `pnpm config set registry` 腾讯云                                                       | 前端依赖加速                            |
+| `pnpm config set ignore-scripts false`                                                                              | 允许依赖执行 install 脚本（部分包需要） |
+| `ARG GITHUB_MIRROR="https://files.m.daocloud.io"`                                                                   | **声明了但全文未使用**（死参数，见 §7） |
 
 ### 2.3 只有 `.github/ci/Dockerfile` 有
 
-| 内容                        | 用途                                   |
-|-----------------------------|----------------------------------------|
-| `GOTESTSUM_VERSION=v1.13.0` | `coveralls.yml` 跑测试并产出 JUnit XML |
+| 内容                        | 用途                                                               |
+|-----------------------------|--------------------------------------------------------------------|
+| `GOTESTSUM_VERSION=v1.13.0` | `codecov.yml`（JUnit）与 `coveralls.yml`（coverage.out）跑 Go 测试 |
 
 `goveralls` 曾在这份文件里（`GOVERALLS_VERSION=v0.0.12`），现已移除：`coveralls.yml` 改用 `coverallsapp/github-action@v2` 以 `file: coverage.out` 上报，不需要镜像内 CLI。**别再加回来**—— 环境里多一个版本不受工作流控制的二进制，只会让「版本只在 ARG 里」这条唯一事实来源失效。
 
@@ -73,23 +73,29 @@ GitHub 侧**不换任何镜像源**：runner 在境外，直连 `nodejs.org` / `
 
 ### 3.1 构建（`.github/workflows/ci-image.yml`）
 
-- **触发**：`push` / `pull_request` 改到 `.github/ci/Dockerfile`；`schedule: 0 0 * * 1`（每周一 UTC 0 点， 拉基础镜像的 apt 安全更新）；`workflow_dispatch`。
+- **触发**：`push`（任意分支）/ `pull_request` 改到 `.github/ci/Dockerfile`；`schedule: 0 0 * * 1`（每周一 UTC 0 点，拉基础镜像的 apt 安全更新）；`workflow_dispatch`。
 - **权限**：`contents: read` + `packages: write`；`concurrency` 同 `github.ref` 取消旧运行。
-- **步骤**：checkout → setup-qemu → setup-buildx → login ghcr（`GITHUB_TOKEN`）→ metadata → build-push → 清理旧版本。
+- **步骤**：checkout → setup-buildx → login ghcr（`GITHUB_TOKEN`）→ metadata → build-push → 清理旧版本。
 - **标签**：`latest`（仅默认分支）+ `sha-<short>`（每次构建，便于回滚）。
-- **架构**：`linux/amd64,linux/arm64`，多架构 manifest；`container` 起 job 时按 runner 架构自动取对应层。
+- **架构**：**只建 `linux/amd64`**（2026-10-23 起）。消费方 `push.yml` / `codecov.yml` / `coveralls.yml` 的 `runs-on` 全是 `ubuntu-latest`，arm64 没有消费方；多平台构建的 arm64 腿是 QEMU 模拟，装 GTK/WebKit + 十几个 Go 工具会慢到离谱，纯烧 Actions 额度。需要 arm64 时见 §3.2。
 - **PR 不推送**：`push: ${{ github.event_name != 'pull_request' }}`，fork PR 无 `packages: write`。
 - **缓存**：`cache-from/to: type=gha,mode=max`。
-- **保留策略**：`delete-package-versions@v5`，`package-name: ${{ github.event.repository.name }}/ci` （即 `kai/ci`），`min-versions-to-keep: 5`。 注意包名边界：镜像地址是 `ghcr.io/<owner>/<repo>/ci`，但 GHCR 的**包名**是 `<repo>/ci`—— `owner` 不属于包名，只写 `ci` 会找不到包，进而清不掉历史版本、撑爆配额。
+- **保留策略**：`delete-package-versions@v5`，`package-name: ${{ github.event.repository.name }}/ci`（即 `kai/ci`），`min-versions-to-keep: 5`。注意包名边界：镜像地址是 `ghcr.io/<owner>/<repo>/ci`，但 GHCR 的**包名**是 `<repo>/ci`——`owner` 不属于包名，只写 `ci` 会找不到包，进而清不掉历史版本、撑爆配额。
 
-### 3.2 消费
+### 3.2 如需加回 arm64
+
+1. `ci-image.yml` 的 `platforms` 改为 `linux/amd64,linux/arm64`，并恢复 `docker/setup-qemu-action`（QEMU 模拟 arm64）。
+2. 或在 arm64 runner 上单独构建一层，再用 `docker buildx imagetools create` 合成 manifest list。
+3. 消费方若始终是 `ubuntu-latest`（amd64），不要加 arm64——只增加成本，没有收益。
+
+### 3.3 消费
 
 ```yaml
 container:
   image: ghcr.io/${{ github.repository }}/ci:latest
 ```
 
-`push.yml` / `coverage.yml` / `coveralls.yml` 三处相同。
+`push.yml` / `codecov.yml` / `coveralls.yml` 三处相同。
 
 > **首次使用前必须先跑一次 `ci-image.yml`**，否则 `container` 拉不到镜像，job 直接起不来。 同理：改了 Dockerfile 但还没等重建完成就改 workflow，跑的还是旧镜像（`latest` 滞后）。
 
@@ -140,7 +146,7 @@ diff <(grep '^ARG ' .cnb/ci/Dockerfile | sort) \
 | `Package gtk4 was not found` / `webkitgtk-6.0.pc` 缺失 | 镜像缺 `libgtk-4-dev` / `libwebkitgtk-6.0-dev`，wails3 与 webview CGO 都依赖它                                                                                            |
 | `gotestsum: command not found`                         | 用了 CNB 那份 Dockerfile（它不装 gotestsum），或 `/go/bin` 不在 PATH                                                                                                      |
 | `markdownfmt: command not found`                       | 镜像未重建（改了 Dockerfile 要等 `ci-image.yml` 推完）；或装成了已停更的 `shurcooL/markdownfmt`（无 tag、无 `/v3` 路径），确认是 `Kunde21/markdownfmt/v3/cmd/markdownfmt` |
-| CNB 构建卡在 `apt-get update`                          | 腾讯云源不可达；换源那条 `sed` 已用 `                                                                                                                                     |
+| CNB 构建卡在 `apt-get update`                          | 腾讯云源不可达；Dockerfile 里的 `sed -i` 已把 `deb.debian.org` 换成 `mirrors.cloud.tencent.com`（兼容两种 sources 文件），确认网络能到腾讯云镜像                          |
 | 运行期 `wget: not found`                               | 收尾阶段 purge 了 `wget` / `xz-utils`；运行期要下载请用 `curl`                                                                                                            |
 | GHCR 存储配额告警                                      | 清理任务没跑成功；核对 `package-name` 是否为 `<repo>/ci`                                                                                                                  |
 | 工具版本在工作流里「莫名其妙」不是 ARG 里写的那个      | 有人在 workflow 里 `go install ...@latest` 覆盖了镜像版本（禁止，见 §7）                                                                                                  |

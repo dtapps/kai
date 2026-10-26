@@ -1,327 +1,277 @@
-# Kai 项目规划文档
+# Kai 项目规划与架构现状
 
-> 参考 [Bob](https://github.com/ripperhe/Bob) 与 [Easydict](https://github.com/tisfeng/Easydict) 一款 macOS 为主、兼容 Windows 的划词 / 截图 / 输入翻译 + OCR 桌面工具。 技术栈：**Wails 3 (Go) + Vue 3 + TypeScript 7 + Naive UI**
+> 本文最初是 2026-08 的立项规划，现按当前实现更新（最后核对：2026-10-26）。
+
+- 当前版本：`v0.2.x`（最新 tag `v0.2.6`）
+- 技术栈：**Wails 3 (Go) + Svelte 5 + TypeScript 7 + Tailwind 4 + Vite 8**
+- 历史决策过程见 `docs/2026-*.md`（开发日志，已冻结）；文档缺口与后续计划见 `docs/docs-plan.md`
 
 ---
 
 ## 1. 产品定位
 
-常驻系统托盘（菜单栏）的轻量工具，开机自启、失焦可用，提供四类核心能力：
+常驻系统托盘（菜单栏）的轻量翻译工具，开机自启、失焦可用：
 
-| 能力     | 触发方式（mac / win）                             | 说明                 |
-|----------|---------------------------------------------------|----------------------|
-| 输入翻译 | 全局快捷键呼窗 `⌥+A` / `Alt+A`                    | 手动输入文本翻译     |
-| 划词翻译 | 选中 + 快捷键 `⌥+D` / `Alt+D`，或鼠标悬停自动弹窗 | 自动识别语种         |
-| 截图翻译 | 快捷键截图区域 `⌥+S` / `Alt+S`                    | 区域 OCR + 翻译      |
-| 静默 OCR | 快捷键 `⌥+⇧+S` / `Alt+Shift+S`                    | 截图识别后写入剪贴板 |
+| 能力       | 触发方式（mac / win）            | 说明                                          |
+|------------|----------------------------------|-----------------------------------------------|
+| 输入翻译   | 全局快捷键 `⌥+A` / `Alt+A`       | 唤起翻译窗口，手动输入或由复制键回填          |
+| 截图翻译   | 全局快捷键 `⌥+S`（**仅 macOS**） | 区域截图 → OCR → 翻译，结果在截图窗口展示     |
+| 复制键取词 | 执行键 `⌘+C` / `Ctrl+C`          | 模拟系统复制，把当前选区填入输入框并翻译      |
+| 自动剪贴板 | 输入翻译窗口内开关               | 按输入翻译键时直接读剪贴板，不模拟复制键      |
+| OCR        | 随截图翻译调用                   | macOS 用系统 Vision；tesseract 为可选外部引擎 |
 
-参考对象能力对照：
+平台边界（以代码为准）：
 
-- **Bob**：划词/截图/输入翻译、OCR（离线/腾讯/百度/Google）、TTS、驼峰拆分、AppleScript/PopClip 调用、自定义插件。
-- **Easydict**：20+ 翻译服务（OpenAI/Gemini/DeepL/Google/有道/腾讯/Bing/百度…）、48 种语言、OCR 截图、安静截图 OCR、TTS、鼠标划词 + 快捷键划词。
+- **macOS**：完整能力（系统翻译 / 系统 OCR / 截图翻译 / 复制键 / 自动更新）。
+- **Windows**：输入翻译、复制键翻译、在线引擎、自动更新；**不支持系统翻译与截图翻译**（区域截图仅 macOS）。
+- **Linux**：仅保留构建与纯在线翻译能力，不在支持范围。
+
+参考对象：Bob、Easydict（功能与交互参考，非代码依赖）。
 
 ---
 
 ## 2. 技术选型
 
-| 层        | 选型                                 | 说明                                                                      |
-|-----------|--------------------------------------|---------------------------------------------------------------------------|
-| 框架      | **Wails 3**（Beta）                  | Go 后端 + 原生 WebView（mac: WKWebView / win: WebView2），无内嵌 Chromium |
-| 后端      | Go（module `cnb.cool/dtapp/kai`）    | `application` 包管理器风格 API                                            |
-| 前端      | **Vue 3 + TypeScript 7 + Naive UI**  | SPA，bindings 自动生成                                                    |
-| 状态/路由 | Pinia + vue-router                   | 配置状态 / 多窗口路由                                                     |
-| 包管理    | **pnpm**（前端）、Go modules（后端） |                                                                           |
-| 构建      | `wails3 dev` / `wails3 build`        | 热重载 + 类型安全 IPC                                                     |
+| 层     | 选型                                                                               | 说明                                                                  |
+|--------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| 框架   | **Wails 3 `v3.0.0-beta.34`**                                                       | Go 后端 + 原生 WebView（mac: WKWebView / win: WebView2），无 Chromium |
+| 后端   | Go `1.27.3`，module `cnb.cool/dtapp/kai`                                           | 领域 Service + Wrapper 门面，事件驱动 IPC                             |
+| 前端   | **Svelte 5 + TypeScript 7 + Tailwind 4 + Vite 8**                                  | 多 HTML 入口（translate / settings / screenshot），无前端路由框架     |
+| 状态   | Svelte runes + 自研 `stores/`（localStorage 持久化）                               | 无 Pinia / vue-router                                                 |
+| 包管理 | pnpm 12（前端）、Go modules（后端）                                                | 前端 `frontend/.nvmrc` 固定 Node 25.9.0                               |
+| 存储   | SQLite（默认 modernc 纯 Go；`sqlite_mattn` 标签切 CGO）/ [sqlc](https://sqlc.dev/) | `config.db` / `history.db` / `httplog.db`                             |
+| 配置   | viper（`settings.json`，支持热重载）                                               | 引擎凭据独立存 `config.db`，不进 settings                             |
+| i18n   | go-i18n/v2（后端）+ 自研前端 i18n                                                  | split JSON，`make i18n` 合并                                          |
+| 构建   | `wails3` + Taskfile + Makefile                                                     | `make dev` / `make darwin-package` / `make windows-package`           |
+| 可观测 | logutil 按天滚动 + httplogstore + PostHog（opt-in）                                | 日志/HTTP 日志/匿名统计互相独立                                       |
 
-### Wails 3 关键 API（设计依据）
+### Wails 3 关键 API（当前用法）
 
-- 应用入口：`application.New(application.Options{...})` → `app.Run()`
-- 多窗口：`app.Window.NewWithOptions(application.WebviewWindowOptions{...})`，支持 `Show/Hide/Focus/Center/RegisterHook`
-- 系统托盘：`app.SystemTray.New().SetIcon(...).SetMenu(...).AttachWindow(w)`
-- 原生菜单：`app.Menu.New()` → `AddSubmenu` / `Add` / `SetAccelerator` / `OnClick`
-- 事件 IPC：`app.Event.On(name, fn)` / `app.Event.Emit(name, data)`（内存通信，无端口）
-- 服务暴露：`application.NewService(&MyService{})` 注入 `Services`，前端经 `frontend/bindings/` 调用
+- 入口：`application.New(application.Options{...})` → `app.Run()`
+- 多窗口：`app.Window.NewWithOptions(...)`，统一 **创建后立即 `Hide()`**（见 §7）
+- 托盘/菜单：`app.SystemTray.New()` + `app.Menu.New()`，语言变更后整棵菜单重建
+- 事件：`application.RegisterEvent[T](name)` 注册强类型事件，`app.Event.Emit/On` 通信
+- 服务：`application.NewService(...)` 注册领域 Service，前端经 `frontend/bindings/` 调用
 - 资源：`//go:embed all:frontend/dist` + `application.AssetFileServerFS(assets)`
 
 ---
 
 ## 3. 目录结构
 
-```
+```text
 kai/
-├── main.go                      # app 初始化、主窗/设置窗、托盘、菜单、事件
-├── go.mod                       # module cnb.cool/dtapp/kai
-├── build/                       # Wails 构建配置（config.yml / darwin / windows ...）
-├── Taskfile.yml                 # dev/build 任务
-├── PLAN.md                      # 本规划文档
-├── README.md
+├── main.go                    # 组装：日志/配置/DB/服务/窗口/托盘/事件
+├── go.mod                     # module cnb.cool/dtapp/kai
+├── Makefile                   # 开发、代码生成、检查、打包、依赖升级
+├── Taskfile.yml               # Wails 任务入口
+├── build/                     # Wails 构建配置（config.yml / darwin / windows / linux / ios）
+├── docs/                      # 规划、CI、覆盖率、开发日志
 ├── internal/
-│   ├── service/
-│   │   ├── app.go               # AppService：暴露给前端的统一入口
-│   │   ├── engines.go           # 按配置注册启用引擎
-│   │   ├── shortcut.go          # 全局快捷键注册（mac/win）
-│   │   ├── selection.go         # 划词监听
-│   │   ├── screenshot.go        # 截图模块
-│   │   ├── ocr.go               # OCR 调度
-│   │   └── tts.go               # 语音合成
-│   ├── engine/                  # 翻译/OCR 引擎实现（统一接口）
-│   │   ├── engine.go            # Translator / OcrEngine 接口 + Registry
-│   │   ├── deepl.go
-│   │   ├── google.go
-│   │   ├── openai.go
-│   │   ├── baidu.go
-│   │   ├── tencent.go
-│   │   └── youdao.go
-│   ├── config/
-│   │   └── config.go            # JSON 配置（~/.kai/config.json）
-│   ├── i18n/
-│   │   └── i18n.go              # 后端 i18n（zh/en 映射 + 按 config.Language 取文案）
-│   ├── historystore/
-│   │   ├── db.go                # sqlc 生成的 DB 访问代码（SQLite）
-│   │   ├── query.sql            # sqlc 查询定义
-│   │   └── sqlc.yaml            # sqlc 配置
-│   ├── configstore/
-│   │   ├── db.go                # 配置类数据 SQLite 存储（引擎等）
-│   │   ├── query.sql            # sqlc 查询定义
-│   │   └── sqlc.yaml            # sqlc 配置
-│   └── system/                  # 系统级能力封装
-│       ├── translate_darwin.go  # macOS Translation framework（CGO 桥接 Swift/ObjC）
-│       ├── detect_darwin.go     # macOS 语种识别（LanguageIdentification）
-│       └── translate_windows.go # Windows：无系统翻译，回退在线引擎
-│   └── model/
-│       └── model.go             # TranslateRequest/Result、OcrRequest/Result、HistoryItem 等
+│   ├── service/               # AppService 及 Config/Engine/History/Translate/Window Wrapper（RPC 门面）
+│   ├── translate/             # 翻译/OCR 编排、多引擎流式结果、历史写入
+│   ├── engine/                # Translator / OcrEngine 接口、Registry、9 个翻译引擎 + 2 个 OCR 引擎
+│   ├── settings/              # settings.json（viper）读写与热重载
+│   ├── configstore/           # config.db：引擎配置 + 凭据加密（sqlc）
+│   ├── historystore/          # history.db：翻译历史（sqlc）
+│   ├── httplogstore/          # httplog.db：HTTP 请求日志（sqlc，append-only）
+│   ├── sqlite/                # SQLite 驱动切换（modernc / mattn）
+│   ├── hotkey/                # 注册类全局快捷键（input / screenshot）
+│   ├── execkey/               # 执行类快捷键（复制键；mac robotgo / win makc）
+│   ├── selection/             # 剪贴板与选区辅助、平台坐标
+│   ├── events/                # 13 个应用事件常量与 payload
+│   ├── model/                 # 共享模型、语言/主题/窗口常量
+│   ├── i18n/                  # 后端 i18n（locales/split + 合并产物）
+│   ├── logutil/               # 运行日志滚动/压缩/清理
+│   ├── network/               # 代理 / 自定义 DNS 的 HTTP client
+│   ├── useragent/             # 全局 UA 注入
+│   ├── webview/               # Windows WebView2 参数兜底
+│   ├── analytics/             # PostHog 匿名统计
+│   ├── singleinstance/        # 单实例锁
+│   └── buildinfo/             # 构建期变量、数据目录规则
+├── pkg/
+│   ├── swiftbridge/           # macOS Swift 桥接（开发用 dylib / 打包内嵌）
+│   └── wails-updater-providers/ # GitHub / CNB 双更新源 + 内置更新窗口
 └── frontend/
-    ├── package.json             # TS7 + naive-ui + pinia + vue-router + vite
-    ├── vite.config.ts
-    ├── translate.html
-    ├── tsconfig.json
+    ├── package.json           # Svelte 5 + TS7 + Tailwind4 + Vite8 + Vitest5
+    ├── vite.config.ts         # 多入口 + wails 插件 + 条件 Codecov 插件
+    ├── vitest.config.ts       # 独立测试配置（不 merge vite.config）
+    ├── bindings/              # wails3 生成，随仓库提交
     └── src/
-        ├── main.ts              # 接入 pinia + naive-ui + router + i18n
-        ├── App.vue
-        ├── bindings/            # wails3 自动生成（勿手改）
-        ├── i18n/
-        │   ├── index.ts         # vue-i18n 初始化（locale 取自后端 GetConfig 或系统）
-        │   ├── en.ts            # 英文文案
-        │   └── zh.ts            # 中文文案
-        ├── router/index.ts      # 主窗/设置窗 路由
-        ├── views/
-        │   ├── TranslateWindow.vue   # 主翻译窗口
-        │   ├── SelectionPopup.vue    # 划词浮窗
-        │   └── Settings.vue          # 设置窗口
-        ├── composables/
-        │   ├── useTranslate.ts
-        │   └── useHotkey.ts
-        ├── stores/
-        │   └── config.ts        # Pinia 配置状态
-        └── styles/
+        ├── components/        # TranslateWindow / ScreenshotWindow / Settings + settings/*Tab
+        ├── windows/           # 各 HTML 入口的 mount 代码
+        ├── stores/            # theme / ui / persisted
+        ├── runtime/           # 平台判断、前端日志
+        ├── utils/             # events / analytics / style
+        ├── i18n/              # zh-CN / en-US
+        └── test/              # Vitest setup
 ```
 
 ---
 
-## 4. 功能模块设计
+## 4. 功能模块
 
-### 4.1 翻译引擎（engine/）
+### 4.1 翻译引擎（`internal/engine`）
 
-- 统一接口：
-  - `Translator`: `Name() string` + `Translate(ctx, req) (*TranslateResult, error)`
-  - `OcrEngine`: `Name() string` + `Recognize(ctx, req) (*OcrResult, error)`
-- 首版接入：DeepL、Google、OpenAI（兼容大模型）、百度、腾讯、有道
-- 能力：自动语种识别、多引擎结果并排展示、`Registry` 按配置动态注册
-- 请求/结果模型（`internal/model/model.go`）：`TranslateRequest/Result`、`OcrRequest/Result`、`DictItem`、`OcrRegion`
+- 统一接口：`Translator.Name/Translate`、`OcrEngine.Name/Recognize`；`Registry` 按配置动态注册。
+- 已知引擎：`apple`、`google`、`deepl`、`openai`、`anthropic`、`gemini`、`baidu`、`tencent`、`youdao`；OCR：`vision`、`tesseract`。
+- 默认启用：`google`（全平台）、`apple`（仅 macOS）、`vision`（仅 macOS）；其余需用户在设置页添加并填 Key。
+- 配置存 `config.db` 的 `engines` 表（API Key / Secret 加密），字段 schema 由 `engine.GetEngineSchema` 提供，前端据此渲染表单。
+- 多引擎并行：`TranslateMulti` 启动后通过 `kai:translate:result` 事件逐个推送结果。
 
-### 4.2 OCR（ocr.go + engine）
+### 4.2 OCR 与截图翻译
 
-- 区域截图捕获：mac 用 `screencapture` / 自建选区；win 用 `PrintWindow` + 选区
-- OCR 引擎：腾讯 / 百度 / Google OCR，后续可接离线
-- 静默模式：识别结果直接写入系统剪贴板
+- OCR 单选：同一时刻只注册一个 OCR 引擎，优先用户启用的 `tesseract`，否则 `vision`。
+- `vision` 走 macOS Vision 框架（离线、免安装），参数 `correct_text` / `timeout_sec` 存 `Extra` JSON。
+- `tesseract` 调本机 `tesseract` 可执行文件，需用户自行安装。
+- 截图翻译流程：快捷键 → `CaptureRegion`（macOS `screencapture -i`）→ OCR → 多引擎翻译 → `kai:screenshot:ocr` 投递截图窗口；改语言走 `kai:screenshot:retranslate` 复用 OCR 原文。
+- Windows 无区域截图实现，截图翻译不可用。
 
-### 4.3 划词（selection.go）
+### 4.3 取词（复制键，不是划词浮窗）
 
-- mac：Accessibility 权限 + 选区监听（或轮询 `pbpaste` / CGEvent 兜底）
-- win：UI Automation 取选中文本
-- 浮窗：贴近选区坐标弹出 Naive UI 卡片
+- 历史方案（AX 读取 + `SelectionPopup` 浮窗）已移除；现方案为**执行键模拟复制**：
+  - macOS：`robotgo.KeyTap("c","cmd")`（CGO）；
+  - Windows：`makc` 调 `user32.dll`（纯 Go，保持 `CGO_ENABLED=0`）；
+  - 复制失败可按配置回退系统默认复制键（`execkeys.copy.fallback`）。
+- 读取剪贴板后经 `kai:input:fill` 回填输入框并翻译。
+- 自动剪贴板模式（`auto_clipboard`）下不模拟复制，直接读剪贴板；开启时复制键自动停用并快照原状态。
 
-### 4.4 快捷键（shortcut.go）
+### 4.4 快捷键（`internal/hotkey`）
 
-- 优先后端全局钩子（失焦可用）：mac 走 CGO/Carbon 或成熟库；win 注册系统热键
-- 配置化：键位存于 `Config.Hotkeys`，前端可编辑
+- 注册类：`input`（默认 `Alt+A`，启用）、`screenshot`（默认 `Alt+S`，关闭）；通过 `app.GlobalShortcut` 注册。
+- 执行类：`execkeys.copy`（默认 `Cmd+C` / `Ctrl+C`，启用），不注册监听，由程序主动模拟。
+- 配置变更后重新注册并广播 `kai:hotkeys:changed`；托盘菜单按启用状态置灰。
 
-### 4.5 TTS（tts.go）
+### 4.5 窗口与事件
 
-- 系统语音（mac `say` / win SAPI）+ 在线 TTS（火山 / 腾讯 / Google）
+- 常驻窗口：`settings`（设置，主窗口）、`translate`（输入翻译）、`screenshot`（截图翻译）；另有 updater 窗口由 `pkg/wails-updater-providers` 管理。
+- 全部使用**原生标题栏**；红 X = `Hide()` 不销毁，并在 `WindowClosing` 钩子里广播 `kai:window:closing` 让前端清空状态。
+- 事件（`internal/events/events.go`，13 个）：窗口显隐/关闭、语言/主题/快捷键/引擎变更、输入回填、多引擎结果、截图 OCR / 重截 / 重翻、自动剪贴板变更。
+- 前端对应常量在 `frontend/src/utils/events.ts`，两端保持一致。
 
-### 4.6 配置（config/）
+### 4.6 配置、存储与日志
 
-- 数据目录（按构建模式切换，由 `version` 包变量 `Dev` 决定）：
-  - **正式版**：`~/.kai/`（config.json、history.db 等）
-  - **开发版**：`~/.kai.dev/`（避免污染正式数据，便于联调）
-- 字段：默认引擎、默认目标语言、各引擎凭证（APIKey/Secret/Endpoint）、快捷键、TTS 设置
-- 前端 `GetConfig / SaveConfig` 读写并热更新引擎注册
+| 内容          | 位置                                        | 说明                                                            |
+|---------------|---------------------------------------------|-----------------------------------------------------------------|
+| 界面/功能配置 | `~/.kai/settings.json`（开发 `~/.kai.dev`） | viper 热重载；字段见 `internal/settings`                        |
+| 引擎配置      | `~/.kai/data/config.db`                     | 凭据由机器指纹派生密钥加密（`configstore/crypto.go`）           |
+| 翻译历史      | `~/.kai/data/history.db`                    | 去重写入，支持搜索/删除/清空                                    |
+| HTTP 日志     | `~/.kai/data/httplog.db`                    | append-only，按保留天数清理                                     |
+| 运行日志      | `~/.kai/logs/`                              | `kai.log` / `frontend.log` / `kai-bridge.log`，按天滚动、可压缩 |
 
-### 4.7 翻译历史（historystore/）
+默认值：界面语言/主题 `auto`、目标语言 `zh`、源语言 `auto`、预发布通道开、匿名统计关、日志 `info` 保留 30 天并压缩、HTTP 日志开、代理关。
 
-- 存储：`~/.kai/data/history.db`（SQLite 单文件）
-- **DB 交互使用 [sqlc](https://sqlc.dev/)**：在 `internal/historystore/sqlc.yaml` 配置 SQLite 方言，`query.sql` 定义 `insert_history` / `query_history` / `delete_history` / `clear_history` 等查询，由 `sqlc generate` 产出类型安全 Go 代码（`db.go`），业务层只调用生成的方法，不手写 SQL 拼接
-- 记录字段（见 `model.HistoryItem`）：原文、译文、源语言、目标语言、引擎名、时间戳、OCR 来源标记
-- 能力：
-  - 每次翻译/OCR 完成后自动入库（去重：相同原文+引擎+方向不重复记）
-  - 前端历史面板：列表、搜索（按原文/译文/语言）、按时间倒序、分页加载
-  - 点击历史项可回填到翻译框重新翻译
-  - 支持单条删除 / 清空全部
-  - 上限保护（如保留最近 5000 条，超出按时间淘汰），避免无限增长
-- 对外接口（AppService 暴露给前端）：`AddHistory` / `QueryHistory(keyword, offset, limit)` / `DeleteHistory(id)` / `ClearHistory`
+### 4.7 自动更新
 
-### 4.8 系统级翻译能力（system/）
+- `pkg/wails-updater-providers` 提供 GitHub / CNB 双 provider，按界面语言选源（中文 → CNB，英文 → GitHub），可手动指定。
+- 预发布通道默认开启；stable 用 tag 比较，预发布用构建时间/commit 比较。
+- 启动静默检查 + 托盘「检查更新」；内置更新窗口，下载完成后重启生效。
 
-不同平台系统是否提供翻译接口，方案不同：
+### 4.8 国际化与主题
 
-- **macOS：提供系统翻译**
-  - 框架：**Translation framework**（macOS 14 Sonoma+），可应用内翻译，离线、无需 API Key
-  - 语种识别：**NaturalLanguage `LanguageIdentification`**（或 Translation 自带识别）
-  - 接入方式：Go 通过 CGO 桥接 Swift/Objective-C（编译期链接 `Translation.framework` / `NaturalLanguage.framework`），封装为 `system.TranslateDarwin` / `system.DetectDarwin`
-  - 注意：首次使用需下载语言模型 + 系统授权弹窗；应作为可选引擎「系统翻译（macOS）」出现在引擎列表，默认启用（mac 用户零配置即用）
-- **Windows：无系统翻译 API**
-  - Windows 没有类似 macOS Translation 的公开离线系统翻译接口（剪贴板/分享用的 `Windows.ApplicationModel.DataTransfer` 不是翻译）
-  - 方案：Windows 下「系统翻译」引擎不存在，自动隐藏该选项；翻译走在线引擎（Google/DeepL/OpenAI/腾讯/百度/有道）
-  - 语种识别：Windows 可用 `Windows.Globalization` 的 `LanguageRecognizer`（WinRT），同样经 CGO/WinRT 桥接，作为可选能力
-- **统一处理**：`system` 包按 `runtime.GOOS` 编译不同文件（build tag `darwin` / `windows`），对外暴露统一 `SystemTranslator` 接口；不可用时引擎列表自动剔除，前端无需感知平台差异
+- 后端：go-i18n/v2，`internal/i18n/locales/split/<locale>/*.json` 为源，`make i18n-go` 合并。
+- 前端：`zh-CN.ts` / `en-US.ts`，split 文件由 `make i18n-frontend` 合并。
+- 严格区分 `Locale`（界面语言 `auto/zh-CN/en-US`）与 `Language`（翻译语言 `auto/zh/en/...`），不可混用。
+- 主题 `auto/light/dark`，auto 跟随系统；窗口原生外观在启动时设置，运行时由前端 theme store 尝试同步。
+- 语言/主题变更分别广播 `kai:locale:changed` / `kai:theme:changed`，托盘菜单随之重建。
 
-### 4.9 国际化（i18n，前端 + 后端）
+### 4.9 匿名统计（PostHog）
 
-前后端均需支持多语言（至少 **中文 / 英文**），翻译工具本身面向多语言用户，i18n 是刚需。
-
-- **前端（vue-i18n）**
-  - 依赖：`vue-i18n`（与 Vue3 配套）
-  - 文案文件：`src/i18n/zh.ts`、`src/i18n/en.ts`，由 `src/i18n/index.ts` 初始化
-  - 所有 UI 文案（按钮、菜单、设置项、提示、空状态）走 `t('key')`，**不硬编码字符串**
-  - 当前语言来源：`GetConfig().Language`；**支持 `auto`（见 4.11），非 auto 时直接用配置值**，可在设置里切换并持久化
-  - 与 Naive UI 集成：Naive UI 自身有 `n-config-provider` 的 locale，需与 vue-i18n 的 locale 联动（如中文用 `zhCN`、英文用 `enUS`）
-- **后端（Go，使用 go-i18n/v2）**
-  - 范围：对外返回的错误信息、状态提示、引擎/语言显示名等需可本地化
-  - 方案：`internal/i18n` 包，使用 **`github.com/nicksnyder/go-i18n/v2`** 管理多语言文案；文案文件 `active.en.json`（source/fallback）/ `active.zh.json` 经 `//go:embed` 内嵌，构建后独立运行无需外部文件
-  - 对外函数保持 `T(lang, key)` / `EngineName(lang, engine)` / `LanguageName(lang, code)`，未知语言回退英文 source，再缺省返回 key
-  - 该库原生支持 ICU MessageFormat 与复数规则，后续如需「N 条记录」类本地化文案可直接用，无需自行拼装
-  - 错误包装：业务错误（如 `ErrNoEngine`、`ErrAPIKey`）返回时附带 i18n key，前端按当前 locale 渲染，避免后端硬编码中文
-  - 引擎/语言列表的「展示名」由后端提供（如 `google → "Google"`、`ZH → "中文"`），前端直接用，减少前端维护成本
-- **语言枚举**：中（zh）/ 英（en）为首批；架构预留扩展（ja/ko 等），新增只需补两份文案 + 映射
-
-### 4.10 主题（Theme，含自动）
-
-UI 主题需支持切换，并**默认「自动」跟随系统外观**（亮/暗），与 Bob/Easydict 一致。
-
-- **主题枚举**：`auto`（默认）/ `light` / `dark`
-- **自动模式（auto）实现**：
-  - 前端经 Wails 暴露的接口读取**系统外观**（mac 用 `window.matchMedia('(prefers-color-scheme: dark)')`；Wails3 WebView 内可直接用 `matchMedia`，无需后端桥接；如需后端兜底可加 `system.Appearance()` CGO 取 `NSAppearance`）
-  - 监听系统外观变化：`matchMedia(...).addEventListener('change', ...)`，切到暗色则前端切 `dark` 主题、亮色切 `light`
-  - `auto` 下不写死主题，实时跟随系统；用户切到 `light`/`dark` 后停止跟随
-- **与 Naive UI 集成**：`n-config-provider` 的 `theme` 属性在 dark 时传 `darkTheme`、light 时传 `lightTheme`；同时 `n-config-provider` 的 `theme-overrides` 提供 Kai 品牌色（主色等）
-- **持久化**：`Config.Theme` 存于 `config.json`，默认 `auto`；前端 `SaveConfig` 写回，重启后恢复。AppService 新增 `GetTheme()/SetTheme()`（或直接复用 GetConfig/SaveConfig）
-- **托盘/窗口外观**：深色模式下窗口背景、托盘图标（可准备 light/dark 两套 `ic_template`/`ic_mask`）随主题切换
-
-### 4.11 语言（Language，含自动）
-
-界面语言同样支持「自动」，**跟随系统语言**，与主题自动模式对称。
-
-- **语言枚举**：`auto`（默认）/ `zh` / `en`（架构预留 ja/ko 等）
-- **自动模式（auto）实现**：
-  - 前端首次启动（配置为 `auto`）：取 `navigator.language`（或 `window.language`）→ 映射 `zh-CN/zh / → zh`，`en-* → en`，其余回退 `en`
-  - 后端兜底：AppService 提供 `DetectSystemLang()`，经 `runtime.GOOS`/`os` 环境变量（`LANG`/`LC_ALL` 或 mac 的 `defaults read -g AppleLocale`）推断，供前端在 WebView 不可用时的回退
-  - `auto` 下实际生效语言（resolved locale）由前端解析后用于 vue-i18n 的 `locale` + Naive UI 的 `n-config-provider` locale；用户手动选 `zh`/`en` 后停止跟随
-- **持久化**：`Config.Language` 存于 `config.json`，默认 `auto`；切换后 `SaveConfig` 写回。`auto` 与具体 `zh/en` 均视为合法值，后端 `i18n.T` 在收到 `auto` 时应回退到推断值（或前端解析后传确定值给后端）
-- **与主题联动**：主题 auto 跟随系统外观、语言 auto 跟随系统语言，二者独立配置、互不干扰
+- 默认关闭，opt-in；未配置 token 或 dev 构建自动 no-op。
+- 事件：`app_installed` / `app_started` / `translate_input` / `translate_screenshot` / `settings_opened` / `feature_toggled` / `error_occurred`。
+- 详细字段与隐私边界见 `README.md` §2。
 
 ---
 
-## 5. 开发里程碑（M1–M6）
+## 5. 里程碑与现状
 
-| 阶段                 | 目标                      | 关键任务                                                                                                                                                                     |
-|----------------------|---------------------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **M1 脚手架 & 基建** | 跑通 Wails3+Vue3+Naive UI | ①`pnpm install` ②`main.go` 改多窗口+托盘+菜单 ③`AppService` 替换示例 Service ④前端 `main.ts` 接 pinia+naive-ui+router ⑤`wails3 dev` 验证空壳可运行                           |
-| **M2 翻译主流程**    | 输入翻译闭环              | ①`model`/`config`/`engine`/`history` 接口 ②接 Google（免 key）验证链路 ③叠加 DeepL/OpenAI（带 key）④前端 `TranslateWindow.vue` + `useTranslate` 结果展示 ⑤翻译完成自动写历史 |
-| **M3 划词浮窗**      | 选中即译                  | ①`selection.go` 选区监听（mac 优先）②`SelectionPopup.vue` 浮窗 ③贴近选区坐标弹出                                                                                             |
-| **M4 截图 OCR**      | 截图识别                  | ①`screenshot.go` 区域截图 ②`ocr.go` + OCR 引擎 ③静默 OCR 写剪贴板                                                                                                            |
-| **M5 快捷键 & 设置** | 体验完善                  | ①`shortcut.go` 全局快捷键 ②`Settings.vue` 引擎配置持久化 ③`tts.go` 语音合成                                                                                                  |
-| **M6 跨平台 & 打包** | 发布                      | ①Windows 适配 ②签名 ③dmg / msi 安装包                                                                                                                                        |
+| 阶段             | 状态 | 说明                                                                                   |
+|------------------|------|----------------------------------------------------------------------------------------|
+| M1 脚手架 & 基建 | ✅   | 多窗口 + 托盘 + 菜单；buildinfo/model/engine/service 骨架；i18n/主题/语言 auto         |
+| M2 翻译主流程    | ✅   | Google/DeepL/OpenAI 等引擎；多引擎并排；历史库（sqlc）                                 |
+| M3 取词          | ✅   | 原划词浮窗已下线，改为复制键 + 自动剪贴板方案                                          |
+| M4 截图 OCR      | ✅   | macOS 区域截图 + Vision/tesseract；截图窗口左图右译                                    |
+| M5 快捷键 & 设置 | ✅   | 注册键/执行键拆分；设置页四个 Tab；引擎 schema 化                                      |
+| M6 跨平台 & 打包 | ✅   | macOS / Windows 双平台打包（dmg / nsis / msix）；GitHub Release                        |
+| 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB / GitLab / Gitee 镜像同步、CI 体系 |
 
-> 引擎接入优先级建议：M2 先通 **Google（免 key）** 验证链路，再叠加 **DeepL / OpenAI**；百度/腾讯/有道随配置可用。
-
----
-
-## 6. 待确认事项（开工前）
-
-1. 首版是否只做 **macOS**，Windows 放到 M6 再适配？（或脚手架即双平台）
-2. M2 引擎接入顺序偏好（Google 先通 vs DeepL/OpenAI 优先）
-3. 划词首版方案：接受「选中 + 快捷键 `Alt+D`」先跑通，还是直接做「鼠标悬停自动弹窗」（需 Accessibility 授权，较重）
+当前发版：GitHub Release 触发后同步到 CNB / GitLab / Gitee；Gitea / GitCode 仅作代码镜像，不发布 Release。每日 Nightly 已取消，预发布改为手动 `prerelease`。
 
 ---
 
-## 7. 环境准备 & 常用命令
+## 6. 环境准备与常用命令
 
-### 7.1 数据目录规则
+### 6.1 数据目录
 
-- 正式版使用 `~/.kai/`，开发版使用 `~/.kai.dev/`，由编译期变量切换（见 7.3）。
+- 正式版 `~/.kai/`，开发版 `~/.kai.dev/`，由 `buildinfo.Dev` 切换。
+- `data/` 放三个 SQLite；`logs/` 放运行日志。
 
-### 7.2 版本与打包信息注入
+### 6.2 构建期变量
 
-- 在 `internal/buildinfo/version.go` 定义可被 `-ldflags -X` 覆盖的变量：
+`internal/buildinfo/buildinfo.go` 暴露可被 `-ldflags -X` 覆盖的变量：
 
-  ```go
-  package buildinfo
-  var (
-      Version   = "dev"        // 版本号
-      BuildTime = "unknown"    // 打包时间
-      Dev       = "true"       // 是否开发模式（决定 ~/.kai 还是 ~/.kai.dev）
-  )
-  ```
-- 打包时通过 `-ldflags` 覆盖：
+```go
+var (
+    Version   = "dev"      // 版本号
+    BuildTime = "unknown"  // 打包时间
+    GitCommit = ""         // 提交短哈希
+    Dev       = "true"     // 开发模式：~/.kai.dev
+)
+```
 
-  ```bash
-  go build -ldflags "\
-    -X cnb.cool/dtapp/kai/internal/buildinfo.Version=1.0.0 \
-    -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-    -X cnb.cool/dtapp/kai/internal/buildinfo.Dev=false"
-  ```
-- 开发运行（`wails3 dev`）默认 `Dev=true`，走 `~/.kai.dev/`；正式构建 `Dev=false`，走 `~/.kai/`。
+CI 通过 `-ldflags "-X cnb.cool/dtapp/kai/internal/buildinfo.Version=..."` 注入；本地 `make dev` 默认 `Dev=true`。
 
-### 7.3 命令
+### 6.3 常用命令
 
 ```bash
-# 安装 Wails 3 CLI
-go install github.com/wailsapp/wails/v3/cmd/wails3@latest
-wails3 doctor
+# 初始化（Go/前端依赖 + bindings + sqlc）
+make setup
 
-# 前端依赖（pnpm）
-cd frontend && pnpm install
+# 开发（热重载，走 ~/.kai.dev）
+make dev
 
-# 开发运行（热重载，默认开发目录 ~/.kai.dev）
-wails3 dev
+# 代码生成
+make bindings      # Wails TS 绑定
+make sqlc          # configstore / historystore / httplogstore
+make i18n          # 合并 split i18n
+make swift-build   # 编译 Swift 桥接 dylib（仅 macOS）
 
-# 正式构建（注入版本号 + 打包时间 + 正式目录）
-wails3 build -ldflags "\
-  -X cnb.cool/dtapp/kai/internal/buildinfo.Version=1.0.0 \
-  -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) \
-  -X cnb.cool/dtapp/kai/internal/buildinfo.Dev=false"
+# 检查与测试
+make format
+make check         # lint-go + lint-frontend + test-go + fuzz-go + vuln-go
+make check-cross   # 交叉编译验证（darwin/arm64 + windows/CGO=0）
+
+# 打包
+make darwin-package
+make windows-package
 ```
 
-> 注：Wails 3 目前处于 Beta，API 可能变动，以 https://v3.wails.io 最新文档为准。
+> Wails 3 仍处 Beta，API 可能变动，以 https://v3.wails.io 为准；升级 Wails 版本时同步改 `go.mod` 与两份 CI Dockerfile 的 `WAILS3_VERSION`。
 
 ---
 
-## 8. 进度追踪
+## 7. 当前约束与已知问题
 
-| 里程碑               | 状态      | 说明                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
-|----------------------|-----------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| **M1 脚手架 & 基建** | ✅ 完成   | 多窗口(主/设置)+托盘+菜单；`buildinfo`/`model`/`config`/`engine`/`service` 骨架；前端 pinia+naive-ui+router + i18n 初始化；**主题/语言 auto 基建已落地**（config 加 `Theme`+`Language=auto`、service 加 `DetectSystemLang`/`DetectSystemAppearance`/`GetTheme`/`SetTheme`、`resolveLang` 修正 GetEngines/GetLanguages lang 来源；前端 App.vue 接 ConfigProvider + matchMedia 自动主题 + navigator.language 自动语言）；后端 go-i18n/v2 切换完成；`go build .` + `pnpm typecheck` 通过                                                                                                                                                                                                                       |
-| **M2 翻译主流程**    | ✅ 完成   | ①`model`/`config`/`engine`/`history`/`service` 接口落地 ②Google（免 key gtx 端点，标准库 net/http）③DeepL（需 APIKey，免费版默认端点）+ OpenAI（Chat Completions 兼容，Endpoint=完整接口地址/Extra=model）④前端 `TranslateWindow.vue` 引擎/语言下拉 + 结果展示 ⑤翻译完成自动写历史（去重）；`internal/historystore` 纯 Go SQLite（modernc.org/sqlite，无 CGO），API 手写实现与 sqlc 生成一致（`query.sql`+`sqlc.yaml` 为可重新生成源头）；前端历史面板（搜索/删除/清空/回填）；`go build` 后端零错误、前端 typecheck 零错误                                                                                                                                                                                 |
-| **M3 划词浮窗**      | ✅ 完成   | ①`selection.go`（带 darwin/windows build tag）轮询 `pbpaste` 检测选中文本变化，命中后 `app.Event.Emit("kai:selection", {text,x,y})` 推前端（zero 额外授权，mac 优先；非 darwin 回退空实现）②`SelectionPopup.vue` 浮窗监听 `kai:selection`，贴近选区坐标弹出并即时翻译 ③`main.go` 注册 `selection` 隐藏窗口、`StartSelectionMonitor` 在 Startup 启动 ④i18n 补 `selection.*`；`go build` 后端零错误、前端 typecheck 零错误（仅 TranslateWindow.vue 预存 `copyText` 未读 HINT）                                                                                                                                                                                                                                |
-| **M4 截图 OCR**      | ✅ 完成   | ①`internal/engine/ocr_tesseract.go`（纯 Go exec 调系统 `tesseract`，无 CGO）：`TesseractOCR.Recognize` 写临时 PNG→tesseract→读 txt；`CaptureScreenshot` 用 `screencapture`(mac)/`import`(linux) 截全屏，windows 回退 `ErrNoScreenshot` ②`engines.go` 注册 `tesseract` OCR 引擎 ③`AppService.Ocr(req)`（取已注册 OCR，默认 tesseract）+ `ScreenshotOCR()`（截图→OCR 一站式，返回文本）④`TranslateWindow.vue` 加「截图翻译」按钮，回填并自动翻译（`from_ocr=true`），i18n 补 `ocr.*`；后端零 error、前端仅 HINT（未用变量）                                                                                                                                                                                   |
-| **M5 快捷键 & 设置** | ✅ 完成   | ①`internal/service/hotkey.go`（新建）用 `app.GlobalShortcut.Register(accel, cb)` 注册 4 个全局快捷键（input/selection/screenshot/silent_ocr，来自 `cfg.Hotkeys`），回调只做窗口显隐/事件推送：截图→`ScreenshotOCR()`→`kai:screenshot:result` 事件；静默 OCR→`writeToClipboard`（mac pbcopy）②`selection_darwin.go`/`selection_other.go` 加 `writeToClipboard` 平台实现 ③`Startup` 末尾调 `RegisterHotkeys` ④前端 `TranslateWindow.vue` 监听 `kai:screenshot:result`(回填并翻译)/`kai:hotkey:selection`(提示先选文本)；`Settings.vue` 增强默认引擎/目标语言/TTS/快捷键展示 ⑤i18n 补 `settings.engine/default_to/tts/hotkeys/hotkey_hint`、`hotkey.*`、`selection.hotkey_hint`；后端零 error、前端仅预存 HINT |
-| **M6 跨平台 & 打包** | ⏳ 待开始 |                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+- **Windows WebView2 竞态**：窗口统一「创建后立即 `Hide()`」，避免 `Hidden: true` 延迟创建 controller 触发 `80010108`；同时注入 `--disable-gpu*` 兜底参数。
+- **macOS 首次唤起截图窗口可能被遮挡**：accessory 应用从后台抢焦点的平台限制；再次触发或点托盘图标可恢复。
+- **截图翻译仅 macOS**：`CaptureRegion` 只实现 darwin；Windows 调用返回 `ErrNoScreenshot`。
+- **Swift 桥接**：开发态需本地 `pkg/swiftbridge/libkai_bridge.dylib`（`make swift-build`）；打包态从内嵌字节落地临时文件后 `Dlopen`。
+- **CGO / 平台构建**：macOS 依赖 CGO（robotgo、mattn sqlite 可选、Swift 桥）；Windows 保持 `CGO_ENABLED=0`（makc + modernc sqlite）。
+- **SQLite 驱动切换**：默认 `modernc.org/sqlite`（纯 Go）；`-tags sqlite_mattn` 切到 `mattn/go-sqlite3`（CGO），DSN 语法不同，见 `internal/sqlite`。
+- **主程序构建用 `go build .`**：`go build ./...` 会误扫 `build/ios` 脚手架脚本；CI 检查时需要先建 `frontend/dist` 占位目录满足 `//go:embed`。
+- **前端测试**：`frontend/vitest.config.ts` 不 merge `vite.config.ts`（wails 插件依赖构建期 bindings）；`@bindings` 指向 `frontend/bindings`。
+- **pnpm peer 规则**：`frontend/.npmrc` 显式放行 `@codecov/vite-plugin` 对 Vite 8 的 peer。
 
-### 已知技术约束（已验证）
+---
 
-- Wails 3 beta.3 无 `UpdateService`；Service 经 `application.NewService(svc)` 注册，窗口引用由 `svc.SetApp(app)` 注入，Service 内用 `app.Window.GetByName("main")` 取窗口。
-- **TypeScript 7 与 vue-tsc 不兼容**（TS7 移除 `typescript/lib/tsc` 子路径）。构建脚本用纯 `vite build`，类型检查用 `tsc --noEmit`；vue-tsc 暂不参与构建。
-- pnpm 11 供应链策略：`vue-demi` 须 `pnpm approve-builds --all` 批准 postinstall；`package.json` 的 `pnpm.onlyBuiltDependencies` 已废弃，改用 `frontend/.npmrc` 的 `dangerously-allow-all-builds=true`。
-- 主程序构建用 `go build .`（`go build ./...` 会误报 `build/ios` 脚手架辅助脚本）。
-- 数据目录：正式 `~/.kai/`、开发 `~/.kai.dev/`（由 `buildinfo.Dev` 切换）；打包经 `-ldflags -X` 注入版本号/时间/Dev。
+## 8. 文档与历史
+
+| 文档                                            | 内容                                        |
+|-------------------------------------------------|---------------------------------------------|
+| `README.md` / `README_EN.md`                    | 用户向介绍、功能、平台、隐私、发布          |
+| `docs/ci-image.md`                              | CNB / GitHub 两份 CI Dockerfile 与镜像分发  |
+| `docs/codecov.md`                               | Codecov 覆盖率 / bundle / 测试结果          |
+| `docs/coveralls.md`                             | Coveralls 双 flag 上传                      |
+| `docs/gitlab-ci.md`                             | GitLab 发布同步（原覆盖率方案已下线）       |
+| `docs/coverage-go.md` / `docs/coverage-node.md` | 覆盖率实现模板与当前状态                    |
+| `docs/docs-plan.md`                             | 文档缺口分析与后续补写计划                  |
+| `docs/2026-*.md`                                | 2026-08 ~ 09 开发日志（历史快照，不再更新） |

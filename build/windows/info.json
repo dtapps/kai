@@ -6,10 +6,10 @@
 		"0000": {
 			"ProductVersion": "0.0.1",
 			"CompanyName": "DTApp",
-			"FileDescription": "常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。",
+			"FileDescription": "常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。",
 			"LegalCopyright": "(c) 2026, liguangchun",
 			"ProductName": "Kai",
-			"Comments": "A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR."
+			"Comments": "A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR."
 		}
 	}
 }

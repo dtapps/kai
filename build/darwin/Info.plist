@@ -5,7 +5,7 @@
 		<key>CFBundleExecutable</key>
 		<string>Kai</string>
 		<key>CFBundleGetInfoString</key>
-		<string>A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR.</string>
+		<string>A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR.</string>
 		<key>CFBundleIconFile</key>
 		<string>icons</string>
 		<key>CFBundleIconName</key>

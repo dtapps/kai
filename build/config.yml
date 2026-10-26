@@ -8,9 +8,9 @@ info:
   companyName: "DTApp" # The name of the company
   productName: "Kai" # The name of the application
   productIdentifier: "net.dtapp.kai" # The unique product identifier
-  description: "常驻系统托盘的翻译工具，支持划词、截图与输入翻译，并内置 OCR。" # The application description
+  description: "常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。" # The application description
   copyright: "(c) 2026, liguangchun" # Copyright text
-  comments: "A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR." # Comments
+  comments: "A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR." # Comments
   version: "0.0.1" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
@@ -28,7 +28,7 @@ ios:
   # The company/organisation name for templates and project settings
   company: "DTApp"
   # Additional comments to embed in Info.plist metadata
-  comments: "A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR."
+  comments: "A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR."
 
 # Dev mode configuration
 dev_mode:

@@ -2,7 +2,7 @@
 
 English | [中文](README.md)
 
-A translation tool that lives in the system tray, with selection, screenshot and input translation plus built-in OCR.
+A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR.
 
 <div align="center">
 
@@ -14,17 +14,18 @@ A translation tool that lives in the system tray, with selection, screenshot and
 
 ## 1. Features
 
-| Feature                | Default Shortcut          | Enabled by Default               | Notes                                                                                |
-|------------------------|---------------------------|----------------------------------|--------------------------------------------------------------------------------------|
-| Input Translation      | mac: `⌥+A` / win: `Alt+A` | Yes                              | Opens the translation window; type text to translate                                 |
-| Screenshot Translation | mac: `⌥+S` / win: `Alt+S` | No (enable manually in Settings) | Capture a region → recognize text → translate; result shown in the screenshot window |
+| Feature                | Default Shortcut          | Enabled by Default               | Notes                                                                                            |
+|------------------------|---------------------------|----------------------------------|--------------------------------------------------------------------------------------------------|
+| Input Translation      | mac: `⌥+A` / win: `Alt+A` | Yes                              | Opens the translation window; type text to translate                                             |
+| Screenshot Translation | mac: `⌥+S`                | No (enable manually in Settings) | Capture a region → recognize text → translate; result shown in the screenshot window; macOS only |
 
-> Only the two global shortcuts above exist. There is also a copy key (`⌘+C` / `Ctrl+C`) that sends the selected text to the clipboard for the translator to read.
+> Only the two global shortcuts above exist. There is also a copy key (mac `⌘+C` / win `Ctrl+C`), simulated by the app to copy the current selection into the input box for translation; rebind or disable it under Settings → Shortcuts.
 
-- **Translation engines**: DeepL, Google, OpenAI, Baidu, Tencent, Youdao, plus macOS system translation. Google and system translation work out of the box; the rest require your own API key
-- **OCR**: macOS uses the system offline recognition (no install needed); local tesseract is optional. Region-capture trigger is macOS only
+- **Translation engines**: Google, DeepL, OpenAI, Anthropic, Gemini, Baidu, Tencent, Youdao, plus macOS system translation. Google and macOS system translation work out of the box; the rest require your own API key
+- **OCR**: macOS uses the system offline recognition (Vision, no install needed); local tesseract is optional. OCR is currently only reachable through the screenshot-translation entry on macOS; Windows has no screenshot entry
+- **Auto-read clipboard**: when enabled, the input-translation shortcut reads the clipboard directly and translates it without simulating the copy key; the copy key is suspended while this is on to avoid double triggering
 - **UI language**: built-in Chinese / English, follows the system or switches in Settings
-- **Auto update**: silent check on startup + "Check for Updates" in the tray menu; the update source defaults to UI language (Chinese → CNB, English → GitHub) and can also be set manually; turning on the pre-release channel receives the daily nightly builds
+- **Auto update**: silent check on startup + "Check for Updates" in the tray menu; the update source defaults to UI language (Chinese → CNB, English → GitHub) and can also be set manually; the pre-release channel is on by default and receives pre-release builds
 
 ## 2. Anonymous Analytics (PostHog)
 
@@ -52,8 +53,8 @@ Notes:
 
 ## 3. Platform Support
 
-- **macOS**: full capabilities (system translation / system OCR / copy key / auto update)
-- **Windows**: online translation and OCR (requires local tesseract) work, copy key works, auto update works; system translation is not supported
+- **macOS**: full capabilities (system translation / system OCR / screenshot translation / copy key / auto update)
+- **Windows**: input translation, copy-key translation, online translation engines and auto update work; system translation and screenshot translation are not supported (region capture is macOS only)
 - Currently only macOS and Windows are supported; Linux is not supported
 
 ## 4. Repositories & Releases
@@ -69,24 +70,29 @@ Notes:
 | Gitee    | https://gitee.com/dtapps/kai  |
 | GitCode  | https://gitcode.com/dtapp/kai |
 
+> Gitea / GitCode are code mirrors only and do not publish releases.
+
 ### Releases
 
-- **Stable release**: manually trigger the Release workflow with a version number; macOS / Windows are built and published
-- **Nightly**: a `nightly` pre-release is built automatically every day
-- Build artifacts are downloaded from the GitHub Release and then published to CNB
+- **Stable release**: manually trigger the Release workflow with a version number; macOS / Windows (arm64 + amd64) are built and published as a GitHub Release
+- **Pre-release**: check `prerelease` in the same workflow (or pass `pre_release=true` on the CNB side); there is no daily Nightly build anymore
+- Build artifacts are mirrored from the GitHub Release to CNB / GitLab / Gitee
 
-## 5. License
+## 5. Documentation
+
+Development and maintenance docs live in [docs/](docs/): project plan, CI image, Codecov / Coveralls, GitLab release sync, and more.
+
+## 6. License
 
 See the `LICENSE` file in the repository.
 
-## 6. Known Issues
+## 7. Known Issues
 
-> The following are known limitations in the current version (Wails v3 beta.9), mostly caused by upstream framework or macOS platform behavior rather than application logic defects.
+> The following are known limitations in the current version (Wails v3 beta.34), mostly caused by upstream framework or macOS platform behavior rather than application logic defects.
 
 - **macOS: screenshot window may be covered on first hotkey invocation**: When invoking the screenshot translation window via the hotkey (`⌥+S`) for the first time while another app is in the foreground, it may occasionally be covered by that app's window. A subsequent invocation (window already in the event loop) works normally. Cause: Kai is an accessory app (no Dock icon), so on macOS (especially Tahoe / macOS 27) its ability to reclaim foreground focus from a background state is limited by the system; a pure Wails solution has a race on the first invocation. Tray-menu clicks are unaffected (native clicks naturally transfer foreground focus). **Workaround**: if covered, click the Kai tray icon once or trigger the hotkey again.
-- **Custom title bar needs a click to activate**: On macOS, the custom-drawn title bar (frameless + transparent, used to follow the in-app light/dark theme) occasionally requires one extra click on the traffic lights (close/minimize/fullscreen) right after the window appears. This is platform behavior of an accessory app's window activation timing; interaction is normal once activated.
 
-## 7. Acknowledgements
+## 8. Acknowledgements
 
 <a href="https://wails.io">
   <img src="https://wails.io/img/wails-button-light.svg" width="90" height="24" alt="Built with Wails">

@@ -1,213 +1,149 @@
-# GitLab 覆盖率（自带能力，自成一套）
+# GitLab 发布同步（原覆盖率方案已下线）
 
-本仓库同时托管在六个平台（GitHub / Gitea / Gitee / GitCode / CNB / GitLab），覆盖率是**各平台各自出数**。 本文只讲 GitLab 这一套：跑在 GitLab 自己的 runner 上、用 GitLab 自己 registry 里的镜像、数据只进 GitLab， 不与任何其它平台的流程共用引用。
+本仓库在多个平台有代码镜像（GitHub / CNB / GitLab / Gitee / Gitea / GitCode），但**发布只覆盖 GitHub、CNB、GitLab、Gitee 四个平台**；Gitea / GitCode 不发布 Release。**GitLab 侧现在只做一件事：把 GitHub Release 同步成 GitLab Release。** 覆盖率采集已于 2026-10-24 整体删除。
 
-- 入口：`.gitlab-ci.yml`（**五个 job**：`check-image` / `build-image` / `merge-image` 建 CI 镜像， `go-coverage` / `node-coverage` 出覆盖率）
-- 镜像：`.gitlab/ci/Dockerfile`（GitLab 专用一份；另两份见 `docs/ci-image.md`）
-- 配置文件：无。GitLab 没有 `.coveralls.yml` 这类仓库内配置，阈值/徽章都在项目设置里
-- 项目地址：`gitlab.com/dtapps/kai`，镜像 `registry.gitlab.com/dtapps/kai/ci:latest`
-- 产物：`coverage.out`、`coverage-go.xml`、`frontend/coverage/*`，保留 1 周
+- 入口：`.gitlab-ci.yml`（只有 `release` 一个 job）
+- 触发：GitHub Release 工作流的 `sync-gitlab` job 自动触发，或在 GitLab 手动运行流水线
+- 产物：GitLab Release + 上传到 Generic Package Registry 的附件
+- 历史覆盖率方案（五个 job / 自建 CI 镜像 / Cobertura）见本文 §6，仅作回溯
 
-## 1. GitLab 的两套机制（互不联动）
+## 1. 为什么删掉覆盖率
 
-官方原文：**read different inputs, produce different outputs, and do not share configuration. Configuring one does not enable the other.** 所以两条都得配。
+删除前 `.gitlab-ci.yml` 有五条覆盖率相关 job：`check-image` / `build-image` / `merge-image`（自建 CI 镜像）+ `go-coverage` / `node-coverage`。删除原因（原文写在 `.gitlab-ci.yml` 头注释）：
 
-| 机制         | 关键字                              | 输入                            | 产出                                                                                  |
-|--------------|-------------------------------------|---------------------------------|---------------------------------------------------------------------------------------|
-| 覆盖率上报   | `coverage: '<正则>'`                | job 日志里的一行数字            | job 页覆盖率、MR 小部件覆盖率与涨跌、流水线列表覆盖率列、覆盖率徽章、Analytics 趋势图 |
-| 覆盖率可视化 | `artifacts:reports:coverage_report` | **只认 Cobertura XML / JaCoCo** | MR diff 里逐行注释：绿=已覆盖、红=未覆盖、橙=（仅 Cobertura）已加载未执行             |
+1. **GitLab 自带覆盖率能力天花板低**：只有一个百分比（多 job 取算术平均）、MR diff 行级注释、默认分支一条折线；没有可下钻的 HTML 报告，不能按文件/目录看，也没有 flags 分组。
+2. **同样的数据另外三处都有且更强**：CNB（`lines` / `diffLines` 硬红线）、Codecov（文件树 + patch + bundle + tests）、Coveralls（逐行 HTML）。
+3. **最有价值的 MR 小部件和 diff 注释触发不了**：本仓库 GitLab 是 pull mirror，开发在 GitHub / CNB 一侧，不会在 GitLab 开 MR。
+4. **成本高**：一次流水线约 10–16 compute minutes（含自建镜像固定开销），GitLab 免费私有项目只有 400 min/月，会挤掉发布同步额度——而发布同步是 GitLab 侧唯一不可替代的能力。
 
-关键限制：
+## 2. 触发方式
 
-- `coverage_report` **不认 lcov，更不认 go 的 coverprofile**——这是和 Coveralls 最大的差别。 Go 要过一层 `gocover-cobertura`，前端让 vitest 多出一个 `cobertura` reporter。
-- `coverage_report` **不产生百分比**，`coverage:` **不产生行级注释**。
-- 行级注释只出现在 **MR diff 中改动的行**上；没改动的文件即使报告里有也不注释。
+### 2.1 自动（主路径）
 
-## 2. 五个 job
+GitHub Release 发布完成后，`.github/workflows/release.yml` 的 `sync-gitlab` job 调用 GitLab Trigger API 创建流水线：
 
-### 2.1 CI 镜像：`check-image` / `build-image` / `merge-image`
+```text
+POST /api/v4/projects/:id/trigger/pipeline
+  variables[VERSION]=v1.2.3
+  variables[PRERELEASE]=false
+```
 
-见 §4.1。三个 job 都在 stage `image`，串成一条链：`check-image` 算 `.gitlab/ci/Dockerfile` 的内容哈希、 去 registry 里查对应 tag 在不在 → 缺就在 amd64 runner 上**原生**构建一次 → `merge-image` 把它指到 `$CI_REGISTRY_IMAGE/ci:latest`。Dockerfile 没改且镜像在时，三个 job 加起来约 1 分钟全绿。
+此时 `CI_PIPELINE_SOURCE == "trigger"`，`release` job 自动执行。
 
-**只出 amd64**：流水线全部跑在 amd64 runner 上，arm64 镜像没有消费方，多建一份只是白烧一倍 compute minutes。
+### 2.2 手动（补发 / 重发）
 
-### 2.2 `go-coverage`
+- **网页**：GitLab 项目 → CI/CD → Pipelines → Run pipeline，在变量区填 `VERSION`（可加 `PRERELEASE`）。
+- **API**：同上 Trigger API，手动 POST。
+
+`rules` 要求 `$VERSION` 非空，没填时**不会创建 job**，避免空跑一次必然失败的发布：
 
 ```yaml
-- PKGS=$(go list ./internal/... ./pkg/... | paste -sd, -)
-- go test -vet=off -coverpkg="$PKGS" -coverprofile=coverage.out ./internal/... ./pkg/...
-- go tool cover -func=coverage.out | tail -1        # total:	(statements)	52.8%
-- gocover-cobertura < coverage.out > coverage-go.xml   # 预装在 CI 镜像里，见 §4.1
-coverage: '/^total:\s+\(statements\)\s+([0-9.]+)%$/'
+rules:
+  - if: $CI_PIPELINE_SOURCE == "trigger"
+  - if: $CI_PIPELINE_SOURCE == "web" && $VERSION
 ```
 
-- `-vet=off`：`i18n.T()` 作 printf 参数会触发 vet 的 non-constant format 报错。
-- **范围必须带上 `./pkg/...`**。只测 `./internal/...` 会漏掉 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例（`cnb_stable_test.go` / `github_*.go` 等，另有 1 个 `testhelper_test.go`）。 补测试前两者差 4 倍多（3.2% vs 14.1%）；现在 `internal/` 已被大量测试拉起（54.9%），`pkg/` 侧只有 50%， 所以两个口径反而接近（仅 internal 54.9% vs 全量 52.8%）——**但这不代表可以去掉 `./pkg/...`**：去掉后那 16 个用例根本不跑， 覆盖率再准也是漏测。这条与 `.github/workflows/coveralls.yml`、`.cnb/workflows/push-coverage.yml` 的命令逐字一致。
-- **本仓库语句覆盖率：52.8%**（本地实测：`./internal/... ./pkg/...` 22 个包、3426 条语句，其中 1812 条被执行）。 补测试前是 14.1%，当时只有 `internal/configstore` 与 `pkg/wails-updater-providers` 有测试。 现在已有测试的包：buildinfo / useragent / i18n / logutil / settings / sqlite / network / analytics / engine / translate / configstore / historystore / httplogstore / hotkey（仅 nil 安全兜底）。 仍为 0%：`internal/service`、`internal/selection`、`internal/webview`、`internal/updater`、`internal/execkey`、`internal/events`、`pkg/swiftbridge` —— 全部绑 Wails 运行时 / 系统 API，需真实窗口或 macOS 框架才能测。 数字随测试增长变化，别把 52.8% 当基线写死。
-- **本项目没有 `internal/ent`**，也不存在需要排除的 sqlc 生成代码目录（`go list ./internal/... ./pkg/...` 的 22 个包全部参与度量）。所以命令里**不要**加 `grep -v`：从别的项目照抄过来时带的 `grep -v '/internal/ent'` 在本仓库是空转，已删除。
-- `gocover-cobertura` 钉 `v1.5.0`，且**装进 CI 镜像**（`ARG GOCOVER_COBERTURA_VERSION`），不在 job 里 `go install`——本流水线把 `GOBIN` 指到了 `$CI_PROJECT_DIR/.cache/bin`，job 里 `go install` 会装到那儿， 而 PATH 上只有镜像构建期的 `/go/bin`，结果就是 `command not found`（exit 127）。
-- **实测（v1.5.0 + 本模块路径）：输出的 `filename` 已是仓库相对路径**，本次 profile 含 59 个源文件 / 436 个函数（`<class>` 条目数随函数数增长，本地无 gocover-cobertura 未复核具体条数）， 形如 `filename="internal/configstore/db.go"`、`filename="pkg/wails-updater-providers/cnb_provider.go"`， 模块路径只出现在 `<package name="cnb.cool/dtapp/kai/...">` 上。 **不需要**剥模块前缀——这里没有任何环节需要在磁盘上反查源文件，路径相对化是 gocover-cobertura 自己做完的；多剥一次反而会把 `internal/...` 变成非法路径。`sed` 剥前缀是 GOPATH 时代的老配方， 在模块模式下一律不要加。
+支持的变量：
 
-### 2.3 `node-coverage`
+| 变量         | 必填 | 说明                                                   |
+|--------------|------|--------------------------------------------------------|
+| `VERSION`    | 是   | 版本号，可写 `1.2.3` 或 `v1.2.3`（脚本自动补 `v`）     |
+| `PRERELEASE` | 否   | `true` / `false`，默认 `false`；非这两个值回落 `false` |
 
-```yaml
-- pnpm --dir frontend install --frozen-lockfile --prefer-offline
-- pnpm --dir frontend exec vitest run --coverage \
-    --coverage.reporter=lcov --coverage.reporter=text \
-    --coverage.reporter=cobertura --coverage.reporter=json-summary
-- sed -i 's#filename="src/#filename="frontend/src/#g' frontend/coverage/cobertura-coverage.xml
-- node -e "...console.log('Total lines: '+t.lines.pct+'%')"
-```
+## 3. 运行环境
 
-- reporter 用 **CLI 覆盖**，不改 `frontend/vitest.config.ts`：本地仍是 `['lcov','text']`， CI 多要 cobertura / json-summary。这样本地开发产物不变。
-- **实测产物名** `frontend/coverage/cobertura-coverage.xml`；里面的 `filename="src/App.vue"` 是 **frontend 相对路径**，GitLab 按仓库根匹配，所以要补 `frontend/` 前缀。 **实测本仓库 17 个文件全部以 `src/` 开头**（共 25 个 `<class>` 条目，含重复包）， `sed` 一条即可全覆盖，无残留。
-- 前端实测覆盖率 **14.38% 行 / 14% 语句**（11 个测试文件 / 67 个用例；`frontend/vitest.config.ts` 里 `all: true` 把未测文件按 0% 计入分母，口径刻意不虚高）。 除 Svelte 组件与 3 个窗口入口 `main.ts` 外，`src/` 下所有逻辑模块（constants / i18n / runtime / stores / utils）均已 100% 或接近 100%。 组件为 0% 是因为没引入 jsdom + `@testing-library/svelte`——要动组件再补依赖，别用 alias 把组件排除出度量来刷数字。
+| 项   | 值                                                                |
+|------|-------------------------------------------------------------------|
+| 镜像 | `debian:trixie-slim`（**必须自带 bash**）                         |
+| 预装 | `before_script` 现装 `curl` `jq` `ca-certificates`                |
+| 检出 | `GIT_STRATEGY: none`，不检出代码，全部在 `mktemp -d` 临时目录完成 |
+| 超时 | 30 分钟                                                           |
+| 并发 | `interruptible: true`                                             |
 
-## 3. 为什么只有 `go-coverage` 配了 `coverage:`
+**为什么不用 alpine + `apk add bash`**：Runner 在容器启动后、`before_script` 之前就探测并锁定 shell。在 `before_script` 里装 bash 改变不了已选定的 shell，整个 `script` 仍由 ash 执行；而脚本用了 bash 数组 `AUTH=(-H ...)`，ash 直接 syntax error。所以 bash 必须预装在镜像里。
 
-**GitLab 会把同一次流水线里所有带 `coverage:` 的 job 的百分比取算术平均**，显示在 MR 小部件和徽章上。 Go 是**语句**覆盖率（52.8%）、前端是**行**覆盖率（14.38%），两个口径差近 4 倍，平均出来是一个既非 A 也非 B 的数， 趋势变化也解释不清，所以默认只让 Go 提供这个数（与 CNB / GitHub 侧「go 做红线」的判断一致）。
+## 4. 发布流程（job 内部）
 
-要改显示前端：把 `node-coverage` 里的 `# coverage:` 取消注释，同时注释掉 `go-coverage` 的，二选一， 别两个都开。
+1. **规范化版本号**：`1.2.3` → `v1.2.3`；读取 `PRERELEASE`。
+2. **认证**：优先 `GL_RELEASE_TOKEN`（PAT，`api` scope）→ 否则 `CI_JOB_TOKEN`。
+3. **读取 GitHub Release**：`GET https://api.github.com/repos/dtapps/kai/releases/tags/<tag>`；附件数为 0 直接失败。若配置了 `KAI_GITHUB_TOKEN` 则带 token（绕开匿名 60 次/小时限额），否则匿名。
+4. **下载全部附件** 到临时目录 `dist/`。
+5. **重写 Release 正文链接**：把 GitHub 的 `/releases/download/<tag>/<file>`、`/releases/tag/<tag>`、`/releases` 等替换为 GitLab 对应路径：
+   - GitHub：`/releases/download/<tag>/<file>`
+   - GitLab：`/-/releases/<tag>/downloads/<file>`
+   - **顺序不能颠倒**（GitLab 多一个 `/-`，`download` 变 `downloads`）；只换域名会 404。
+   - 兜底：正文里只要还残留 `github.com/dtapps/kai`，job 直接失败，避免发出点进去 404 的 release 页面。
+6. **上传附件到 Generic Package Registry**（GitLab 没有 Release 二进制附件 API）：
+   - `PUT /projects/:id/packages/generic/kai/<tag>/<url-encoded-file>`
+   - 文件名可能含空格 / 中文（如 `安装包.dmg`），必须 `jq -sRr @uri` 编码，否则 curl 报 URL malformed。
+   - `200/201` 成功；`403/409` 视为同版本重发、复用已有文件；其它状态码失败。
+7. **幂等创建 Release**：
+   - 先 `DELETE /projects/:id/releases/<tag>`（`200/204` 删除；`404` 无旧 release；其它仅告警）。
+   - 再 `POST /projects/:id/releases`，`assets.links` 指向 Package Registry，并带 `direct_asset_path` 生成直链 `/-/releases/<tag>/downloads/<file>`。
+   - tag 不存在时由 `ref: $CI_DEFAULT_BRANCH` 自动创建，指向默认分支最新提交。
+8. **输出**：`${CI_PROJECT_URL}/-/releases/<tag>`。
 
-## 4. 前置条件（不满足会静默不跑）
+## 5. 密钥与权限
 
-1. **项目要开 CI/CD。** pull mirror 仓库默认可能是关的：Settings → CI/CD → General pipelines； 镜像仓库还要勾 **Run pipelines for mirrored repositories**（否则镜像同步了也不触发流水线）。
-2. **要开 Container Registry。** CI 镜像由 GitLab 自己构建并存在 `$CI_REGISTRY_IMAGE/ci`， 需要 Settings → General → Visibility, project features → **Container Registry 打开**。 不需要任何 secret：同实例 registry，Runner 用 `CI_JOB_TOKEN` 自动认证。
-3. 容器内 `git` 会因 dubious ownership 报错（root 进程 + 非 root 属主目录），`before_script` 里 已加 `git config --global --add safe.directory "$CI_PROJECT_DIR"`。
-4. `GIT_DEPTH: '20'`：覆盖率 job 不需要完整历史，浅克隆省时间；但别设成 1， `git describe` 之类会被截断。
+| 变量 / Secret               | 位置          | 必填 | 用途                                                                              |
+|-----------------------------|---------------|------|-----------------------------------------------------------------------------------|
+| `CI_JOB_TOKEN`              | GitLab 自动   | 自动 | 默认认证；Releases API 与 Package Registry 均支持                                 |
+| `GL_RELEASE_TOKEN`          | GitLab 变量   | 否   | 项目禁用 job token 权限时使用（PAT，`api` scope）；配置后自动切换                 |
+| `KAI_GITHUB_TOKEN`          | GitLab 变量   | 否   | 只读 GitHub token，仅用于绕开 `api.github.com` 匿名限额；未配置时匿名回落，不报错 |
+| `SYNC_GITLAB_TRIGGER_TOKEN` | GitHub Secret | 是   | GitHub Release 工作流用它 POST trigger API；未配置时同步 job 直接跳过             |
 
-### 4.1 CI 镜像：GitLab 自己构建（`.gitlab/ci/Dockerfile`）
+`KAI_GITHUB_TOKEN` 配置位置：GitLab → Settings → CI/CD → Variables；**Masked，但不要勾 Protected**（trigger 流水线的 ref 不是保护分支时取不到值）。名字与 `.cnb.yml` / Gitee 两处保持一致，源头是 `cnb.cool/dtapp/envs` 的 `github.yml`，改名要同步改那份（GitCode 当前不发布）。
 
-镜像不跨平台拉，GitLab 侧自成一套：
+`SYNC_GITLAB_TRIGGER_TOKEN` 配置位置：GitHub → Settings → Secrets → Actions，值为 GitLab 项目的 Pipeline trigger token（`glptt-...`）。未配置时 `.github/workflows/release.yml` 的 `sync-gitlab` job 直接跳过，不影响 GitHub Release 本身。
 
-| 项         | 值                                                                                                                                                                |
-|------------|-------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| Dockerfile | `.gitlab/ci/Dockerfile`（本平台专用；Node 安装那段有 `uname -m` 分支，arm64 也能构，只是流水线不构）                                                              |
-| 基础环境   | `golang:1.27.3-trixie` + Node 26.12.1 + pnpm 12.15.0 + GTK4/WebKit6 开发库                                                                                        |
-| 预装工具   | wails3 / sqlc / golangci-lint / govulncheck / shfmt / dockerfmt / yamlfmt / gojq / gotestsum / `gocover-cobertura` v1.5.0 / markdownfmt v3.1.0（全部 ARG 钉版本） |
-| 构建 job   | `check-image` → `build-image`（amd64 原生 runner）→ `merge-image`，都在 stage `image`                                                                             |
-| 构建引擎   | `moby/buildkit:rootless` + `buildctl-daemonless.sh`，**不需要 privileged、不需要 dind**；原生构建，不用 QEMU                                                      |
-| 产物       | `ci:latest` → 单平台 linux/amd64 镜像；内容寻址 tag：`ci:sha-<Dockerfile sha256 前 12 位>`                                                                        |
-| 合并       | `merge-image` 用 `docker buildx imagetools create`（纯 registry API，不需要 daemon）                                                                              |
-| 缓存       | registry cache：`ci:buildcache`                                                                                                                                   |
-| 触发       | 默认分支 push 自动判断（内容哈希 tag 在不在 registry 里，缺了就建）；`CI_FORCE_REBUILD_IMAGE=true` 强制重建；MR / 其它分支不建                                    |
+## 6. 历史覆盖率方案（已删除，仅回溯）
 
-**为什么只出 amd64**：这个镜像的唯二消费方（`go-coverage` / `node-coverage`）都跑在 amd64 runner 上， arm64 那份建出来没有任何人拉。多建一份 = compute minutes 翻倍（每次 Dockerfile 变更约 2×10 分钟）， 对一个每月 400 分钟的免费额度来说这笔账不划算。
+> 2026-10-24 删除。保留本节是为了以后需要恢复时知道原方案长什么样、踩过哪些坑。
 
-| 架构  | runner tag               | 说明                           |
-|-------|--------------------------|--------------------------------|
-| amd64 | `saas-linux-small-amd64` | 默认免费 runner，2 vCPU / 8 GB |
+原 `.gitlab-ci.yml` 的五个 job：
 
-**需要 arm64 时怎么加回来**（比如要在 Apple Silicon 上本地 `docker run` 这个镜像调试）：
+| Job             | 作用                                                                         |
+|-----------------|------------------------------------------------------------------------------|
+| `check-image`   | 算 `.gitlab/ci/Dockerfile` 内容哈希，查 registry 里 `ci:sha-<hash>` 是否存在 |
+| `build-image`   | 缺镜像时在 amd64 runner 上原生 `buildctl` 构建                               |
+| `merge-image`   | 用 `docker buildx imagetools create` 把 `latest` 指到新 sha                  |
+| `go-coverage`   | `go test -coverprofile` → `gocover-cobertura` → Cobertura 报告               |
+| `node-coverage` | `pnpm test:coverage` + `cobertura` reporter → Cobertura 报告                 |
 
-1. `.gitlab-ci.yml` 里复制 `build-image` 一份改名为 `build-image-arm64`，`tags: [saas-linux-small-arm64]`， tag/cache 后缀改成 `-arm64`；
-2. `merge-image.needs` 加一条 `- job: build-image-arm64`（`optional: true`，没权限时不阻塞）；
-3. `merge-image` 的 `imagetools create` 里把两个 `sha-` ref 一起列上，就又能合成 manifest list。
+当时的坑（恢复前必读）：
 
-**注意单平台**：`ci:latest` 现在是 linux/amd64 单平台镜像，在 Apple Silicon 上 `docker pull` 没问题， 但 `docker run` 会 `exec format error`，要带 `--platform linux/amd64`（慢，靠 QEMU）。 CI 里 `default.image: $CI_IMAGE` 不受影响——runner 本来就是 amd64。
+- **BuildKit rootless**：GitLab SaaS runner 没有 root daemon，必须用 rootless buildkit，并处理 `--oci-worker-no-process-sandbox`。
+- **镜像判重不能用「Dockerfile 改没改」**：用内容哈希 `sha256sum .gitlab/ci/Dockerfile | cut -c1-12` 得到 `ci:sha-<hash>`，查 registry 是否已存在。
+- **`gocover-cobertura` 要装进镜像**：Go 的 coverprofile 不是 Cobertura，GitLab `coverage_report` 只认 Cobertura / JaCoCo。
+- **前端要额外的 `cobertura` reporter**：lcov 不被 `coverage_report` 识别。
+- **`coverage:` 与 `artifacts:reports:coverage_report` 是两套机制**：前者只出百分比，后者只出行级注释，互不联动。
+- **`--output` 只能推一个 tag**：`name=repo:a,repo:b` 会失败；多 tag 用 `merge-image` 的 `imagetools create -t` 补。
+- **必须用带 bash 的镜像**：原因见 §3。
 
-关于构建引擎——GitLab 官方文档《Use BuildKit to build Docker images》的对照表：
+恢复时按上表重建 job，并确认 GitLab 项目仍是 pull mirror（否则 MR 相关能力依然用不上）。
 
-| 方法              | 安全要求                   | 使用的命令               |
-|-------------------|----------------------------|--------------------------|
-| BuildKit rootless | **不需要 privileged 容器** | `buildctl-daemonless.sh` |
-| Docker Buildx     | 需要 `docker:dind`         | `docker buildx`          |
-| Native BuildKit   | 需要 `docker:dind`         | `buildctl`               |
+## 7. 验证与排错
 
-原文还写明：rootless 方式是 **Kaniko 的替代品**，且 "Hosted runners on GitLab.com permit these calls and need no extra configuration"。所以 GitLab.com 上开箱可用，不用自备 runner。
+### 7.1 验证一次发布
 
-`build-image` / `merge-image` 的几个必要细节（写错就挂）：
+1. GitHub Release 已存在且附件不为空。
+2. GitLab → CI/CD → Pipelines，能看到 `trigger` 来源的流水线；`release` job 绿色。
+3. 打开 `${CI_PROJECT_URL}/-/releases/<tag>`：
+   - 正文链接全部指向 GitLab；
+   - 每个附件都能通过 `/-/releases/<tag>/downloads/<file>` 下载。
+4. 重复跑同一 `VERSION`：应删除旧 release 后重建，附件复用（403/409 分支）。
 
-- `entrypoint: [""]` **必须覆盖**——`moby/buildkit:rootless` 默认启动常驻 daemon， 不覆盖的话 job 会一直挂着直到超时。
-- `BUILDKITD_FLAGS: --oci-worker-no-process-sandbox` 是 rootless 的必需参数。
-- 认证要手写 `~/.docker/config.json`（rootless 模式不会自动用 `CI_JOB_TOKEN`）：
+### 7.2 常见问题
 
-  ```yaml
-  - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > ~/.docker/config.json
-  ```
-
-- job 级 `before_script` 会**整体替换** `default.before_script`，所以这个 job 里没有 `git safe.directory` （它不读 git，无所谓）。
-- **`--output` 只推一个 tag**：`name=$IMAGE_REF`（即 `ci:sha-<hash>`，由 `check-image` 写进 dotenv）。 写成 `name=repo:a,repo:b` 会直接失败——它的值按逗号切成多段 `key=value`，第二段不是 `key=value`， 报 `error: invalid value registry.gitlab.com/dtapps/kai/ci:<sha>`。想额外打可读 tag 不要紧， 用 `merge-image` 里的 `imagetools create -t` 补，别在 buildctl 里写两个。
-- **不写 `--opt platform`**：job 跑在 amd64 runner 上，构建目标天然就是本机架构，`buildctl` 不需要 （也不该）指定平台——显式写死反而会在别的架构 runner 上退化成 QEMU 模拟。
-
-**什么时候会重建**（判断依据是「Dockerfile 内容哈希对应的 tag 在不在 registry 里」，不是 commit 差分）：
-
-| 场景                                                                         | 会怎样                                                                                                                                                |
-|------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 默认分支 push，Dockerfile 内容变了                                           | `sha-<hash>` 变了 → 重建（约 10 分钟，有 registry cache 时几分钟）→ `merge-image` 指向新的 `latest`                                                   |
-| 默认分支 push，Dockerfile 没变、镜像在                                       | `check-image` 查到 tag 已存在 → `build-image` 十几秒 `exit 0` 跳过；`merge-image` 仍跑一遍把 `latest` 重新指向（约 20 秒，顺带修好被误删的 `latest`） |
-| 默认分支 push，Dockerfile 没变、镜像**不在**（从没建成 / 上次失败 / 被清理） | tag 查不到 → **自动补建**。这就是自愈，不用人工干预                                                                                                   |
-| MR / 其它分支 push                                                           | 整个 image stage 不创建，coverage 直接拉默认分支上已有的 `latest`                                                                                     |
-| Run pipeline 传 `CI_FORCE_REBUILD_IMAGE=true`                                | 无视 tag 是否存在，强制重建（刷基础镜像、上次构建失败时用）                                                                                           |
-
-**为什么不用 `rules:changes` 判断要不要重建**（本项目真实踩过 `manifest unknown`）： `rules:changes` 比较的是「这次 commit 相对上一次有没有改 Dockerfile」，而不是「registry 里到底有没有拿得到的镜像」。 这两件事不等价——镜像一次都没建成过时，你只改 `.gitlab-ci.yml` 推上来，Dockerfile 没变 → build job 不创建 → coverage 拉 `ci:latest` 直接 `manifest unknown` 失败，而且**下一条流水线还是同样结果**，死循环， 只能人工 Run pipeline 才跳得出来。另外 `changes` 在 schedule / web / API / tag 这类没有 push 事件的流水线里 恒为 true（无从比较 `CI_COMMIT_BEFORE_SHA`）。
-
-现在两者都不依赖：`check-image` 用 `sha256sum .gitlab/ci/Dockerfile | cut -c1-12` 算内容哈希， 拿 `ci:sha-<hash>` 去 registry 里查，缺了就建、有就跳过——判断的是**客观事实**，不是「这次改没改」。
-
-**代价**：每次默认分支 push 都会多出 `check-image`（约 20 秒）+ 空跑的 `build-image`（约 20 秒）
-+ `merge-image`（约 20 秒），约 1 分钟固定开销；换来的是「镜像坏了/缺了自动补」和「不白烧 10 分钟构建」。
-
-**Dockerfile 归属**：本仓库现在有三份，互相不引用——`.cnb/ci/Dockerfile`、`.github/ci/Dockerfile`、 `.gitlab/ci/Dockerfile`。任何一个平台的 registry / runner 出问题都不会拖累别的平台， 代价是升 Go / Node / pnpm / 工具版本时三份都要改。另两份的对照见 `docs/ci-image.md`。
-
-## 5. GitLab 特有的坑
-
-| 现象                                                  | 原因 / 处理                                                                                                                                                                                       |
-|-------------------------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 流水线根本没有触发                                    | 项目没开 CI/CD，或镜像仓库没勾 "Run pipelines for mirrored repositories"                                                                                                                          |
-| `coverage` 列是空的                                   | `coverage:` 正则没命中日志。GitLab 按**行**匹配，`^...$` 锚定到单行；先本地跑一遍命令看输出格式                                                                                                   |
-| 百分比 = 两个 job 的平均                              | 两个 job 都配了 `coverage:`。见 §3，只留一个                                                                                                                                                      |
-| MR 里没有行级注释                                     | ① 报告不是 Cobertura/JaCoCo；② `filename` 不是仓库相对路径（见 §2）；③ 该文件在本 MR 没改动；④ 镜像仓库没有 MR，本来就看不到                                                                      |
-| `jobs config should contain at least one visible job` | 所有 job 都被 `rules` 过滤掉了（当前规则：MR 事件 + 默认分支 push）                                                                                                                               |
-| 缓存命中但依赖还是全量装                              | `cache.paths` 只能写**项目目录内**路径，故 `GOCACHE`/`GOMODCACHE`/`GOBIN`/pnpm store 全部改到 `$CI_PROJECT_DIR/.cache/`                                                                           |
-| 覆盖率报告解析失败、job 红                            | `coverage_report.path` 写错（Go 是 `coverage-go.xml`，前端在 `frontend/coverage/` 下）                                                                                                            |
-| 拉镜像 `unauthorized` / `manifest unknown`            | ① 项目没开 Container Registry；② 镜像确实还没建成。新流水线里 `check-image` 会自动补建（先跑一次默认分支 push）；急着用就 Run pipeline 带 `CI_FORCE_REBUILD_IMAGE=true`                           |
-| `build-image` 一直跑到超时、无日志输出                | 忘了 `entrypoint: [""]`，container 里起的是 BuildKit 常驻 daemon                                                                                                                                  |
-| `改完 Dockerfile 没重建` / `每次都重建`               | 按内容哈希判断，理论上不会误判；若真不建，看 `check-image` 日志里算出的 `IMAGE_TAG` 与 `imagetools inspect` 的结果。MR / 其它分支**故意**不建（避免覆盖 `latest`）                                |
-| `error: invalid value <registry>/ci:<sha>`            | `--output` 里写了两个 tag：逗号被当成属性分隔符。只留一个 `name=`，见 §4.1                                                                                                                        |
-| 本地 `docker run` 报 `exec format error`              | 在 Apple Silicon 上跑 CI 镜像：`ci:latest` 只出 amd64，要加 `--platform linux/amd64`（走 QEMU，慢）。CI 自己不受影响                                                                              |
-| `exec format error` / `qemu: uncaught target signal`  | 有人把命令改成 `--opt platform=linux/amd64,linux/arm64`，宿主机没注册 aarch64 binfmt。本仓库不走这条路，见 §4.1                                                                                   |
-| `gocover-cobertura: command not found`（exit 127）    | 在 job 里 `go install` 了工具，但 `GOBIN` 被覆盖成 `$CI_PROJECT_DIR/.cache/bin`（PATH 上没有它）。工具二进制一律装进 `.gitlab/ci/Dockerfile`；确需临时装就用 `"$(go env GOBIN)/xxx"` 绝对路径调用 |
-| `go-coverage` 覆盖率和其它平台对不上                  | ① 三个平台的 `go test` 命令是否逐字一致（本仓库已统一为 `./internal/... ./pkg/...`）；② `pkg/*_test.go` 是否真被 git 收录（未跟踪则 checkout 后恒为 0%，本仓库无 `_test.go` 忽略规则）            |
-
-## 6. 怎么验证
-
-1. 推一次默认分支，打开 **Build → Pipelines**：`image` stage 三个 job（`check-image` → `build-image` → `merge-image`）绿，`go-coverage` / `node-coverage` 绿，`Coverage` 列有数字（本仓库当前约 `52.8%`）。 镜像建好后在 **Deployments → Container Registry** 里能看到 `ci:latest` 与 `ci:sha-<hash>`。
-2. 打开 `go-coverage` job 日志，搜 `total:`；`node-coverage` 日志搜 `Total lines:`。
-3. 徽章：`https://gitlab.com/dtapps/kai/badges/main/coverage.svg`（私有项目需 token）。
-4. 趋势：**Analyze → Repository analytics / CI/CD analytics** 里的覆盖率曲线。
-5. 行级：在 GitLab 上开一个真的 MR 改几行 Go / Svelte 代码，MR → Changes 里应出现绿/红注释条。
-
-本地复现（不需要 GitLab），两条命令各自跑完就能看到与 CI 同一份输出：
-
-```bash
-# Go：52.8% 与全量 class 的 Cobertura
-PKGS=$(go list ./internal/... ./pkg/... | paste -sd, -)
-go test -vet=off -coverpkg="$PKGS" -coverprofile=coverage.out ./internal/... ./pkg/...
-go tool cover -func=coverage.out | tail -1
-go run github.com/boumenot/gocover-cobertura@v1.5.0 < coverage.out > coverage-go.xml
-
-# 前端：14.38% 行覆盖 + 全部 src 文件的 Cobertura
-pnpm --dir frontend exec vitest run --coverage \
-  --coverage.reporter=lcov --coverage.reporter=text \
-  --coverage.reporter=cobertura --coverage.reporter=json-summary
-sed -i 's#filename="src/#filename="frontend/src/#g' frontend/coverage/cobertura-coverage.xml
-```
-
-## 7. 三个平台的命令口径（已对齐）
-
-三套流程用**同一条** `go test`、**同一条** `vitest`，只在「怎么上报」上不同：
-
-| 平台   | 入口                               | Go 范围                    | 前端产物                      | 上报                            |
-|--------|------------------------------------|----------------------------|-------------------------------|---------------------------------|
-| GitLab | `.gitlab-ci.yml`                   | `./internal/... ./pkg/...` | `frontend/coverage/lcov.info` | `coverage:` + Cobertura 工件    |
-| GitHub | `.github/workflows/coveralls.yml`  | `./internal/... ./pkg/...` | `frontend/coverage/lcov.info` | `coverallsapp/github-action@v2` |
-| CNB    | `.cnb/workflows/push-coverage.yml` | `./internal/... ./pkg/...` | `frontend/coverage/lcov.info` | `testing:coverage` 内置任务     |
-
-从别的项目复制这三份配置时踩过的两个坑，已在本仓库修正，改动时别退回去：
-
-1. **`go-coverage` 必须带 `./pkg/...`**。原配置只跑 `./internal/...`，把 `pkg/wails-updater-providers` 的 6 个测试文件、16 个用例整个漏掉了（补测试前这 16 个用例直接决定 3.2% 还是 14.1%，差 4 倍多）。
-2. **前端产物路径是 `frontend/coverage/lcov.info`**。原 CNB 配置写的是 `cmd/frontend/coverage/lcov.info`（那是另一个项目的布局，产物在 Go 侧 `cmd/` 目录下）。 本仓库没有 `cmd/`，写错时 `breakIfNoCoverage: true` 会让 node 那条流水线直接报错。
-
-`pkg/swiftbridge` 也在度量范围内：它没有 cgo（purego），`embed.go` 走 `//go:build darwin`、 `load_other.go` 兜其它平台，`GOOS=linux go list ./pkg/...` 能正常列出，Linux runner 上测过没问题。
-
-两处都属于「改了会影响 CI 实际行为」，未擅自改动。
+| 现象                                     | 原因 / 处理                                                                                      |
+|------------------------------------------|--------------------------------------------------------------------------------------------------|
+| 手动运行流水线没有 `release` job         | 没填 `VERSION`；`rules` 要求 `$CI_PIPELINE_SOURCE == "web" && $VERSION`                          |
+| `VERSION` 为空报错                       | trigger 调用未传 `variables[VERSION]`，或网页运行没填变量                                        |
+| `401` / `403`                            | `CI_JOB_TOKEN` 权限被禁用且未配 `GL_RELEASE_TOKEN`；或 token scope 不是 `api`                    |
+| 读取 GitHub Release `404`                | tag 不存在或版本号拼错；确认 GitHub 上已有该 tag 的 Release                                      |
+| 下载附件失败 / `API rate limit exceeded` | 未配 `KAI_GITHUB_TOKEN`，共享 runner IP 撞上匿名限额；配置 token 后重试                          |
+| 上传附件 `URL malformed`                 | 文件名未 URL 编码；脚本已用 `jq -sRr @uri`，若改过脚本注意保留                                   |
+| 正文链接检查失败（job 主动 abort）       | 发布正文里还有 GitHub 链接；补一条 `sed` 规则或手动改正文后重发                                  |
+| `syntax error` / `AUTH: not found`       | 镜像不是 bash（如误改回 alpine）；`debian:trixie-slim` 不要动                                    |
+| 附件下载 404                             | Release 链接用了 `/releases/download/...`（GitHub 风格）；应为 `/-/releases/<tag>/downloads/...` |
+| 同版本重发后附件仍旧                     | Package Registry 对同版本同文件名返回 403/409，脚本复用旧文件；要换文件需删 Package 或升版本     |

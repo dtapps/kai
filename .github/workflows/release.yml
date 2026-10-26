@@ -1,6 +1,7 @@
 # 发布工作流
-# 手动触发，输入版本号后自动构建四个平台组合（darwin/windows × amd64/arm64）并发布 GitHub Release，
-# 随后触发 CNB / Gitee / GitLab / GitCode 四个平台的镜像同步（各自 secret 未配置则跳过）
+# 手动触发，输入版本号后自动构建四个构建组合（darwin/windows × amd64/arm64）并发布 GitHub Release，
+# 随后触发 CNB / Gitee / GitLab 三个平台的发布同步（各自 secret 未配置则跳过）；
+# GitCode 同步 job 保留，但当前发布链路只覆盖上述三个平台；Gitea 仅作代码镜像、不发布 Release。
 # https://github.com/actions/runner-images
 # https://github.com/actions/checkout
 # https://github.com/actions/cache
@@ -939,7 +940,7 @@ jobs:
           DESP="${DESP}**Git 提交**: ${{ needs.prepare.outputs.git_commit }}  "$'\n'
           DESP="${DESP}**GitHub Release**: [${TAG}](${RELEASE_URL})  "$'\n'
           DESP="${DESP}**CNB Release**: [${TAG}](https://cnb.cool/dtapp/kai/-/releases/tag/${TAG})  "$'\n'
-          DESP="${DESP}**镜像同步**: 已请求 CNB / Gitee / GitLab / GitCode"
+          DESP="${DESP}**镜像同步**: 已请求 CNB / Gitee / GitLab"
 
           echo "推送 ServerChan3 通知: ${TITLE}"
           HTTP=$(curl -s -o /tmp/sc3.json -w "%{http_code}" -X POST \

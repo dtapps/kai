@@ -15,7 +15,7 @@
 #      唯一不可替代的能力。
 #
 # 历史实现（含所有踩过的坑：BuildKit rootless、content-hash 判镜像、gocover-cobertura 装进镜像等）
-# 见 docs/gitlab-ci.md 与 docs/2026-10-23.md，需要时按那里复原。
+# 见 docs/gitlab-ci.md §6，需要时按那里复原。
 
 stages:
   - release

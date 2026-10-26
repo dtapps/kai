@@ -1,16 +1,16 @@
 # Codecov 配置
 # 文档：https://docs.codecov.com/docs/codecov-yaml
 #
-# 本仓库覆盖率报告由 GitHub Actions 的 Coverage 工作流生成并上传
-# （.github/workflows/coverage.yml，使用 codecov/codecov-action@v5）：
+# 本仓库覆盖率报告由 GitHub Actions 的 Codecov 工作流生成并上传
+# （.github/workflows/codecov.yml，使用 codecov/codecov-action@v7）：
 #   - Go 后端    → coverage.out              （flag: go）
 #   - 前端 Svelte → frontend/coverage/lcov.info（flag: node）
 # 两份报告用不同 flag 区分，各自独立统计、互不覆盖。
-# 注意：CNB 流水线（.cnb/workflows）另有自己的 testing:coverage 硬性红线门禁，与 Codecov 相互独立。
+# 注意：CNB 流水线（.cnb/workflows）另有自己的 testing:coverage 任务，与 Codecov 相互独立。
 #
-# 注意：状态检查默认设为 informational（不阻塞 PR）。因为本仓库已在 CNB 的
-# testing:coverage 内置任务里设了硬性红线（lines / diffLines）。若想在 GitHub 侧
-# 也强约束覆盖率，把对应 status 块的 `informational: true` 去掉即可。
+# 注意：状态检查默认设为 informational（不阻塞 PR）。CNB 侧预留了 lines / diffLines
+# 红线，但当前在 .cnb/workflows/{push,pull}-coverage.yml 中为注释状态（未启用）。
+# 若想在 GitHub 侧强约束覆盖率，把对应 status 块的 `informational: true` 去掉即可。
 #
 # flag 命名沿用本项目 CNB 约定：Go 侧 go、前端侧 node（对应 CNB testing:coverage 的 key: go / key: node）。
 

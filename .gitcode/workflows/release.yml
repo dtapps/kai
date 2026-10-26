@@ -1,0 +1,154 @@
+# 同步发布：从 GitHub Release 下载构建产物，发布到 GitCode Release
+#
+# 触发方式：GitHub Release 发布后由 .github/workflows/release.yml 的 sync-gitcode job 调 workflow_dispatch
+#   POST /api/v8/repos/:owner/:repo/actions/workflows/release.yml/dispatches
+#   传入 inputs.version / inputs.prerelease
+# 也可在 GitCode 页面手动 Run workflow（补发历史版本时最省事）。
+#
+# 前置条件（仓库 → 设置 → Secrets → 新建仓库密钥；名称只能大写/数字/下划线，不能以 ATOMGIT_ 开头）：
+#   - GITCODE_TOKEN：个人访问令牌，repo 读写
+#   - KAI_GITHUB_TOKEN：GitHub 只读令牌，与 .cnb.yml 用的是同一个（匿名调 API 只有 60 次/小时）
+#
+# API 版本说明：dispatch 走 v8（Actions 扩展），Release 相关走 v5（官方文档明确提供）。
+#   - 创建：POST   /api/v5/repos/:owner/:repo/releases
+#   - 取上传地址：GET /api/v5/repos/:owner/:repo/releases/:tag/upload_url?file_name=
+#   - 传文件：PUT  <upload_url 返回值>（必须原样带上返回的 headers）
+# 注意：v5 要求 access_token 走 query 串，故脚本只打印文件名/HTTP 码，不打印完整 URL。
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: '版本号（如 1.2.3 或 v1.2.3）'
+        required: true
+      prerelease:
+        description: '是否发布为预发布（true/false）'
+        required: false
+        default: 'false'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 从 GitHub 下载并发布到 GitCode
+        env:
+          GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
+          KAI_GITHUB_TOKEN: ${{ secrets.KAI_GITHUB_TOKEN }}
+          VERSION: ${{ inputs.version }}
+          PRERELEASE: ${{ inputs.prerelease }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          : "${GITCODE_TOKEN:?未配置 secret GITCODE_TOKEN}"
+
+          # 版本号归一（允许传 1.2.3 或 v1.2.3）
+          TAG="${VERSION:?未传入 version}"
+          case "$TAG" in v*) ;; *) TAG="v${TAG}" ;; esac
+
+          PRE="${PRERELEASE:-false}"
+          [ "$PRE" = "true" ] || PRE="false"
+          if [ "$PRE" = "true" ]; then STATUS="pre"; else STATUS="latest"; fi
+          echo "版本号: ${TAG}  预发布: ${PRE} (release_status=${STATUS})"
+
+          command -v jq >/dev/null 2>&1 || { echo "环境缺少 jq"; exit 1; }
+
+          REPO_PATH="dtapp/kai"
+          # 默认分支是 master（不是 main）：target_commitish 写错会让 release 挂到不存在的分支上
+          BRANCH="master"
+          API="https://api.gitcode.com/api/v5"
+          GH_API="https://api.github.com/repos/dtapps/kai"
+
+          # GitHub 公开仓库匿名也能下，但 API 只有 60 次/小时；没配 token 时回落到匿名，不报错。
+          gh_get() {
+            if [ -n "${KAI_GITHUB_TOKEN:-}" ]; then
+              curl -fsSL -H "Authorization: token ${KAI_GITHUB_TOKEN}" "$1" -o "$2"
+            else
+              curl -fsSL "$1" -o "$2"
+            fi
+          }
+
+          WORK=$(mktemp -d)
+          cd "$WORK"
+          mkdir -p dist
+
+          echo "读取 GitHub Release: ${TAG}"
+          gh_get "${GH_API}/releases/tags/${TAG}" release.json
+          COUNT=$(jq '.assets | length' release.json)
+          if [ "$COUNT" -le 0 ]; then
+            echo "错误：GitHub Release ${TAG} 没有附件"
+            exit 1
+          fi
+          echo "共 ${COUNT} 个附件"
+
+          for i in $(seq 0 $((COUNT - 1))); do
+            NAME=$(jq -r ".assets[$i].name" release.json)
+            URL=$(jq -r ".assets[$i].browser_download_url" release.json)
+            echo "下载 ${NAME} ..."
+            gh_get "$URL" "dist/${NAME}"
+          done
+          ls -lh dist/
+
+          # 复用 GitHub 正文，把仓库链接替换为 GitCode
+          jq -r '.body // ""' release.json \
+            | sed "s#https://github.com/dtapps/kai#https://gitcode.com/${REPO_PATH}#g" \
+            > body.md
+
+          # 幂等：先删同 tag 的旧 release（该端点官方文档未明示，失败只警告不阻断）
+          DEL=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            "${API}/repos/${REPO_PATH}/releases/${TAG}?access_token=${GITCODE_TOKEN}")
+          case "$DEL" in
+            200|204) echo "已删除已存在的 release ${TAG}" ;;
+            404) echo "无旧 release，直接新建" ;;
+            *) echo "⚠ 删除旧 release 返回 HTTP=${DEL}（继续，若 409 需手动清理）" ;;
+          esac
+
+          PAYLOAD=$(jq -n \
+            --arg tag "$TAG" \
+            --arg name "$TAG" \
+            --arg body "$(cat body.md)" \
+            --arg tc "$BRANCH" \
+            --arg st "$STATUS" \
+            '{tag_name: $tag, name: $name, body: $body, target_commitish: $tc, release_status: $st}')
+
+          echo "创建 GitCode Release: ${TAG}"
+          CREATE=$(curl -s -o create.json -w "%{http_code}" -X POST \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD" \
+            "${API}/repos/${REPO_PATH}/releases?access_token=${GITCODE_TOKEN}")
+          if [ "$CREATE" != "200" ] && [ "$CREATE" != "201" ]; then
+            echo "创建 release 失败 HTTP=${CREATE}"
+            cat create.json
+            exit 1
+          fi
+          echo "✓ release 已创建"
+
+          # 逐个文件：先要预签名上传地址，再 PUT 文件本体
+          for f in dist/*; do
+            NAME=$(basename "$f")
+            ENC=$(printf '%s' "$NAME" | jq -sRr @uri)
+
+            UP=$(curl -s -o up.json -w "%{http_code}" \
+              "${API}/repos/${REPO_PATH}/releases/${TAG}/upload_url?access_token=${GITCODE_TOKEN}&file_name=${ENC}")
+            if [ "$UP" != "200" ]; then
+              echo "获取 ${NAME} 上传地址失败 HTTP=${UP}"
+              cat up.json
+              exit 1
+            fi
+
+            PUT_URL=$(jq -r '.url' up.json)
+            # 预签名 URL 要求原样带回 headers（含 Content-Type / x-obs-*），漏一个都会失败
+            HDRS=()
+            while IFS= read -r h; do HDRS+=(-H "$h"); done \
+              < <(jq -r '.headers // {} | to_entries[] | "\(.key): \(.value)"' up.json)
+
+            PUT_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X PUT "${HDRS[@]}" --upload-file "$f" "$PUT_URL")
+            case "$PUT_CODE" in
+              200|201|204) echo "  ✓ 已上传 ${NAME}" ;;
+              *) echo "  ✗ 上传 ${NAME} 失败 HTTP=${PUT_CODE}"; exit 1 ;;
+            esac
+          done
+
+          echo ""
+          echo "完成：https://gitcode.com/${REPO_PATH}/releases/tag/${TAG}"

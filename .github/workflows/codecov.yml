@@ -10,7 +10,7 @@
 # https://github.com/pnpm/action-setup
 # https://github.com/actions/setup-node
 # https://github.com/codecov/test-results-action
-name: Coverage
+name: Codecov
 
 on:
   push:
@@ -86,36 +86,29 @@ jobs:
       - name: 安装所有依赖
         run: make deps
 
-      # 范围同 CNB 一样
-      - name: 生成 Go 测试覆盖率与测试结果
+      # 范围与 CNB（.cnb/workflows/push-coverage.yml）保持一致：./internal/... ./pkg/...
+      - name: 生成 Go 测试覆盖率
+        # 用 gotestsum 包裹 go test：参数原样透传，coverage.out 照常产出，
+        # 同时额外生成 go-test-report.xml（JUnit）供 Codecov 测试分析。
         run: |
-          gotestsum --junitfile go-test-report.xml -- -vet=off -coverpkg=$(go list ./internal/... ./pkg/... | paste -sd, -) -coverprofile=coverage.out ./internal/... ./pkg/...
+          gotestsum --junitfile go-test-report.xml -- -vet=off \
+            -coverpkg=$(go list ./internal/... ./pkg/... | paste -sd, -) -coverprofile=coverage.out \
+            ./internal/... ./pkg/...
           go tool cover -func=coverage.out
 
       - name: 生成前端测试覆盖率
-        # 同时挂内置 json reporter 产出 test-results.json（供测试结果上传，Vitest 3 无内置 junit reporter）。
-        # lcov.info 仍正常产出，不受影响。
+        # 额外挂 json reporter（产出 test-results.json），供后续转 JUnit 上传测试结果；
+        # coverage/lcov.info 仍正常产出。
         run: pnpm test:coverage --reporter=default --reporter=json --outputFile=test-results.json
         working-directory: frontend
 
-      - name: 转换测试结果为 JUnit
-        run: node scripts/vitest-json-to-junit.mjs
-        working-directory: frontend
-
-      - name: 上传测试结果到 Codecov
-        uses: codecov/test-results-action@v1
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          files: ./frontend/test-report.xml,./go-test-report.xml
-          fail_ci_if_error: false
-
-      - name: 构建前端（Bundle Analysis）
-        # @codecov/vite-plugin 在 vite build 时上传打包体积；仅当 CODECOV_TOKEN 存在时插件才实例化（见 vite.config.ts）。
-        # 设 continue-on-error：Vite 8 下插件可能不兼容导致构建失败，但不应拖垮上方覆盖率 / 测试结果上报。
+      - name: 构建前端（触发 Bundle Analysis 上传）
+        # 仅作体积分析上报，失败（如插件与 Vite 8 不兼容）不应阻断上面的覆盖率上传，故 continue-on-error。
+        # 没有 CODECOV_TOKEN 时插件不实例化（见 vite.config.ts），整步没意义，直接跳过。
         if: ${{ env.CODECOV_TOKEN != '' }}
         continue-on-error: true
-        run: pnpm build
         working-directory: frontend
+        run: pnpm build # = vue-tsc && vite build --mode production，构建时插件自动上传 chunk 体积
 
       - name: 上传 Go 覆盖率到 Codecov
         uses: codecov/codecov-action@v7
@@ -131,4 +124,18 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: ./frontend/coverage/lcov.info
           flags: node
+          fail_ci_if_error: false
+
+      - name: 转换 Vitest JSON 为 JUnit XML
+        # Vitest 5.0.5 无内置 junit reporter，用内置 json reporter 产出 test-results.json 后再转 JUnit（零依赖脚本）。
+        # 脚本会把 testResults[].name 的绝对路径归一化成仓库相对路径再写入 classname，
+        # 否则 Codecov 上会出现 /__w/kai/kai/frontend/... 这类 runner 专属路径（详见 docs/codecov.md §3.3）。
+        working-directory: frontend
+        run: node scripts/vitest-json-to-junit.mjs
+
+      - name: 上传测试结果到 Codecov
+        uses: codecov/test-results-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./frontend/test-report.xml,./go-test-report.xml
           fail_ci_if_error: false

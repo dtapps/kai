@@ -122,11 +122,17 @@ endif
 format-frontend: ## 修复前端代码
 	pnpm --dir ./frontend run format
 
+# ==================== i18n JSON 格式化 ====================
+
+format-i18n: format-i18n-go format-i18n-frontend ## 格式化 Go 与前端 i18n JSON 文件
+
 format-i18n-go: ## 格式化 Go 后端 i18n JSON 文件
 	pnpm --dir ./frontend exec prettier --write "$(CURDIR)/internal/i18n/locales/**/*.json"
 
 format-i18n-frontend: ## 格式化前端 i18n JSON 文件
 # 	pnpm --dir ./frontend exec prettier --write "$(CURDIR)/internal/i18n/*.json"
+
+# ==================== 其他 格式化 ====================
 
 # 格式化 JSON 文件
 .PHONY: format-json
@@ -161,7 +167,8 @@ format-yaml:
 	@yamlfmt -conf .yamlfmt \
 		".cnb" \
 		".github" \
-		".gitlab" \
+		".gitcode" \
+		".workflow" \
 		".cnb.yml" \
 		".nfpm.yaml" \
 		".golangci.yml" \
@@ -216,7 +223,6 @@ format-docker:
 	@echo "[Format] 使用 dockerfmt 格式化 Dockerfile..."
 	@find .cnb -type f -name "Dockerfile*" -exec dockerfmt -w {} + || { echo "❌ dockerfmt 格式化失败"; exit 1; }
 	@find .github -type f -name "Dockerfile*" -exec dockerfmt -w {} + || { echo "❌ dockerfmt 格式化失败"; exit 1; }
-	@find .gitlab -type f -name "Dockerfile*" -exec dockerfmt -w {} + || { echo "❌ dockerfmt 格式化失败"; exit 1; }
 	@echo "[Format] Dockerfile 格式化完成（dockerfmt）。"
 
 # ==================== 检查 / 测试 ====================
@@ -283,8 +289,8 @@ clean: ## 清理构建产物
 	rm -rf frontend/dist frontend/bindings
 	rm -f kai bin/*
 
-tool-deps: ## 工具依赖
-	@echo "==> 安装必要的工具依赖..."
+tool-deps: ## 安装必要的工具
+	@echo "==> 安装必要的工具..."
 
 	wails3 version || true
 	go install github.com/wailsapp/wails/v3/cmd/wails3@latest
@@ -325,6 +331,11 @@ tool-deps: ## 工具依赖
 	go install github.com/reteps/dockerfmt@latest
 	-dockerfmt version
 	@echo "==> dockerfmt 工具安装或更新完成"
+
+	markdownfmt -version || true
+	go install github.com/Kunde21/markdownfmt/v3/cmd/markdownfmt@latest
+	-markdownfmt -version
+	@echo "==> markdownfmt 工具安装或更新完成"
 
 deps: ## 安装所有依赖
 	@echo "==> 安装所有依赖..."

@@ -12,6 +12,7 @@ include:
 
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
 # 支持预发布：通过页面/API 传入 pre_release=true 即发布为预发布版本（原 nightly 能力已合并到此）。
+# KAI_GITHUB_TOKEN 去 envs 里配置环境变量
 .trigger_release: &trigger_release
   runner:
     tags: cnb:arch:amd64
@@ -208,11 +209,11 @@ include:
       script: echo $FILES
 
 master:
-  # 手动触发：通过页面自定义按钮执行
+  # 手动触发：通过页面自定义按钮执行（可选是否预发布）
   web_trigger_release:
     - *trigger_release
 
-  # API 触发：由 GitHub Actions 发布正式版后调用 CNB Open API 触发（event=api_trigger_release）
+  # API 触发：由 GitHub Actions 发布 Release 后调用 CNB Open API 触发（event=api_trigger_release）
   # 需通过 env 传入 version 变量（如 {"version":"v1.2.3"}），发布到 CNB
   # 可选：传入 pre_release 变量控制是否为预发布版本（true/false），默认 false
   api_trigger_release:

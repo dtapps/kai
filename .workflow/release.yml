@@ -1,0 +1,575 @@
+# 从 GitHub Release 下载产物并发布到 Gitee Release
+#
+# 两种触发方式：
+#   1) 外部系统 POST Webhook（GitHub Actions 发完 Release 直接调），见下方 triggers 段；
+#   2) Gitee → 仓库 → 流水线 → 选「发布版本」→ 点「执行」（补发时可手填 VERSION）。
+#
+# 前置条件（Gitee Go → 该仓库流水线 → 设置 → 全局参数）：
+#   - VERSION               可选。不填就按 GitHub 最新的 Release 自动判定（常态）；
+#                           只有补发历史版本才需要填，**带不带 v 都行**（v1.2.3 / 1.2.3），脚本自己归一化
+#   - KAI_GITHUB_TOKEN      可选，GitHub 只读令牌，仅用于避开 api.github.com 60 次/小时匿名限额
+#                           （与 .cnb.yml / GitLab / GitCode 同名，源头是 cnb.cool/dtapp/envs 的 github.yml）
+#   - PRERELEASE            可选，填 true / false 强制指定预发布；不建则自动判断
+#
+# 正文：download-stage 请求 GitHub API 拿到 release.body（markdown），
+# 用 marked 转成 HTML，处理后压成单行写进 GITEE_PARAMS 的 RELEASE_BODY，
+# release-stage 的 description: ${RELEASE_BODY} 取值。发布时一次成型，不做事后编辑。
+#
+# 不走文件通道：插件只读「已提交进 git」的文件，流水线运行时生成的
+# assets/release-notes.md 不在任何 commit 里，路径写再对也只会被当成纯文本。
+#
+# 参数通道的三个硬约束（都是实测踩出来的），在 download-stage 里逐一处理：
+#   1. 平台按 = 切 KEY=VALUE → 正文里不能有裸 =，全部转成实体 &#61;；
+#   2. 插件把值当相对路径 open，单段超过 255 字节直接 file name too long 崩掉
+#      → 块级元素之间插 <!--/-->，用注释里的 / 把路径切成短段，走 ENOENT 降级；
+#   3. KEY=VALUE 不能跨行 → 拼成单行，HTML 交给 Gitee 渲染。
+#
+# 预发布：默认按 GitHub 的 prerelease 字段判断，并用 tag 后缀（-rc/-beta/-alpha）
+# 和正文里的「预发布 / Pre-release」等字样兜底；结果写入 GITEE_PARAMS，
+# 由 release-stage 的 prerelease: ${PRERELEASE} 取用。
+#
+# 两个 stage 的职责（stage 之间串行；同一 stage 内的 step 是并行的）：
+#   1) download-stage  build@nodejs —— 云端容器（ubuntu:plugin-24，没有 python3，脚本只用 node 内置模块），
+#      把 GitHub 资产全部下载到 assets/，文件名保留 GitHub 原名（Kai-1.2.3-darwin-arm64.zip）
+#   2) release-stage   release@gitee —— 平台插件，建 Release 并按清单上传附件
+#
+# 附件必须逐个列名：插件不支持目录，assertFiles 填 assets 会把整个目录压成
+# assets.tar.gz 去上传，然后 400 失败。GitHub 增减资产时要同步改那份清单。
+# VERSION 带不带 v 由脚本归一化（VER 去掉 v），填 v1.2.3 或 1.2.3 都能跑通。
+#
+# 触发方式：只认 Webhook 自定义事件，不响应 push / PR。
+# 本仓库是 GitHub 的镜像，push 由镜像同步自动产生，若配 push 触发就会每次同步都发一版。
+# Webhook 触发不依赖代码变动，正好用来承接「GitHub 那边发了 Release」这个外部事件。
+#
+# 外部系统（GitHub Actions 等）调用方式：
+#   POST <流水线页面给出的 Webhook 触发地址>
+#   Authorization: Bearer <个人令牌>（个人中心获取）
+#   {"eventType": "kai-release", "payload": {"params": {"VERSION": "v0.2.19"}}}
+# payload.params 里的键会作为流水线参数注入，所以 VERSION 可以由调用方直接给，
+# 不必每次回 Gitee 手改全局参数。
+version: '1.0'
+name: release
+displayName: 发布版本
+
+triggers:
+  # auto = 允许自动触发；下面没有配 push / pr，所以只有 Webhook 事件能自动拉起流水线。
+  trigger: auto
+  # 自定义事件名，调用方 eventType 必须与之一致（可写多个）。
+  webhook:
+    - 'kai-release'
+
+# 阻塞构建：同一条流水线同时只跑一个，后来的排队等前一个结束。
+# 发版涉及建 Release、传附件、覆盖同名 tag，并发跑会互相踩（allowUpdate 覆盖到一半）。
+strategy:
+  blocking: true
+
+# 引用仓库级「全局参数」。缺了这段，VERSION / KAI_GITHUB_TOKEN 不会进到任务里，
+# 脚本拿到的就是空值（实测日志里 RELEASE_VERSION= 为空）。
+ref_variable:
+  - VERSION
+  - KAI_GITHUB_TOKEN
+  # 预发布开关，可选。填 true / false 就强制指定；不建这个参数也没关系，
+  # 脚本会按 GitHub 的 prerelease 字段自动判断。
+  - PRERELEASE
+  # Release 正文。download-stage 用 marked 把 GitHub 的 body 转成单行 HTML
+  # 写进 GITEE_PARAMS，下游 description: ${RELEASE_BODY} 取值。
+  - RELEASE_BODY
+
+stages:
+  # 必须分成两个 stage：Gitee Go 同一个 stage 内的 step 默认**并行**执行（官方文档：
+  # 「在阶段可以定义任务按照串行或并行两种顺序执行」，没写 dependsOn 就是并行）。
+  # stage 之间才是「按配置顺序串行执行」，且上游失败不触发下游 —— 这才是下载没完成不发布。
+  - name: download-stage
+    displayName: 下载产物
+    strategy: naturally
+    trigger: auto
+    executor: []
+    steps:
+      - step: build@nodejs
+        name: download_assets
+        displayName: 下载 GitHub Release 资产
+        nodeVersion: 20.19.0
+        commands:
+          - |
+            set -eu
+            # 通用变量用 ${TEST_GO} 这种形式引用 —— 平台做的是**文本插值**，不是 shell 展开。
+            # 所以必须写 ${VERSION} 的精确形式：之前写成 ${VERSION:-} 不匹配插值规则，
+            # 原样落进 shell 后按"未设置则空"求值，于是 RELEASE_VERSION 恒为空。
+            # set +u 只是防止变量没配时 unbound variable 直接中断，下面会显式判空并给出可读错误。
+            set +u
+            export RELEASE_VERSION="${VERSION}"
+            export KAI_GITHUB_TOKEN="${KAI_GITHUB_TOKEN}"
+            set -u
+
+            # VERSION 不是必填：Webhook 触发时可以从 payload.params 带过来；
+            # 完全没带就按 GitHub 最新的 Release 自动判定，省掉每次回 Gitee 改全局参数。
+            if [ -z "$RELEASE_VERSION" ]; then
+              echo "VERSION 为空：按 GitHub 最新 Release 自动判定"
+              echo "     想指定版本：全局参数 VERSION 填 v0.2.19，或 Webhook 的 payload.params 里带 VERSION"
+            fi
+
+            # 预发布开关：全局参数 PRERELEASE 可选，填 true / false 则强制指定，
+            # 不配（或值不是这两种）就由脚本按 GitHub 的 prerelease 字段自动判断。
+            # 用 printenv 而不是直接展开：参数没建时平台不做插值，留下的是字面 ${...}，
+            # 直接展开会把占位符塞进脚本，这里读出来再在 node 里判掉。
+            export PRERELEASE_MANUAL="$(printenv PRERELEASE 2>/dev/null || true)"
+
+            # 正文转换依赖：marked 把 markdown 转 HTML。走 npmmirror 国内镜像，
+            # 装到当前工作目录，下面的 stdin 脚本按 cwd 解析 require('marked')。
+            export npm_config_registry=https://registry.npmmirror.com
+            npm install marked \
+              --registry=https://registry.npmmirror.com --no-audit --no-fund --loglevel=error
+
+            node - <<'JS'
+            'use strict';
+            // build@nodejs 的镜像里没有 python3（实测 ubuntu:plugin-24 报 command not found），
+            // 全流程改用 node 内置模块：https 下载 + JSON.parse + fs 写文件，不依赖 curl / jq。
+            const fs = require('fs');
+            const http = require('http');
+            const https = require('https');
+
+            // 所有附件统一落到这个目录。下游 artifacts.path 只声明目录本身，
+            // 不再逐个列文件名 —— 传哪些文件由目录里的实际内容决定。
+            const OUT_DIR = 'assets';
+
+            const GH_API = 'https://api.github.com/repos/dtapps/kai';
+            const GH_TOKEN = (process.env.KAI_GITHUB_TOKEN || '').trim();
+            let RAW = (process.env.RELEASE_VERSION || '').trim();
+
+            // VERSION 带不带 v 都能跑，脚本自己归一化：GitHub 资产名里的版本段永远不带 v
+            // （Kai-0.2.19-darwin-arm64.zip），所以查 Release 用 VER。
+            // 三个都用 let：VERSION 缺省时由 GitHub 最新 Release 的 tag_name 回填。
+            let VER = RAW.replace(/^v/i, '');
+
+            function fail(msg) {
+              console.error('错误：' + msg);
+              process.exit(1);
+            }
+
+            // tag 一律补 v（GitHub 侧的惯用形式是 v0.2.19）。查 GitHub Release 用它，
+            // 与附件名用的 VER 完全独立，所以 VERSION 填哪种格式都能对上。
+            // VERSION 没给时留空，由 main() 取 /releases/latest 后回填。
+            let TAG = VER ? 'v' + VER : '';
+
+            // 断点续传要带 Range 头，重定向到签名地址时也得一路带着，否则续传变成从头下
+            function request(url, redirects, withAuth, rangeFrom) {
+              return new Promise(function (resolve, reject) {
+                const lib = url.indexOf('https:') === 0 ? https : http;
+                const headers = { 'User-Agent': 'kai-release-sync' };
+                if (GH_TOKEN && withAuth) {
+                  headers.Authorization = 'token ' + GH_TOKEN;
+                }
+                if (rangeFrom > 0) {
+                  headers.Range = 'bytes=' + rangeFrom + '-';
+                }
+                const req = lib.get(url, { headers: headers }, function (res) {
+                  if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                    res.resume();
+                    if (!redirects) {
+                      return reject(new Error('重定向次数过多: ' + url));
+                    }
+                    return resolve(request(res.headers.location, redirects - 1, withAuth, rangeFrom));
+                  }
+                  // 206 = 服务端接受了续传
+                  if (res.statusCode !== 200 && res.statusCode !== 206) {
+                    let body = '';
+                    res.on('data', function (chunk) { body += chunk; });
+                    res.on('end', function () {
+                      reject(new Error('HTTP ' + res.statusCode + ' ' + url + '\n' + body.slice(0, 300)));
+                    });
+                    return;
+                  }
+                  resolve(res);
+                });
+                req.on('error', reject);
+                req.setTimeout(60000, function () {
+                  req.destroy(new Error('请求超时: ' + url));
+                });
+              });
+            }
+
+            function readText(url) {
+              return request(url, 5, true).then(function (res) {
+                return new Promise(function (resolve, reject) {
+                  let body = '';
+                  res.setEncoding('utf8');
+                  res.on('data', function (chunk) { body += chunk; });
+                  res.on('end', function () { resolve(body); });
+                  res.on('error', reject);
+                });
+              });
+            }
+
+            // GitHub 资产直连境内实测 10~30 KB/s（单个百 MB 级安装包要下几十分钟），且常在几分钟后
+            // 被中间设备掐断（日志里 node 抛 "aborted"）。所以：多源回退 + 断点续传 + 重试。
+            // 代理优先 —— 直连实测 0.0 MB/s，先试它纯属浪费时间；直连留作最后兜底。
+            // 各家拼接方式不一样：daocloud 要剥掉协议头，另外两家是把完整 URL 直接接在后面。
+            const MIRRORS = [
+              { name: 'daocloud', wrap: function (u) { return 'https://files.m.daocloud.io/' + u.replace(/^https?:\/\//, ''); } },
+              { name: 'ghfast', wrap: function (u) { return 'https://ghfast.top/' + u; } },
+              { name: 'gh-proxy', wrap: function (u) { return 'https://gh-proxy.com/' + u; } },
+              { name: '直连', wrap: function (u) { return u; } }
+            ];
+
+            function mb(n) { return (n / 1048576).toFixed(1) + ' MB'; }
+            // 慢的时候 MB/s 恒等于 0.0，看不出是在动还是死了，退化到 KB/s 才有参考价值
+            function rate(bps) {
+              if (bps >= 1048576) { return mb(bps) + '/s'; }
+              if (bps >= 1024) { return (bps / 1024).toFixed(0) + ' KB/s'; }
+              return bps.toFixed(0) + ' B/s';
+            }
+            function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+            // 下一次（可能中途断），返回结束时文件的实际字节数
+            function downloadOnce(url, dest, from) {
+              return request(url, 5, false, from).then(function (res) {
+                return new Promise(function (resolve, reject) {
+                  // 只有服务端确认 206 才续写，否则截断重来
+                  const append = from > 0 && res.statusCode === 206;
+                  const out = fs.createWriteStream(dest, { flags: append ? 'a' : 'w' });
+                  let written = append ? from : 0;
+                  let lastAt = Date.now();
+                  let lastBytes = written;
+                  let done = false;
+                  let lowStreak = 0;
+
+                  function abort(err) {
+                    if (done) { return; }
+                    done = true;
+                    out.destroy();
+                    res.destroy();
+                    reject(err);
+                  }
+
+                  res.on('data', function (chunk) {
+                    written += chunk.length;
+                    const now = Date.now();
+                    // 5 秒一报：能看出是真慢还是卡死，也不至于把日志刷爆
+                    if (now - lastAt >= 5000) {
+                      const bps = (written - lastBytes) / ((now - lastAt) / 1000);
+                      console.log('    ' + mb(written) + '  ' + rate(bps));
+                      // 15 秒持续低于 30 KB/s 就判定这条源废了，主动断开换源。
+                      // 只在「连接断了」时才换源的话，慢而不断的连接会一直磨下去
+                      // （日志里 30 秒才 0.4 MB 就是这种情况，按这速度一个安装包要磨几小时）。
+                      lowStreak = bps < 30 * 1024 ? lowStreak + 1 : 0;
+                      if (lowStreak >= 3) {
+                        const slowErr = new Error('速度过低（' + rate(bps) + '）');
+                        slowErr.slow = true;
+                        abort(slowErr);
+                        return;
+                      }
+                      lastAt = now;
+                      lastBytes = written;
+                    }
+                  });
+                  res.on('error', abort);
+                  res.on('aborted', function () { abort(new Error('连接被中断')); });
+                  out.on('error', abort);
+                  out.on('finish', function () {
+                    if (done) { return; }
+                    done = true;
+                    resolve(written);
+                  });
+                  res.pipe(out);
+                });
+              });
+            }
+
+            // 单个文件：最多切 3 个源、累计重试 8 次，每次从已落盘的字节续传
+            function downloadFile(url, dest, expectedSize) {
+              let mirror = 0;
+              let tries = 0;
+              function step() {
+                const from = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
+                if (expectedSize > 0 && from === expectedSize) {
+                  console.log('  已完整（' + mb(from) + '）');
+                  return Promise.resolve();
+                }
+                if (expectedSize > 0 && from > expectedSize) {
+                  fs.unlinkSync(dest); // 上次写了脏数据，重来
+                }
+                return downloadOnce(MIRRORS[mirror].wrap(url), dest, from).then(function (written) {
+                  if (expectedSize > 0 && written !== expectedSize) {
+                    throw new Error('大小不符：' + written + ' != ' + expectedSize);
+                  }
+                  console.log('  完成 ' + mb(written) + '（' + MIRRORS[mirror].name + '）');
+                }).catch(function (err) {
+                  tries++;
+                  const now = fs.existsSync(dest) ? fs.statSync(dest).size : 0;
+                  console.log('  中断：' + (err && err.message ? err.message : err) +
+                    '，已下 ' + mb(now) + '，第 ' + tries + ' 次');
+                  if (tries >= 8) {
+                    return Promise.reject(new Error('下载失败（重试 ' + tries + ' 次）：' + url));
+                  }
+                  // 速度过低立刻换源；普通中断则两轮换一次，避免在同一个慢源上反复消耗次数
+                  if ((err && err.slow) || tries % 2 === 0) {
+                    if (mirror < MIRRORS.length - 1) {
+                      mirror++;
+                      console.log('  切换下载源 → ' + MIRRORS[mirror].name);
+                    }
+                  }
+                  return sleep(1500).then(step);
+                });
+              }
+              return step();
+            }
+
+            function main() {
+              // 容器启动时工作目录可能已被删除（日志里的 shell-init getcwd 报错），先兜一下
+              try {
+                process.cwd();
+              } catch (e) {
+                process.chdir('/');
+              }
+
+              if (!fs.existsSync(OUT_DIR)) {
+                fs.mkdirSync(OUT_DIR, { recursive: true });
+              }
+
+              // 参数文件：下游 description / prerelease / tagName 等全靠它插值。
+              const pf = process.env.GITEE_PARAMS || 'GITEE_PARAMS';
+
+              // 指定了版本就按 tag 精确取（补发历史版本）；没指定就取最新，
+              // 这样 Webhook 只带事件不带参数也能发版。
+              const relUrl = TAG
+                ? GH_API + '/releases/tags/' + encodeURIComponent(TAG)
+                : GH_API + '/releases/latest';
+              console.log('版本号: ' + (TAG || '未指定，取 GitHub 最新 Release'));
+
+              return readText(relUrl).then(async function (raw) {
+                const rel = JSON.parse(raw);
+                // 未指定版本时用 tag_name 回填，并写回 GITEE_PARAMS 的 VERSION ——
+                // 下游 releaseName / tagName / assertFiles 都是 VERSION 插值，
+                // 不回填的话文件名会变成 Kai--darwin-amd64.zip。
+                if (!TAG) {
+                  TAG = String(rel.tag_name || '').trim();
+                  if (!TAG) {
+                    fail('GitHub 最新 Release 没有 tag_name，无法判定版本');
+                  }
+                  VER = TAG.replace(/^v/i, '');
+                  RAW = TAG;
+                  fs.appendFileSync(pf, 'VERSION=' + TAG + '\n', 'utf8');
+                  console.log('自动判定版本：' + TAG + '（已写入 ' + pf + ' 的 VERSION）');
+                }
+                const assets = rel.assets || [];
+                if (!assets.length) {
+                  fail('GitHub Release ' + TAG + ' 没有附件');
+                }
+                console.log('共 ' + assets.length + ' 个附件');
+
+                // 正文：GitHub 的 body（markdown）→ HTML（marked）→ 单行，
+                // 写进 GITEE_PARAMS 的 RELEASE_BODY，下游 description: ${RELEASE_BODY} 取值。
+                //
+                // 参数通道的硬约束是「KEY=VALUE」，平台按 = 切分，所以值里不能有裸 =；
+                // 插件又会把这个值当相对路径 open，路径单个分量超过 255 字节会直接
+                // ENAMETOOLONG 报错退出（实测几百 KB 正文必崩）。三件事分别处理：
+                //   1. 链接的 URL 整个去掉，只留文字（Gitee Release 页面自带附件，
+                //      正文里再放地址既冗余又点不开）；
+                //   2. 去掉标签上残余的属性（class= 之类），标签结构保留；
+                //   3. 剩下的 = 一律转成实体 &#61;，渲染出来还是 =，但不触发切分；
+                //   4. 每累计 200 字节插一个 <br/>：它自带的 / 会把插件 open 的路径切成
+                //      一段段短分量，open 必然走 ENOENT 分支降级成正文，而不是 ENAMETOOLONG
+                //      崩掉。不能再用 <!--/-->：实测平台会把 HTML 注释删掉、把 // 压成 /，
+                //      分隔符被清掉后整串又变成一个超长分量（10/25 08:30 那次就这么崩的）；
+                //   5. 拼成单行，KEY=VALUE 不能跨行。
+                const body = String(rel.body || '')
+                  .replace(/\r\n/g, '\n')
+                  .split('https://github.com/dtapps/kai').join('https://gitee.com/dtapps/kai')
+                  .trim();
+                const notes = body || ('Kai ' + TAG);
+                const { marked } = require('marked');
+                let notesHtml = marked.parse(notes);
+                notesHtml = notesHtml.replace(
+                  /<a\b[^>]*\bhref="([^"]*)"[^>]*>([\s\S]*?)<\/a>/g,
+                  function (m, url, text) {
+                    // 只留链接文字，URL 整个去掉：Gitee 的 Release 页面自己就挂着附件，
+                    // 正文里再放一遍地址既冗余又点不开（插件存的是纯文本，不是真链接）。
+                    return text.replace(/<[^>]+>/g, '').trim();
+                  }
+                );
+                // marked 会把裸 URL 也包成 <a>，上面已经换成空串，这里清掉残留的空链接标签
+                notesHtml = notesHtml.replace(/<a\b[^>]*>\s*<\/a>/g, '');
+                notesHtml = notesHtml.replace(/\s+[a-zA-Z][\w:-]*="[^"]*"/g, '');
+                notesHtml = notesHtml.replace(/=/g, '&#61;');
+                // 按字节精确切分，每累计 LIMIT 字节插一个 <br/>。
+                // <br/> 在块级元素之间只多一个空行，几乎看不出；它自带的 / 会把插件
+                // open 的路径切成一段段短分量，open 必然走 ENOENT 分支降级成正文，
+                // 而不是 ENAMETOOLONG 直接崩掉。
+                // 不能再用 <!--/-->：实测平台会把 HTML 注释删掉、把 // 压成 /，
+                // 分隔符被清掉后整串又变成一个超长分量（8:30 那次就是这么崩的）。
+                // 切分只落在「标签」与「文本」的边界上，不会把多字节汉字或标签切断。
+                function withBreaks(block, LIMIT) {
+                  const tokens = block.match(/<[^>]*>|[^<]+/g) || [];
+                  let out = '', size = 0;
+                  for (const t of tokens) {
+                    if (t.charAt(0) === '<') {
+                      out += t;
+                      size += Buffer.byteLength(t, 'utf8');
+                    } else {
+                      let buf = Buffer.from(t, 'utf8');
+                      while (buf.length > 0) {
+                        if (size >= LIMIT) { out += '<br/>'; size = 0; continue; }
+                        let end = Math.min(LIMIT - size, buf.length);
+                        // 往回退到 UTF-8 字符边界，避免切出乱码
+                        while (end > 0 && (buf[end] & 0xc0) === 0x80) end--;
+                        out += buf.slice(0, end).toString('utf8');
+                        size += end;
+                        buf = buf.slice(end);
+                      }
+                    }
+                    if (size >= LIMIT) { out += '<br/>'; size = 0; }
+                  }
+                  return out;
+                }
+                const oneLine = notesHtml
+                  .split('\n')
+                  .map(function (l) { return l.trim(); })
+                  .filter(Boolean)
+                  .map(function (l) { return withBreaks(l, 200); })
+                  .join('');
+                if (oneLine.indexOf('=') !== -1) {
+                  throw new Error('正文里还有裸 =，会被参数解析截断');
+                }
+                // 兜底校验：任何一段都不能超过 255，否则插件 open 会 file name too long
+                const longest = Math.max.apply(null, oneLine.split('/').map(function (p) {
+                  return Buffer.byteLength(p, 'utf8');
+                }));
+                if (longest > 200) {
+                  throw new Error('正文分段后仍有 ' + longest + ' 字节的片段，会被插件当超长文件名');
+                }
+                fs.appendFileSync(pf, 'RELEASE_BODY=' + oneLine + '\n', 'utf8');
+                console.log('正文：markdown ' + notes.split('\n').length + ' 行 / ' +
+                  notes.length + ' 字符 → 单行 HTML ' + oneLine.length + ' 字符' +
+                  '（无裸 =，最长路径片段 ' + longest + ' 字节）');
+
+                // 预发布标记：全局参数 PRERELEASE 显式指定时最优先；否则
+                // GitHub 的 prerelease 字段最权威，再叠加 tag 后缀和正文关键词兜底。
+                // 结果写进 GITEE_PARAMS，供下游 prerelease 字段插值（布尔）。
+                const manual = (process.env.PRERELEASE_MANUAL || '').trim().toLowerCase();
+                const preByTag = /[-.](rc|beta|alpha|pre|preview)\d*(\.|\b)/i.test(VER);
+                const preByBody = /(预发布|测试版|抢先版|pre-?release|release candidate)/i.test(body);
+                let PRE;
+                if (manual === 'true' || manual === 'false') {
+                  PRE = manual === 'true';
+                  console.log('预发布：按全局参数 PRERELEASE=' + manual + ' 指定');
+                } else {
+                  PRE = rel.prerelease === true || preByTag || preByBody;
+                  console.log('预发布：' + PRE + '（GitHub prerelease=' + rel.prerelease +
+                    '，tag 后缀=' + preByTag + '，正文关键词=' + preByBody + '）');
+                }
+                fs.appendFileSync(pf, 'PRERELEASE=' + (PRE ? 'true' : 'false') + '\n', 'utf8');
+
+                // 落盘名直接用 GitHub 资产原名，目录上传不看名字，
+                // 所以附件名能和 GitHub / CNB / GitLab 逐字一致。
+                // 不比对任何固定清单：GitHub 发几个，就下几个、传几个。
+
+                // 单流境内只有几十 KB/s，几个安装包串行要几小时；开 3 路并发把带宽叠起来
+                const CONCURRENCY = 3;
+                const total = assets.length;
+                let seq = 0;
+
+                // GitHub 资产名里的版本段不带 v（Kai-0.2.19-darwin-amd64.zip），
+                // 而下游 assertFiles 用 VERSION 参数拼文件名。两者必须一致，
+                // 所以落盘时把版本段统一替换成 VERSION 原文（带 v 就带 v）。
+                function localName(name) {
+                  return name.split('Kai-' + VER).join('Kai-' + RAW);
+                }
+
+                function downloadOne(asset) {
+                  seq++;
+                  console.log('[' + seq + '/' + total + '] ' + asset.name +
+                    '（' + mb(asset.size || 0) + '）');
+                  return downloadFile(asset.browser_download_url, OUT_DIR + '/' + localName(asset.name), asset.size || 0);
+                }
+
+                const queue = assets.slice();
+                function worker() {
+                  if (!queue.length) { return Promise.resolve(); }
+                  return downloadOne(queue.shift()).then(worker);
+                }
+
+                const pool = [];
+                for (let i = 0; i < Math.min(CONCURRENCY, queue.length); i++) {
+                  pool.push(worker());
+                }
+
+                return Promise.all(pool).then(function () {
+                  // 以目录里的实际内容为准：GitHub 有什么就传什么，不补也不减
+                  const all = fs.readdirSync(OUT_DIR);
+                  console.log('准备就绪：' + OUT_DIR + '/ 下 ' + all.length + ' 个附件');
+                  all.forEach(function (f) { console.log('  - ' + f); });
+                });
+              });
+            }
+
+            main().catch(function (err) {
+              fail(err && err.message ? err.message : String(err));
+            });
+            JS
+
+            # 落盘自检：正文没写进参数文件就直接红在这一步，不要等到发布阶段才发现
+            echo "---- 附件 ----"
+            ls -lh assets/
+            echo "---- 参数文件 ----"
+            ls -l "${GITEE_PARAMS:-GITEE_PARAMS}"
+            echo "---- 正文 ----"
+            # RELEASE_BODY 是单行，截断显示；字节数单独看
+            grep -o '^RELEASE_BODY=.\{0,120\}' "${GITEE_PARAMS:-GITEE_PARAMS}" || true
+            awk '/^RELEASE_BODY=/{print "RELEASE_BODY 共 " length($0) - 13 " 字节"}' \
+              "${GITEE_PARAMS:-GITEE_PARAMS}"
+        # 声明产物，供下游 release@gitee 的 upstreamArtifact 取用。
+        # 必须写目录名 assets，不能写 assets/*：实测通配符会把匹配到的文件
+        # 平铺到工作目录根下（assets/ 前缀丢失），插件的 assertFiles 逐条找
+        # assets/xxx.zip 就会 file not exists。目录名则保留层级。
+        artifacts:
+          - name: GH_ASSETS
+            path:
+              - assets
+
+  - name: release-stage
+    displayName: 发布
+    strategy: naturally
+    trigger: auto
+    executor: []
+    steps:
+      - step: release@gitee
+        name: release_gitee
+        displayName: 创建 Gitee Release 并上传附件
+        # tag 直接用 VERSION 原文（填 v0.2.19 就是 v0.2.19）。
+        # 这里不能写 v${VERSION}：VERSION 已带 v 时会拼成 vv0.2.19。
+        releaseName: ${VERSION}
+        tagName: ${VERSION}
+        # 正文取自全局参数 RELEASE_BODY：download-stage 用 marked 把 GitHub 的 body
+        # 转成 HTML，处理掉 = 和超长分量后写成单行，经 GITEE_PARAMS 到这里插值。
+        # 单行是必须的（KEY=VALUE 不能跨行），单行内的 HTML 由 Gitee 渲染。
+        description: ${RELEASE_BODY}
+        upstreamArtifact:
+          - GH_ASSETS
+        # 必须逐个列文件名。插件不支持目录：填 assets 会把整个目录压成
+        # assets.tar.gz 去上传，然后 400 失败。
+        # 文件名里的版本段用 ${VERSION}，与脚本落盘名保持一致。
+        #
+        # 清单必须与 .github/workflows/release.yml 的 matrix 逐平台对齐：
+        # 当前只构建 darwin / windows（amd64 + arm64），Linux 那几行在 release.yml 里是注释掉的，
+        # 所以这里不列 .AppImage / .deb / .rpm / .pkg.tar.zst —— 列了就是重启 Linux 构建时才有的文件，
+        # 会让每次发版都在 assert 阶段失败。等 Linux 放开时两边一起加。
+        #
+        # BUILD_TIME / GIT_COMMIT 不列：release.yml 只在**预发布**时才生成这两个文件，
+        # 列进来会让正式版必然失败（正式版只有 SHA256SUMS）。
+        assertFiles:
+          - assets/Kai-${VERSION}-darwin-amd64.zip
+          - assets/Kai-${VERSION}-darwin-arm64.zip
+          - assets/Kai-${VERSION}-windows-amd64-install.exe
+          - assets/Kai-${VERSION}-windows-arm64-install.exe
+          - assets/updater-Kai-${VERSION}-darwin-amd64.zip
+          - assets/updater-Kai-${VERSION}-darwin-arm64.zip
+          - assets/updater-Kai-${VERSION}-windows-amd64.zip
+          - assets/updater-Kai-${VERSION}-windows-arm64.zip
+          - assets/SHA256SUMS
+        # 预发布：download-stage 判定后写入 GITEE_PARAMS，这里插值取 true / false。
+        # 判定优先级：GitHub 的 prerelease 字段 > tag 后缀（-rc/-beta/-alpha）> 正文关键词。
+        # 想强制指定，就在流水线全局参数里新建 PRERELEASE（值为 true 或 false），
+        # 脚本会优先用它（见下方 download-stage 的 preManual 判断）。
+        prerelease: ${PRERELEASE}
+        # 同 tag 已存在时覆盖，代替之前手写的「先删旧 Release」
+        allowUpdate: true

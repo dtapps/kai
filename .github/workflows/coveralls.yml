@@ -3,9 +3,9 @@
 # 为什么独立：
 #   - 与 Codecov 解耦：Coveralls 侧故障 / token 失效不会拖垮 Codecov 上传与测试 job；
 #   - 凭证隔离：只用内置 GITHUB_TOKEN，不扩散到 Codecov 流程；
-#   - Codecov 那条（.github/workflows/coverage.yml）已经跑通，不动它。
+#   - Codecov 那条（.github/workflows/codecov.yml）已经跑通，不动它。
 #
-# 代价：本工作流会把测试再跑一遍（与 coverage.yml 重复）。这是「独立」换来的隔离性。
+# 代价：本工作流会把测试再跑一遍（与 codecov.yml 重复）。这是「独立」换来的隔离性。
 #
 # 为什么是单个 job（而不是 go / node 拆两个 job）：
 #   Coveralls 以 build 为单位聚合报告，go / node 两份报告必须落在同一个 build 里，

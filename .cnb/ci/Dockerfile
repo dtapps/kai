@@ -17,8 +17,8 @@ ARG GITHUB_MIRROR="https://files.m.daocloud.io"
 # https://github.com/Kunde21/markdownfmt/releases
 # ==========================================
 ARG NODE_VERSION=26.12.1
-ARG PNPM_VERSION=12.15.0
-ARG WAILS3_VERSION=v3.0.0-beta.34
+ARG PNPM_VERSION=12.16.0
+ARG WAILS3_VERSION=v3.0.0
 ARG SQLC_VERSION=v1.31.1
 ARG GOLANGCI_LINT_VERSION=v2.15.0
 ARG GOVULNCHECK_VERSION=v1.9.0

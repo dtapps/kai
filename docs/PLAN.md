@@ -1,8 +1,8 @@
 # Kai 项目规划与架构现状
 
-> 本文最初是 2026-08 的立项规划，现按当前实现更新（最后核对：2026-10-26）。
+> 本文最初是 2026-08 的立项规划，现按当前实现更新（最后核对：2026-10-27）。
 
-- 当前版本：`v0.2.x`（最新 tag `v0.2.6`）
+- 当前版本：`v0.2.x`（最新 tag `v0.2.7`）
 - 技术栈：**Wails 3 (Go) + Svelte 5 + TypeScript 7 + Tailwind 4 + Vite 8**
 - 历史决策过程见 `docs/2026-*.md`（开发日志，已冻结）；文档缺口与后续计划见 `docs/docs-plan.md`
 
@@ -34,7 +34,7 @@
 
 | 层     | 选型                                                                               | 说明                                                                  |
 |--------|------------------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| 框架   | **Wails 3 `v3.0.0-beta.34`**                                                       | Go 后端 + 原生 WebView（mac: WKWebView / win: WebView2），无 Chromium |
+| 框架   | **Wails 3 `v3.0.0`**                                                               | Go 后端 + 原生 WebView（mac: WKWebView / win: WebView2），无 Chromium |
 | 后端   | Go `1.27.3`，module `cnb.cool/dtapp/kai`                                           | 领域 Service + Wrapper 门面，事件驱动 IPC                             |
 | 前端   | **Svelte 5 + TypeScript 7 + Tailwind 4 + Vite 8**                                  | 多 HTML 入口（translate / settings / screenshot），无前端路由框架     |
 | 状态   | Svelte runes + 自研 `stores/`（localStorage 持久化）                               | 无 Pinia / vue-router                                                 |
@@ -245,7 +245,7 @@ make darwin-package
 make windows-package
 ```
 
-> Wails 3 仍处 Beta，API 可能变动，以 https://v3.wails.io 为准；升级 Wails 版本时同步改 `go.mod` 与两份 CI Dockerfile 的 `WAILS3_VERSION`。
+> Wails 3 已发布 `v3.0.0`，仍以 https://v3.wails.io 为准；升级 Wails 版本时同步改 `go.mod` 与两份 CI Dockerfile 的 `WAILS3_VERSION`。
 
 ---
 

@@ -6,9 +6,11 @@ A translation tool that lives in the system tray, with input translation, screen
 
 <div align="center">
 
-[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) [![Codecov](https://img.shields.io/codecov/c/github/dtapps/kai?style=flat-square&logo=codecov&label=codecov)](https://codecov.io/gh/dtapps/kai) [![Coveralls](https://img.shields.io/coverallsCoverage/github/dtapps/kai?style=flat-square&logo=coveralls&label=coveralls)](https://coveralls.io/github/dtapps/kai?branch=master) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
 
-[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) [![CNB Coverage](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage?branch=master)](https://cnb.cool/dtapp/kai) [![CNB Coverage PR](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage-pr?branch=master)](https://cnb.cool/dtapp/kai) ![Download Requests](https://img.shields.io/endpoint?label=Download%20Requests&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+
+[![CNB Vulnerability Full](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest.link?branch=master) [![CNB Vulnerability Diff](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest.link?branch=master) [![CNB License Full](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest.link?branch=master) [![CNB License Diff](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest.link?branch=master) [![CNB SBOM Full](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest.link?branch=master) [![CNB SBOM Diff](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest.link?branch=master)
 
 </div>
 
@@ -31,7 +33,7 @@ A translation tool that lives in the system tray, with input translation, screen
 
 Kai includes optional anonymous usage analytics (**disabled by default**; enable it under Settings → General) to understand how features are used and improve the product. When enabled, **only the anonymous data below is reported, with no personal information** (no text content, translation results, API keys, or accounts are collected):
 
-- **Anonymous device ID**: an irreversible random ID derived one-way (HMAC) from a machine fingerprint, used to distinguish devices and measure retention; it is reset by deleting the app data.
+- **Anonymous device ID**: an irreversible random ID derived one-way (HMAC) from a machine fingerprint, used to distinguish devices and measure retention; it is not stored in the app data, so deleting the app data does not reset it.
 - **Coarse location**: when enabled, PostHog derives coarse geolocation (country / region / city) from the request source IP — no precise coordinates or carrier detail, used only for regional distribution stats.
 - **App identifier (app_name)**: always `kai`, used to distinguish this app/build within a shared PostHog instance.
 
@@ -80,7 +82,9 @@ Notes:
 
 ## 5. Documentation
 
-Development and maintenance docs live in [docs/](docs/): project plan, CI image, Codecov / Coveralls, GitLab release sync, and more.
+Development and maintenance docs live in [docs/README.md](docs/README.md): index, development/configuration/release guides, CI topics, and ADRs.
+
+Three collaboration files live at the repository root: [CONTRIBUTING.md](CONTRIBUTING.md) (contribution guide), [SECURITY.md](SECURITY.md) (security policy), and [CHANGELOG.md](CHANGELOG.md) (version history).
 
 ## 6. License
 
@@ -88,7 +92,7 @@ See the `LICENSE` file in the repository.
 
 ## 7. Known Issues
 
-> The following are known limitations in the current version (Wails v3 beta.34), mostly caused by upstream framework or macOS platform behavior rather than application logic defects.
+> The following are known limitations in the current version (Wails v3.0.0), mostly caused by upstream framework or macOS platform behavior rather than application logic defects.
 
 - **macOS: screenshot window may be covered on first hotkey invocation**: When invoking the screenshot translation window via the hotkey (`⌥+S`) for the first time while another app is in the foreground, it may occasionally be covered by that app's window. A subsequent invocation (window already in the event loop) works normally. Cause: Kai is an accessory app (no Dock icon), so on macOS (especially Tahoe / macOS 27) its ability to reclaim foreground focus from a background state is limited by the system; a pure Wails solution has a race on the first invocation. Tray-menu clicks are unaffected (native clicks naturally transfer foreground focus). **Workaround**: if covered, click the Kai tray icon once or trigger the hotkey again.
 

@@ -29,12 +29,12 @@
 - **基础镜像** `golang:1.27.3-trixie`。
 - **apt 包**：`wget` `xz-utils` `ca-certificates` `curl` `gnupg` `zip` `unzip` `pkg-config` `git` `make` `libgtk-4-dev` `libwebkitgtk-6.0-dev` `jq`。 其中 GTK4 / WebKit6 开发库是硬需求：既供 `go install wails3` 从源码编译，也供后续 `go build` / `go test` 编译 webview 时 `pkg-config` 找到 `gtk4.pc` / `webkitgtk-6.0.pc`。
 - **Node** 26.12.1：按 `uname -m` 选 `x64` / `arm64` 的官方 `.tar.xz`，解到 `/usr/local`（其他架构直接 `exit 1`）。
-- **pnpm** 12.15.0：`npm install -g pnpm@${PNPM_VERSION}`。
+- **pnpm** 12.16.0：`npm install -g pnpm@${PNPM_VERSION}`。
 - **Go 工具链**（全部 `go install` 到 `/go/bin`，版本由 ARG 钉死）：
 
   | 工具            | 版本                                      |
   |-----------------|-------------------------------------------|
-  | `wails3`        | `v3.0.0-beta.34`                          |
+  | `wails3`        | `v3.0.0`                                  |
   | `sqlc`          | `v1.31.1`                                 |
   | `golangci-lint` | `v2.15.0`                                 |
   | `govulncheck`   | `v1.9.0`                                  |

@@ -1,24 +1,35 @@
 # CNB 代码安全扫描配置
 # 文档: https://docs.cnb.cool/zh/security/config-file.html
 #
-# 注意：scan.paths 为 gitignore 风格规则列表，按顺序匹配、后者覆盖前者。
-# 正向 pattern = 纳入扫描范围；排除必须用 '!' 取反（且 YAML 中 ! 须引号包裹）。
-# 曾误将排除项写成正向 patterns，等于把扫描范围收窄为「只有测试文件」，适得其反。
+# 公共忽略规则统一放在仓库根目录的 .scanignore（默认对所有能力生效），
+# 这里只在需要按能力微调时补充 scan.paths。
+#
+# 注意：scan.paths 为 gitignore 风格规则列表，按顺序匹配、后者覆盖前者；
+# 排除必须用 '!' 取反（且 YAML 中 ! 须引号包裹）；正向 pattern = 纳入扫描范围。
+# 曾误将排除项写成正向 patterns，等于把扫描范围收窄成「只有测试文件」，适得其反。
 
 # 秘密扫描（API Key、Token、凭据等）
 secrets:
   scan:
     paths:
-      - '**' # 先纳入全部文件
-      - '!vendor/**' # 排除 vendor 依赖目录
+      - '!vendor/**'
       - '!**/*_test.go' # 排除 Go 测试文件
       - '!**/testdata/**' # 排除 Go 测试数据目录
+      - '!**/*.test.ts' # 排除前端单元测试
+      - '!**/*.test.tsx'
+      - '!**/*.spec.ts' # 排除前端 E2E 测试
+      - '!**/*.spec.tsx'
+      - '!**/__tests__/**'
 
 # 软件成分分析（依赖漏洞扫描）
 software-composition-analysis:
   scan:
     paths:
-      - '**' # 先纳入全部文件
-      - '!vendor/**' # 排除 vendor 依赖目录
+      - '!vendor/**'
       - '!**/*_test.go' # 排除 Go 测试文件
       - '!**/testdata/**' # 排除 Go 测试数据目录
+      - '!**/*.test.ts' # 排除前端单元测试
+      - '!**/*.test.tsx'
+      - '!**/*.spec.ts' # 排除前端 E2E 测试
+      - '!**/*.spec.tsx'
+      - '!**/__tests__/**'

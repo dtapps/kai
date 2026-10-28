@@ -1,0 +1,25 @@
+# CNB 代码安全扫描 · 公共忽略规则
+# 文档: https://docs.cnb.cool/zh/security/quickstart.html
+#
+# 使用 gitignore 风格路径规则，默认对所有扫描能力（secrets / SCA）生效。
+# 本文件只写"不扫什么"；需要按能力单独配置时，改用 code_scan_config.yml 的
+# scan.ignoreFrom / scan.paths。注意：ignoreFrom 指定的文件不会与本文件合并。
+
+# 第三方依赖与构建产物
+vendor/
+node_modules/
+frontend/dist/
+frontend/coverage/
+bin/
+dist/
+build/linux/appimage/build/
+build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
+
+# Go 测试代码与测试数据：测试里常有写死的假凭据/URL，且不随产物发布
+**/*_test.go
+**/testdata/**
+**/test-fixtures/**
+**/__tests__/**
+**/__mocks__/**
+**/coverage.out
+**/coverage.html

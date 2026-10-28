@@ -1,25 +1,36 @@
 # CNB 代码安全扫描 · 公共忽略规则
-# 文档: https://docs.cnb.cool/zh/security/quickstart.html
+# https://docs.cnb.cool/zh/security/intro.html
 #
-# 使用 gitignore 风格路径规则，默认对所有扫描能力（secrets / SCA）生效。
-# 本文件只写"不扫什么"；需要按能力单独配置时，改用 code_scan_config.yml 的
-# scan.ignoreFrom / scan.paths。注意：ignoreFrom 指定的文件不会与本文件合并。
+# 语义（gitignore 风格）：本文件每一条都是「排除」；'!' 前缀才是重新纳入。
+# 对所有扫描能力生效。能力级差异才需要 .cnb/security/code_scan_config.yml，
+# 目前 secrets 与 software-composition-analysis 口径一致，统一写在这里。
+#
+# 原则：排除面保持最小。每多加一条，安全扫描面就少一块，按实际路径补，不要预先放宽。
 
-# 第三方依赖与构建产物
-vendor/
-node_modules/
-frontend/dist/
-frontend/coverage/
-bin/
-dist/
-build/linux/appimage/build/
-build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
-
-# Go 测试代码与测试数据：测试里常有写死的假凭据/URL，且不随产物发布
+# Go 测试：测试里写死假 Key、假凭证、自签证书是刻意为之，扫出来是噪音。
+# 口径对齐 .golangci.yml 中 gosec 对 _test.go 的文件级豁免——只豁免测试文件本身。
 **/*_test.go
-**/testdata/**
-**/test-fixtures/**
-**/__tests__/**
-**/__mocks__/**
-**/coverage.out
-**/coverage.html
+
+# 前端测试：frontend/src/ 下 11 个 *.test.ts（constants、i18n、runtime、stores、utils）。
+# 当前内容不含任何凭证类字符串，排除了也不减少噪音，只为与 Go 测试口径一致——
+# 将来测试里写死假 token 时不必再回来补规则。
+**/*.test.ts
+# vitest 原生支持 .spec 变体，仓库当前 0 个；Svelte 项目的组件测试会是 .tsx。
+# 三条都是零成本占位，避免下次有人换个后缀就漏出扫描面。
+**/*.spec.ts
+**/*.test.tsx
+**/*.spec.tsx
+
+# 测试装置目录：当前只有 setup.ts 一个桩文件（localStorage / navigator 内存桩）。
+# 它名字不带 .test，上面几条规则盖不到，必须单列——这是「排除测试装置」口径里唯一会漏的路径。
+frontend/src/test/**
+
+# vendor：当前仓库没有（Go modules，未提交 vendored 依赖）。
+# 留一行是防哪天 go mod vendor 被提交，成本为零。
+vendor/**
+
+# 未被 git 跟踪、无需声明的路径（扫描器看不到，列在此处仅备查）：
+#   bin/                  构建产物，已在 .gitignore
+#   frontend/node_modules 依赖目录，已在 .gitignore
+#   frontend/dist         构建产物，已在 .gitignore
+# 本仓库没有 Go 的 testdata/ 或 fixtures/ 目录。

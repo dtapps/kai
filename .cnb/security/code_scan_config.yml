@@ -1,39 +1,12 @@
 # CNB 代码安全扫描配置
-# 文档: https://docs.cnb.cool/zh/security/config-file.html
-#
-# 公共忽略规则只写一份：仓库根目录的 .scanignore（默认对所有扫描能力生效）。
-# 这里补齐 .scanignore 覆盖不到的细节——前端测试与 mock、构建产物、仓库级文档与 CI 配置。
-#
-# 注意：scan.paths 为 gitignore 风格规则列表，按顺序匹配；
-# 排除必须用 '!' 取反（且 YAML 中 ! 须引号包裹），正向 pattern = 纳入扫描范围。
-# 曾误将排除项写成正向 patterns，等于把扫描范围收窄成「只有测试文件」，适得其反。
+# https://docs.cnb.cool/zh/security/intro.html
 
+# 敏感信息扫描配置
 secrets:
   scan:
-    paths:
-      - '!**/*.test.ts' # 前端单元测试：大量假 key/URL
-      - '!**/*.test.tsx'
-      - '!**/*.spec.ts' # 前端 E2E 测试
-      - '!**/*.spec.tsx'
-      - '!**/__tests__/**'
-      - '!**/__mocks__/**'
-      - '!**/dist/**' # 构建产物：与源码重复扫描
-      - '!**/coverage/**'
-      - '!**/*.min.js'
-      - '!docs/**' # 文档与 CI 配置：示例里的假 token、镜像名会刷屏
-      - '!.github/**'
-      - '!.gitlab-ci.yml'
-      - '!.gitcode/**'
-      - '!.workflow/**'
+    ignoreFrom: .scanignore
 
+# 开源组件扫描配置
 software-composition-analysis:
   scan:
-    paths:
-      - '!**/*.test.ts' # 前端单元测试：依赖清单由根 lockfile 覆盖
-      - '!**/*.test.tsx'
-      - '!**/*.spec.ts'
-      - '!**/*.spec.tsx'
-      - '!**/__tests__/**'
-      - '!**/__mocks__/**'
-      - '!**/coverage/**' # 覆盖率报告
-      - '!docs/**' # 文档里的依赖示例不是真实依赖
+    ignoreFrom: .scanignore

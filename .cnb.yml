@@ -1,6 +1,7 @@
 include:
   - .cnb/workflows/cnb-sechook.yml
   - .cnb/workflows/code-review.yml
+  - .cnb/workflows/code-scan-config-validate.yml
   - .cnb/workflows/codewiki.yml
   - .cnb/workflows/knowledge-base.yml
   - .cnb/workflows/pull-coverage.yml

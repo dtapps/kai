@@ -16,11 +16,11 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as model$0 from "../model/models.js";
 
 export function Ocr(req: model$0.OcrRequest): $CancellablePromise<model$0.OcrResult | null> {
-    return $Call.ByID(1768998496, req);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.TranslateWrapper.Ocr", req);
 }
 
 export function ScreenshotOCR(engineName: string): $CancellablePromise<model$0.OcrResult | null> {
-    return $Call.ByID(3318430308, engineName);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.TranslateWrapper.ScreenshotOCR", engineName);
 }
 
 /**
@@ -28,13 +28,13 @@ export function ScreenshotOCR(engineName: string): $CancellablePromise<model$0.O
  * session 标识缓存来源（events.ScreenshotSessionScreenshot / ScreenshotSessionInput）。
  */
 export function ScreenshotTranslate(session: string): $CancellablePromise<model$0.ScreenshotResult | null> {
-    return $Call.ByID(674436322, session);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.TranslateWrapper.ScreenshotTranslate", session);
 }
 
 export function Translate(req: model$0.TranslateRequest): $CancellablePromise<model$0.TranslateResult | null> {
-    return $Call.ByID(207873806, req);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.TranslateWrapper.Translate", req);
 }
 
 export function TranslateMulti(req: model$0.TranslateRequest): $CancellablePromise<model$0.TranslateMultiResult | null> {
-    return $Call.ByID(2013479831, req);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.TranslateWrapper.TranslateMulti", req);
 }

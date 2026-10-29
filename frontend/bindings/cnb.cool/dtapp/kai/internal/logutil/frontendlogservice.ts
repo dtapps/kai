@@ -18,12 +18,12 @@ import * as slog$0 from "../../../../../log/slog/models.js";
  * FrontendLog 由前端调用：level 取值 debug/info/warn/error，msg 为日志文本。
  */
 export function FrontendLog(level: string, msg: string): $CancellablePromise<void> {
-    return $Call.ByID(1142342357, level, msg);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/logutil.FrontendLogService.FrontendLog", level, msg);
 }
 
 /**
  * SetLevel 同步前端日志级别（由 applyLogConfig 调用）。
  */
 export function SetLevel(level: slog$0.Level): $CancellablePromise<void> {
-    return $Call.ByID(413077503, level);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/logutil.FrontendLogService.SetLevel", level);
 }

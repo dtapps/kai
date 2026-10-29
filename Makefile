@@ -45,8 +45,12 @@ help: ## 显示帮助信息
 install: ## 安装前端依赖
 	pnpm --dir ./frontend install
 
-bindings: ## 生成 Wails TypeScript 绑定
-	wails3 generate bindings -clean=true -ts -i
+# -clean=true 生成前清理输出目录
+# -ts 生成 TypeScript
+# -i 使用 TS 接口
+# -names 使用名称而非 ID
+bindings: ## 生成 Wails 绑定
+	wails3 generate bindings -clean=true -ts -i -names
 
 icons: ## 生成图标资源
 	wails3 task common:generate:icons
@@ -54,12 +58,7 @@ icons: ## 生成图标资源
 build-assets: ## 同步版本号/应用名到构建资源
 	wails3 task common:update:build-assets
 
-# wails3 生成命令全集（备查）：
-#   通用（全平台）：generate bindings / generate icons / update build-assets  ← 已聚合进下方 wails3-generate
-#   Windows 专属：generate syso / generate webview2bootstrapper  ← 由 build/windows/Taskfile.yml 在 build/package 时自动触发
-#   Linux  专属：generate appimage / generate .desktop            ← 由 build/linux/Taskfile.yml 在 build/package 时自动触发
-# 平台专属命令不在本 Makefile 暴露（非目标平台跑无意义，依赖各自 Taskfile 自动跑）。
-wails3-generate: bindings icons build-assets ## 生成 Wails 绑定/图标/构建资源
+wails3-generate: bindings icons build-assets ## 生成 Wails 绑定/图标/webview/构建资源
 
 sqlc: ## 生成 sqlc 代码（internal/historystore internal/configstore internal/httplogstore）
 	cd internal/historystore && sqlc generate

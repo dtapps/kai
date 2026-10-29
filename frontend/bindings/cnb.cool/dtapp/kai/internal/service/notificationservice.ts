@@ -21,5 +21,5 @@ import * as notifications$0 from "../../../../../github.com/wailsapp/wails/v3/pk
  * 发送失败也只记日志，绝不向上抛出（更新检查等后台流程不应被通知问题阻断）。
  */
 export function Notify(opts: notifications$0.NotificationOptions): $CancellablePromise<void> {
-    return $Call.ByID(604523010, opts);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.NotificationService.Notify", opts);
 }

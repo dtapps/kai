@@ -20,7 +20,7 @@ import * as application$0 from "../../../../../github.com/wailsapp/wails/v3/pkg/
  * SetApp 在 app 就绪后注入。
  */
 export function SetApp(app: application$0.App | null): $CancellablePromise<void> {
-    return $Call.ByID(1570579795, app);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.WindowWrapper.SetApp", app);
 }
 
 /**
@@ -29,19 +29,19 @@ export function SetApp(app: application$0.App | null): $CancellablePromise<void>
  * 包级函数；后续可统一迁移到本方法，使窗口呼出全部收口到 WindowWrapper。
  */
 export function ShowScreenshotWindow(): $CancellablePromise<void> {
-    return $Call.ByID(3066686029);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.WindowWrapper.ShowScreenshotWindow");
 }
 
 /**
  * ShowSettings 打开设置
  */
 export function ShowSettings(): $CancellablePromise<void> {
-    return $Call.ByID(2264317276);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.WindowWrapper.ShowSettings");
 }
 
 /**
  * ShowTranslateWindow 呼出翻译窗口
  */
 export function ShowTranslateWindow(): $CancellablePromise<void> {
-    return $Call.ByID(4045388625);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.WindowWrapper.ShowTranslateWindow");
 }

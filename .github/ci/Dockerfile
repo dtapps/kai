@@ -51,13 +51,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     make \
     libgtk-4-dev \
     libwebkitgtk-6.0-dev \
-    jq
+    jq \
+    && rm -rf /var/lib/apt/lists/*
 
-# 4. 安装 Node.js 工具
+# 3. 安装 Node.js 工具
 RUN ARCH=$(uname -m) && \
     if [ "$ARCH" = "x86_64" ]; then NODE_ARCH="x64"; \
     elif [ "$ARCH" = "aarch64" ]; then NODE_ARCH="arm64"; \
-    else echo "Unsupported architecture: $ARCH" && exit 1; fi && \
+    else echo "不支持的架构: $ARCH" && exit 1; fi && \
     \
     # 构建下载地址
     NODE_DIR="node-v${NODE_VERSION}-linux-${NODE_ARCH}" && \
@@ -71,12 +72,13 @@ RUN ARCH=$(uname -m) && \
     npm install -g pnpm@${PNPM_VERSION} && \
     \
     # 清理
-    rm -rf node.tar.xz && \
-    echo "--- Node.js installed ---" && \
+    rm -rf node.tar.xz /root/.npm /root/.cache/node && \
+    echo "--- Node.js 安装的 ---" && \
     node -v && npm -v && pnpm -v
 
-# 5 预安装 Go 工具链（版本已锁定）
-RUN echo "==> 预安装 Go 工具链（版本已锁定）..." \
+# 4. 预安装 Go 工具链
+# 同一层内 go install + 清缓存，避免 go-build 和 mod 缓存留在独立层里
+RUN echo "==> 预安装 Go 工具链..." \
     && go install github.com/wailsapp/wails/v3/cmd/wails3@${WAILS3_VERSION} \
     && echo "==> wails3 安装完成 (${WAILS3_VERSION})" \
     && go install github.com/sqlc-dev/sqlc/cmd/sqlc@${SQLC_VERSION} \
@@ -98,9 +100,10 @@ RUN echo "==> 预安装 Go 工具链（版本已锁定）..." \
     && go install github.com/Kunde21/markdownfmt/v3/cmd/markdownfmt@${MARKDOWNFMT_VERSION} \
     && echo "==> markdownfmt 安装完成 (${MARKDOWNFMT_VERSION})" \
     && echo "--- Go 工具链安装完成 ---" \
-    && ls -l $GOPATH/bin
+    && ls -l $GOPATH/bin \
+    && rm -rf /root/.cache/go-build /go/pkg/mod
 
-# 6. 卸载不需要的工具，并清空所有 apt 缓存
+# 5. 卸载不需要的工具，并清空所有 apt 缓存
 RUN apt-get purge -y wget xz-utils \
     && apt-get autoremove -y \
     && apt-get clean \

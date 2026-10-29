@@ -26,7 +26,7 @@ import * as $models from "./models.js";
  * AddEngine 新增单个引擎配置到 config.db，返回 DB 分配的 ID。
  */
 export function AddEngine(cfg: engine$0.EngineConfig | null): $CancellablePromise<number> {
-    return $Call.ByID(2510416615, cfg);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.AddEngine", cfg);
 }
 
 /**
@@ -34,7 +34,7 @@ export function AddEngine(cfg: engine$0.EngineConfig | null): $CancellablePromis
  * 供设置页展示 Tesseract 引擎的「已安装/未安装」提示。
  */
 export function CheckTesseract(): $CancellablePromise<engine$0.TesseractStatus> {
-    return $Call.ByID(2067219980);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.CheckTesseract");
 }
 
 /**
@@ -45,7 +45,7 @@ export function CheckTesseract(): $CancellablePromise<engine$0.TesseractStatus> 
  * kind 取自 KnownEngines 目录（引擎类型由代码注册，不在数据库内）。
  */
 export function GetAllEngines(): $CancellablePromise<$models.AllEngineItem[] | null> {
-    return $Call.ByID(191559056);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetAllEngines");
 }
 
 /**
@@ -53,14 +53,14 @@ export function GetAllEngines(): $CancellablePromise<$models.AllEngineItem[] | n
  * 供设置页右列表单回填已存值。未找到返回 nil。
  */
 export function GetEngineConfig(id: number): $CancellablePromise<engine$0.EngineConfig | null> {
-    return $Call.ByID(250220986, id);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetEngineConfig", id);
 }
 
 /**
  * GetEngineSchema 返回指定引擎的「真实」配置字段 schema，供前端动态渲染右列表单。
  */
 export function GetEngineSchema(engineName: string): $CancellablePromise<engine$0.EngineSchema> {
-    return $Call.ByID(3136113511, engineName);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetEngineSchema", engineName);
 }
 
 /**
@@ -68,7 +68,7 @@ export function GetEngineSchema(engineName: string): $CancellablePromise<engine$
  * 顺序严格按 config.db 的 engines 表自增 id 顺序（而非代码注册目录顺序）。
  */
 export function GetEngines(): $CancellablePromise<$models.EngineListItem[] | null> {
-    return $Call.ByID(1488128365);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetEngines");
 }
 
 /**
@@ -77,7 +77,7 @@ export function GetEngines(): $CancellablePromise<$models.EngineListItem[] | nul
  * 下拉项必须来自代码目录以保证 name 能被 Registry 识别、翻译可工作。
  */
 export function GetKnownEngines(): $CancellablePromise<$models.EngineListItem[] | null> {
-    return $Call.ByID(1073135640);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetKnownEngines");
 }
 
 /**
@@ -85,7 +85,7 @@ export function GetKnownEngines(): $CancellablePromise<$models.EngineListItem[] 
  * 供前端 OCR 专属 UI 渲染 langs 多选。与 Extra(JSON) 解耦，由代码唯一维护。
  */
 export function GetOcrLangs(): $CancellablePromise<string[] | null> {
-    return $Call.ByID(3491230379);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.GetOcrLangs");
 }
 
 /**
@@ -95,14 +95,14 @@ export function GetOcrLangs(): $CancellablePromise<string[] | null> {
  * 此处再加后端兜底拦截，避免其它调用途径误删。
  */
 export function RemoveEngine(id: number): $CancellablePromise<void> {
-    return $Call.ByID(1575958516, id);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.RemoveEngine", id);
 }
 
 /**
  * SetApp 在 app 就绪后注入。
  */
 export function SetApp(app: application$0.App | null): $CancellablePromise<void> {
-    return $Call.ByID(248546961, app);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.SetApp", app);
 }
 
 /**
@@ -110,12 +110,12 @@ export function SetApp(app: application$0.App | null): $CancellablePromise<void>
  * 启用（enabled=true）时校验必填参数，缺项则拒绝开启并提示。
  */
 export function ToggleEngineEnabled(id: number, enabled: boolean): $CancellablePromise<void> {
-    return $Call.ByID(1976956865, id, enabled);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.ToggleEngineEnabled", id, enabled);
 }
 
 /**
  * UpdateEngineConfig 按 ID 更新单个引擎的全部配置字段。
  */
 export function UpdateEngineConfig(cfg: engine$0.EngineConfig | null): $CancellablePromise<void> {
-    return $Call.ByID(3464143975, cfg);
+    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.EngineWrapper.UpdateEngineConfig", cfg);
 }

@@ -36,8 +36,8 @@
         - name: 创建 frontend/dist 占位（供 //go:embed 解析）
           script: mkdir -p frontend/dist && touch frontend/dist/index.html
 
-        - name: 格式化和修复（Go + Vue + TypeScript）
-          script: make format
+        # - name: 格式化和修复（Go + Vue + TypeScript）
+        #   script: make format
 
         - name: 检查和测试（Go + Vue + TypeScript）
           script: make check

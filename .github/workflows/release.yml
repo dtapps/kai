@@ -39,10 +39,10 @@ on:
 permissions:
   contents: write
 
-# 同一分支的多次运行取消旧的运行，避免排队浪费。
+# 同一分支的多次运行不取消旧的运行。
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   # 统一生成构建参数（BUILD_TIME / GIT_COMMIT），确保「所有平台注入的 build_time」

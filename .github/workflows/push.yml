@@ -17,10 +17,10 @@ permissions:
   contents: read
   packages: read # 拉取 GHCR 上的 CI 镜像（公开镜像亦可匿名拉，写上以防仓库转私有）
 
-# 同一分支的多次 push 取消旧的运行，避免排队浪费。
+# 同一分支的多次运行不取消旧的运行。
 concurrency:
   group: push-check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   check:
@@ -119,11 +119,11 @@ jobs:
       - name: 创建 frontend/dist 占位（供 //go:embed 解析）
         run: mkdir -p frontend/dist && touch frontend/dist/index.html
 
-      - name: 格式化和修复（Go + Vue + TypeScript）
-        env:
-          GOPATH: ${{ env.GO_PATH_DIR }}
-          GOBIN: ${{ env.GO_BIN_DIR }}
-        run: make format
+      # - name: 格式化和修复（Go + Vue + TypeScript）
+      #   env:
+      #     GOPATH: ${{ env.GO_PATH_DIR }}
+      #     GOBIN: ${{ env.GO_BIN_DIR }}
+      #   run: make format
 
       - name: 检查和测试（Go + Vue + TypeScript）
         env:

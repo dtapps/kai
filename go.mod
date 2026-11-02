@@ -13,7 +13,7 @@ require (
 	github.com/go-ole/go-ole v1.3.0
 	github.com/go-vgo/robotgo v1.3.7
 	github.com/mattn/go-sqlite3 v1.14.52
-	github.com/nicksnyder/go-i18n/v2 v2.6.1
+	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/openai/openai-go/v3 v3.88.0
 	github.com/posthog/posthog-go v1.39.0
 	github.com/spf13/viper v1.21.0

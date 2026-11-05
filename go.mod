@@ -17,7 +17,7 @@ require (
 	github.com/openai/openai-go/v3 v3.91.0
 	github.com/posthog/posthog-go v1.39.0
 	github.com/spf13/viper v1.21.0
-	github.com/wailsapp/wails/v3 v3.0.0
+	github.com/wailsapp/wails/v3 v3.1.0
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
@@ -30,7 +30,6 @@ require (
 	cloud.google.com/go/auth v0.24.1 // indirect
 	cloud.google.com/go/compute/metadata v0.10.0 // indirect
 	git.sr.ht/~jackmordaunt/go-toast/v2 v2.0.3 // indirect
-	github.com/adrg/xdg v0.5.3 // indirect
 	github.com/andybalholm/brotli v1.2.7 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/basgys/goxml2json v1.1.0 // indirect
@@ -58,7 +57,6 @@ require (
 	github.com/jezek/xgbutil v0.0.0-20260124183602-9fd151d6a51a // indirect
 	github.com/klauspost/compress v1.20.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260802145828-341c2f0c90b5 // indirect
-	github.com/mattn/go-colorable v0.1.16 // indirect
 	github.com/mattn/go-isatty v0.0.24 // indirect
 	github.com/ncruces/go-strftime v1.1.0 // indirect
 	github.com/otiai10/gosseract/v2 v2.4.1 // indirect
@@ -101,6 +99,7 @@ require (
 	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.61.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/term v0.47.0 // indirect
 	google.golang.org/api v0.309.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261026165753-2ffab32bce7e // indirect
 	google.golang.org/grpc v1.85.0 // indirect

@@ -6,17 +6,19 @@
 
 ## 1. 工具链
 
-| 工具             | 仓库声明 / 实际使用                               | 依据                                                |
-|------------------|---------------------------------------------------|-----------------------------------------------------|
-| Go               | `1.27.3`                                          | `go.mod`、两份 CI Dockerfile 的 `FROM`              |
-| Node             | `.nvmrc` 为 `25.9.0`；CI 镜像为 `26.12.1`         | `frontend/.nvmrc`、`.github/ci/Dockerfile`          |
-| pnpm             | `packageManager: pnpm@12.15.0`；CI 镜像 `12.16.0` | `frontend/package.json`、CI Dockerfile `ARG`        |
-| Wails 3          | Go 依赖 `github.com/wailsapp/wails/v3 v3.0.0`     | `go.mod`、`ARG WAILS3_VERSION=v3.0.0`               |
-| Wails 前端运行时 | `@wailsio/runtime 3.0.0-beta.34`                  | `frontend/package.json`                             |
-| sqlc             | `v1.31.1`                                         | CI Dockerfile `ARG SQLC_VERSION`、生成文件头        |
-| golangci-lint    | `v2.15.0`                                         | `.github/ci/Dockerfile`                             |
-| govulncheck      | `v1.9.0`                                          | `.github/ci/Dockerfile`                             |
-| markdownfmt      | `v3.1.0`                                          | `.github/ci/Dockerfile`、`Makefile:format-markdown` |
+| 工具             | 仓库声明 / 实际使用                               | 依据                                     |
+|------------------|---------------------------------------------------|------------------------------------------|
+| Go               | `1.27.3`                                          | `go.mod`、统一 CI 镜像                   |
+| Node             | `.nvmrc` 为 `25.9.0`；CI 镜像为 `26.12.1`         | `frontend/.nvmrc`、统一 CI 镜像          |
+| pnpm             | `packageManager: pnpm@12.15.0`；CI 镜像 `12.16.0` | `frontend/package.json`、统一 CI 镜像    |
+| Wails 3          | Go 依赖 `github.com/wailsapp/wails/v3 v3.0.0`     | `go.mod`、统一 CI 镜像                   |
+| Wails 前端运行时 | `@wailsio/runtime 3.0.0-beta.34`                  | `frontend/package.json`                  |
+| sqlc             | `v1.31.1`                                         | 统一 CI 镜像、生成文件头                 |
+| golangci-lint    | `v2.15.0`                                         | 统一 CI 镜像                             |
+| govulncheck      | `v1.9.0`                                          | 统一 CI 镜像                             |
+| markdownfmt      | `v3.1.0`                                          | 统一 CI 镜像、`Makefile:format-markdown` |
+
+> CI 工具链由外部统一镜像提供（GitHub：`ghcr.io/dtapps/golang/wails3:latest`；CNB：`docker.cnb.cool/dtapp/golang/wails3`），**本仓库不再维护 Dockerfile / 工具版本 ARG**。上表版本是镜像快照，升级工具需到镜像仓库修改，详见 `docs/ci/README.md` §2。
 
 > Wails 的 Go 依赖已是正式版 `v3.0.0`，前端运行时仍锁在 `3.0.0-beta.34`。升级时两边要一起看，不要只改一边。
 

@@ -70,18 +70,18 @@
 
 > 下列问题已全部处理，保留记录供追溯。后续如再次偏离实现，按 §7 的维护机制回归。
 
-| #  | 位置                                     | 原问题                                                                             | 处理结果                                                                                                           |
-|----|------------------------------------------|------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------|
-| 1  | `PLAN.md`                                | 技术栈写 Vue 3 + Naive UI + Pinia，目录含 `SelectionPopup.vue`，M6 标「待开始」    | 重写为《Kai 项目规划与架构现状》：Svelte 5 + Tailwind 4 + Vite 8、真实目录与包职责、M1–M6 全部完成、约束与命令更新 |
-| 2  | `coveralls.md`                           | 整篇按 goveralls CLI + 并行 job + 镜像预装描述                                     | 按当前官方 Action 单 job 双 flag 重写，补充 token、缓存、排错                                                      |
-| 3  | `gitlab-ci.md`                           | 描述已删除的五个覆盖率 job                                                         | 重写为「GitLab 发布同步」，原方案与坑点收进 §6 历史章节                                                            |
-| 4  | `coverage-go.md`                         | 「全部测试在 configstore / updater」、红线为启用态、`.cnb/Dockerfile` 路径         | 更新测试分布（26 个 `_test.go`）、`.cnb/ci/Dockerfile`、三卷缓存、红线未启用状态与恢复方式                         |
-| 5  | `coverage-node.md`                       | vitest 配置/排除范围过时、基线 1.43% 过时、红线为启用态、Dockerfile 路径           | 按当前 `vitest.config.ts` 重写：`@bindings` 指向 `frontend/bindings`、exclude 仅 test/d.ts、红线未启用             |
-| 6  | `codecov.md` / `.github/codecov.yml`     | 引用 `coverage.yml`、action v5、`ubuntu-24.04 + apt` 运行环境、Vitest 3.2.7        | 改为 `codecov.yml`、action v7、GHCR 容器镜像、Vitest 5、Go 测试分布；配置头注释同步                                |
-| 7  | `ci-image.md`                            | 引用 `coverage.yml`、声称多架构 amd64+arm64、diff 21 行、两处表格被竖线截断        | 改为 `codecov.yml`、仅 amd64 + 「加回 arm64」章节、diff 约 60 行、表格重写                                         |
-| 8  | `.gitlab-ci.yml`                         | 引用不存在的 `docs/2026-10-23.md`                                                  | 改为 `docs/gitlab-ci.md §6`                                                                                        |
-| 9  | `README.md` / `README_EN.md` / `build/*` | 「划词」与功能表不一致、Nightly 已取消、Wails beta.9、自定义标题栏已知问题已不存在 | 统一为「复制键取词翻译」；改为预发布；beta.34；删除过期已知问题；增加文档章节；重新生成 build 资源                 |
-| 10 | 覆盖率门禁表述                           | 多处把 CNB 红线写成已启用                                                          | 统一改为「预留、当前注释未启用」，并说明恢复方式                                                                   |
+| #  | 位置                                     | 原问题                                                                             | 处理结果                                                                                                                   |
+|----|------------------------------------------|------------------------------------------------------------------------------------|----------------------------------------------------------------------------------------------------------------------------|
+| 1  | `PLAN.md`                                | 技术栈写 Vue 3 + Naive UI + Pinia，目录含 `SelectionPopup.vue`，M6 标「待开始」    | 重写为《Kai 项目规划与架构现状》：Svelte 5 + Tailwind 4 + Vite 8、真实目录与包职责、M1–M6 全部完成、约束与命令更新         |
+| 2  | `coveralls.md`                           | 整篇按 goveralls CLI + 并行 job + 镜像预装描述                                     | 按当前官方 Action 单 job 双 flag 重写，补充 token、缓存、排错                                                              |
+| 3  | `gitlab-ci.md`                           | 描述已删除的五个覆盖率 job                                                         | 重写为「GitLab 发布同步」，原方案与坑点收进 §6 历史章节                                                                    |
+| 4  | `coverage-go.md`                         | 「全部测试在 configstore / updater」、红线为启用态、`.cnb/Dockerfile` 路径         | 更新测试分布（26 个 `_test.go`）、当时的 `.cnb/ci/Dockerfile` 路径（现已改用统一镜像）、三卷缓存、红线未启用状态与恢复方式 |
+| 5  | `coverage-node.md`                       | vitest 配置/排除范围过时、基线 1.43% 过时、红线为启用态、Dockerfile 路径           | 按当前 `vitest.config.ts` 重写：`@bindings` 指向 `frontend/bindings`、exclude 仅 test/d.ts、红线未启用                     |
+| 6  | `codecov.md` / `.github/codecov.yml`     | 引用 `coverage.yml`、action v5、`ubuntu-24.04 + apt` 运行环境、Vitest 3.2.7        | 改为 `codecov.yml`、action v7、GHCR 容器镜像、Vitest 5、Go 测试分布；配置头注释同步                                        |
+| 7  | `ci-image.md`                            | 引用 `coverage.yml`、声称多架构 amd64+arm64、diff 21 行、两处表格被竖线截断        | 改为 `codecov.yml`、仅 amd64 + 「加回 arm64」章节、diff 约 60 行、表格重写                                                 |
+| 8  | `.gitlab-ci.yml`                         | 引用不存在的 `docs/2026-10-23.md`                                                  | 改为 `docs/gitlab-ci.md §6`                                                                                                |
+| 9  | `README.md` / `README_EN.md` / `build/*` | 「划词」与功能表不一致、Nightly 已取消、Wails beta.9、自定义标题栏已知问题已不存在 | 统一为「复制键取词翻译」；改为预发布；beta.34；删除过期已知问题；增加文档章节；重新生成 build 资源                         |
+| 10 | 覆盖率门禁表述                           | 多处把 CNB 红线写成已启用                                                          | 统一改为「预留、当前注释未启用」，并说明恢复方式                                                                           |
 
 ---
 
@@ -142,10 +142,10 @@
 - FAQ（已知问题从 README §6 迁移并扩写）、日志获取方式。
 
 #### P0-7 `docs/ci/README.md` — CI 总览（入口文档）
-- GitHub Actions（5 个 workflow）为主，CNB（10 个）做门禁/覆盖率/安全扫描，GitLab 只做发布同步，Gitee 由 GitHub 工作流推送；GitCode workflow 保留但当前不发布，Gitea 仅代码镜像；
+- GitHub Actions（现为 4 个 workflow，规划时为 5 个）为主，CNB（10 个）做门禁/覆盖率/安全扫描，GitLab 只做发布同步，Gitee 由 GitHub 工作流推送；GitCode workflow 保留但当前不发布，Gitea 仅代码镜像；
 - 每个 workflow 的触发条件、关键 job、所需 secret、产物；
 - 覆盖率三处口径：CNB 内置 `testing:coverage`、Codecov、Coveralls（各自「看什么、红线在哪」）；
-- 指向现有专题：`ci-image.md`、`codecov.md`、`coveralls.md`、`gitlab-ci.md`（修好后）；
+- 指向现有专题：`ci-image.md`（现已归档，镜像现状并入本文 §2）、`codecov.md`、`coveralls.md`、`gitlab-ci.md`（修好后）；
 - 新增一条工作流时该改哪些文件（避免只改一处）。
 
 ### P1（迭代期内补，9 篇）

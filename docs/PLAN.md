@@ -245,7 +245,7 @@ make darwin-package
 make windows-package
 ```
 
-> Wails 3 已发布 `v3.0.0`，仍以 https://v3.wails.io 为准；升级 Wails 版本时同步改 `go.mod` 与两份 CI Dockerfile 的 `WAILS3_VERSION`。
+> Wails 3 已发布 `v3.0.0`，仍以 https://v3.wails.io 为准；升级 Wails 版本时同步改 `go.mod`，并在外部统一 CI 镜像仓库更新 `wails3` CLI 版本（本仓库已不再维护 Dockerfile）。
 
 ---
 
@@ -265,13 +265,13 @@ make windows-package
 
 ## 8. 文档与历史
 
-| 文档                                            | 内容                                        |
-|-------------------------------------------------|---------------------------------------------|
-| `README.md` / `README_EN.md`                    | 用户向介绍、功能、平台、隐私、发布          |
-| `docs/ci-image.md`                              | CNB / GitHub 两份 CI Dockerfile 与镜像分发  |
-| `docs/codecov.md`                               | Codecov 覆盖率 / bundle / 测试结果          |
-| `docs/coveralls.md`                             | Coveralls 双 flag 上传                      |
-| `docs/gitlab-ci.md`                             | GitLab 发布同步（原覆盖率方案已下线）       |
-| `docs/coverage-go.md` / `docs/coverage-node.md` | 覆盖率实现模板与当前状态                    |
-| `docs/docs-plan.md`                             | 文档缺口分析与后续补写计划                  |
-| `docs/2026-*.md`                                | 2026-08 ~ 09 开发日志（历史快照，不再更新） |
+| 文档                                            | 内容                                             |
+|-------------------------------------------------|--------------------------------------------------|
+| `README.md` / `README_EN.md`                    | 用户向介绍、功能、平台、隐私、发布               |
+| `docs/ci-image.md`（已归档）                    | 旧自建 CI 镜像方案（现状见 `docs/ci/README.md`） |
+| `docs/codecov.md`                               | Codecov 覆盖率 / bundle / 测试结果               |
+| `docs/coveralls.md`                             | Coveralls 双 flag 上传                           |
+| `docs/gitlab-ci.md`                             | GitLab 发布同步（原覆盖率方案已下线）            |
+| `docs/coverage-go.md` / `docs/coverage-node.md` | 覆盖率实现模板与当前状态                         |
+| `docs/docs-plan.md`                             | 文档缺口分析与后续补写计划                       |
+| `docs/2026-*.md`                                | 2026-08 ~ 09 开发日志（历史快照，不再更新）      |

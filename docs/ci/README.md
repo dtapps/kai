@@ -1,8 +1,8 @@
 # CI 总览
 
-> status: 有效 · last_verified: 2026-10-27 · 基线 `de28c9e`（master）
+> status: 有效 · last_verified: 2026-11-05 · 基线 `5e2b532`（master）
 
-先看这张地图，再进专题。镜像细节见 `ci-image.md`，Codecov / Coveralls / GitLab 见各自专题；本文只做总览、触发条件、secret 清单与「新增流水线要改哪里」。
+先看这张地图，再进专题。CI 镜像与并发策略见本文 §2，Codecov / Coveralls / GitLab 见各自专题；本文只做总览、触发条件、secret 清单与「新增流水线要改哪里」。旧的 `ci-image.md`（自建两份 Dockerfile 方案）已归档，仅作历史追溯。
 
 ## 1. 平台分工
 
@@ -15,21 +15,20 @@
 | GitCode | 工作流保留，当前不发布                                  | `.gitcode/workflows/release.yml` |
 | Gitea   | 仅代码镜像，无 CI/Release                               | —                                |
 
-## 2. GitHub Actions（5 个）
+## 2. GitHub Actions（4 个）
 
-| Workflow       | 文件            | 触发                                     | 关键内容                                                                                        |
-|----------------|-----------------|------------------------------------------|-------------------------------------------------------------------------------------------------|
-| PushRequest    | `push.yml`      | push / PR 所有分支                       | GHCR 镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make format` → `make check` |
-| Codecov        | `codecov.yml`   | push / PR                                | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                                          |
-| Coveralls      | `coveralls.yml` | push / PR                                | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                                             |
-| Release        | `release.yml`   | 仅 `workflow_dispatch`                   | 4 个构建组合 → GitHub Release → CNB/Gitee/GitLab 同步（GitCode 保留未启用）→ 通知               |
-| Build CI Image | `ci-image.yml`  | `Dockerfile` 变更、每周一 UTC 0 点、手动 | 构建并推送 `ghcr.io/<repo>/ci:latest` + sha 标签，保留最近 5 个版本                             |
+| Workflow    | 文件            | 触发                   | 关键内容                                                                          |
+|-------------|-----------------|------------------------|-----------------------------------------------------------------------------------|
+| PushRequest | `push.yml`      | push / PR 所有分支     | 统一镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make check`    |
+| Codecov     | `codecov.yml`   | push / PR              | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                            |
+| Coveralls   | `coveralls.yml` | push / PR              | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                               |
+| Release     | `release.yml`   | 仅 `workflow_dispatch` | 4 个构建组合 → GitHub Release → CNB/Gitee/GitLab 同步（GitCode 保留未启用）→ 通知 |
 
 共同点：
 
-- 所有消费镜像的 job 都用 `container: ghcr.io/${{ github.repository }}/ci:latest`；首次使用前必须先跑一次 `Build CI Image`。
+- **统一 CI 镜像**：`push.yml` / `codecov.yml` / `coveralls.yml` 都用 `container: ghcr.io/dtapps/golang/wails3:latest`，直接拉取即可。本仓库不再自建镜像——`ci-image.yml`、`.github/ci/Dockerfile`、`.cnb/ci/Dockerfile` 均已删除；CNB 侧对应 `docker.image: docker.cnb.cool/dtapp/golang/wails3`。工具版本由镜像仓库统一维护，各仓库共用，避免重复打包。
 - Go module、Go build cache、pnpm store 都做了缓存；key 分别按 `go.sum` / `pnpm-lock.yaml` 命中。
-- push / PR 工作流都开了 concurrency，同分支新推送会取消旧运行。
+- **并发策略**：四个 workflow 一致，`cancel-in-progress: false` + `queue: max`。同一分支多次触发按 FIFO 串行排队，最多 100 个 pending，**不取消任何运行**（正在运行的与排队中的都不取消），仅队列满时溢出的运行被取消。`queue: max` 不能与 `cancel-in-progress: true` 组合。
 
 ## 3. CNB（10 个 workflow）
 
@@ -48,7 +47,7 @@
 | codewiki          | `codewiki.yml`          | `tag_push`                        | 生成 Code Wiki 到 `codewiki/`                                               |
 | knowledge-base    | `knowledge-base.yml`    | push / issue.open / issue.comment | 把 `docs/**/*.md` + README / CONTRIBUTING / SECURITY / CHANGELOG 入库知识库 |
 
-CNB 的检查与覆盖率都现场 `docker: build: .cnb/ci/Dockerfile`，并用 copy-on-write 卷缓存 `/root/.cache/go-build`、pnpm store、`/go/pkg/mod`。
+CNB 的检查与覆盖率流水线统一用 `docker.image: docker.cnb.cool/dtapp/golang/wails3`（不再现场 build Dockerfile），并用 copy-on-write 卷缓存 `/root/.cache/go-build`、pnpm store、`/go/pkg/mod`。
 
 ## 4. GitLab / Gitee（GitCode 保留）
 
@@ -119,24 +118,24 @@ cd frontend && pnpm test:coverage
 
 ## 7. 新增 / 修改流水线时要改哪些文件
 
-| 改动                 | 必须同步                                                                                                                               |
-|----------------------|----------------------------------------------------------------------------------------------------------------------------------------|
-| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                  |
-| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                         |
-| 新增 CI 工具         | `.cnb/ci/Dockerfile` + `.github/ci/Dockerfile`（两份都改）                                                                             |
-| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                 |
-| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.gitlab-ci.yml`、`.workflow/release.yml`、`.gitcode/workflows/release.yml`、`release.md` |
-| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                      |
-| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                              |
+| 改动                 | 必须同步                                                                                                                                           |
+|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                              |
+| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                                     |
+| 新增 CI 工具         | 到外部统一镜像仓库改（GitHub `ghcr.io/dtapps/golang/wails3`、CNB `docker.cnb.cool/dtapp/golang/wails3`），本仓库不维护 Dockerfile；改完同步本文 §2 |
+| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                             |
+| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.gitlab-ci.yml`、`.workflow/release.yml`、`.gitcode/workflows/release.yml`、`release.md`             |
+| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                                  |
+| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                                          |
 
 ## 8. 专题文档
 
-| 文档                                    | 内容                                                |
-|-----------------------------------------|-----------------------------------------------------|
-| [ci-image.md](../ci-image.md)           | CNB / GitHub 两份 Dockerfile 的差异、镜像分发、排错 |
-| [codecov.md](../codecov.md)             | Codecov 三支柱、flag、组件、上传与排错              |
-| [coveralls.md](../coveralls.md)         | Coveralls 单 job 双 flag、token、排错               |
-| [gitlab-ci.md](../gitlab-ci.md)         | GitLab 发布同步、历史覆盖率方案                     |
-| [coverage-go.md](../coverage-go.md)     | Go 覆盖率模板（可复制到其他项目）                   |
-| [coverage-node.md](../coverage-node.md) | 前端覆盖率模板                                      |
-| [testing.md](../testing.md)             | 测试分层与本地命令                                  |
+| 文档                                    | 内容                                        |
+|-----------------------------------------|---------------------------------------------|
+| [ci-image.md](../ci-image.md)（已归档） | 旧自建镜像方案，仅作历史追溯；现状见本文 §2 |
+| [codecov.md](../codecov.md)             | Codecov 三支柱、flag、组件、上传与排错      |
+| [coveralls.md](../coveralls.md)         | Coveralls 单 job 双 flag、token、排错       |
+| [gitlab-ci.md](../gitlab-ci.md)         | GitLab 发布同步、历史覆盖率方案             |
+| [coverage-go.md](../coverage-go.md)     | Go 覆盖率模板（可复制到其他项目）           |
+| [coverage-node.md](../coverage-node.md) | 前端覆盖率模板                              |
+| [testing.md](../testing.md)             | 测试分层与本地命令                          |

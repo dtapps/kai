@@ -1,4 +1,10 @@
-# CI 镜像（CNB / GitHub 两份 Dockerfile）
+# CI 镜像（已归档：自建两份 Dockerfile 方案）
+
+> status: 已归档 · 归档于 2026-11-05
+>
+> **本文全部内容已失效，仅作历史追溯。** 本仓库已删除 `.cnb/ci/Dockerfile`、`.github/ci/Dockerfile` 与 `.github/workflows/ci-image.yml`，不再自建 CI 镜像；当前统一使用外部镜像：GitHub 侧 `container: ghcr.io/dtapps/golang/wails3:latest`，CNB 侧 `docker.image: docker.cnb.cool/dtapp/golang/wails3`。现状见 `docs/ci/README.md` §2。
+
+（以下为归档原文）
 
 两份 Dockerfile 装的是**同一套环境**（Go 1.27.3 + Node/pnpm + GTK4/WebKit6 + 锁版本的 Go 工具链）， 但**构建与分发方式完全不同**：
 

@@ -116,22 +116,22 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
 
 ## 5. 运行环境
 
-- `runs-on: ubuntu-latest`，并直接使用 **预构建 CI 镜像**：
+- `runs-on: ubuntu-latest`，并直接使用**外部统一 CI 镜像**：
 
   ```yaml
   container:
-    image: ghcr.io/${{ github.repository }}/ci:latest
+    image: ghcr.io/dtapps/golang/wails3:latest
   ```
 
-- 镜像内含 Go 工具链、Node/pnpm、GTK4/WebKit6 开发库与全部固定版本 CLI（见 `docs/ci-image.md`），因此工作流**不再** `apt-get install`、`setup-go`、`setup-node`、`go install`。
-- 首次使用前必须先跑一次 `ci-image.yml` 把镜像推到 GHCR，否则 `container` 拉不到镜像。
-- 镜像由 `.github/ci/Dockerfile` 构建，只出 `linux/amd64`（与 `ubuntu-latest` 消费方一致）。
+- 镜像内含 Go 工具链、Node/pnpm、GTK4/WebKit6 开发库与全部固定版本 CLI，因此工作流**不再** `apt-get install`、`setup-go`、`setup-node`、`go install`。
+- 本仓库**不再自建镜像**：`.github/ci/Dockerfile` 与 `ci-image.yml` 已删除，改由平台侧统一维护、各仓库共用，无需先跑构建工作流。
+- CNB 侧对应 `docker.image: docker.cnb.cool/dtapp/golang/wails3`。详见 `docs/ci/README.md` §2。
 
 ## 6. 验证与排错
 
 在 Codecov 项目页应能看到三个面板：**Coverage / Bundle / Tests**。
 
-- **Go 测试 `ld` 报错 `cannot find -lwebkitgtk-6.0` 等**：容器镜像不对或未拉到；确认 `container.image` 指向 GHCR 的 `ci:latest`，且 `ci-image.yml` 已成功推送。
+- **Go 测试 `ld` 报错 `cannot find -lwebkitgtk-6.0` 等**：容器镜像不对或未拉到；确认 `container.image` 指向 `ghcr.io/dtapps/golang/wails3:latest`。
 - **Bundle 面板空白**：检查「构建前端」步骤是否真的上传成功；插件与 Vite 8 不兼容时该步骤会 `continue-on-error` 失败但不阻断。
 - **Tests 面板空白**：检查 `test-results.json` / `go-test-report.xml` 是否生成、`vitest-json-to-junit.mjs` 是否产出 `test-report.xml`、`codecov/test-results-action` 是否拿到 token。
 - **Tests 面板里用例名带 `/__w/...`、`/home/runner/work/...` 等绝对路径，同一条用例出现成两条记录**：`classname` 没归一化。自查： `grep -o 'classname="[^"]*"' frontend/test-report.xml | sort -u | head` —— 出现以 `/`（或 `C:\`）开头即是，应修生成脚本（见 3.3），不要在 `codecov.yml` 里打补丁。

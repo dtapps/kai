@@ -40,5 +40,5 @@ markdownfmt -w <每个 .md>
 ## 证据
 
 - `Makefile:format-markdown`：安装提示与 `markdownfmt -w` 循环。
-- `.github/ci/Dockerfile`、`.cnb/ci/Dockerfile`：`ARG MARKDOWNFMT_VERSION=v3.1.0`。
+- 归档证据：旧 `.github/ci/Dockerfile`、`.cnb/ci/Dockerfile` 曾有 `ARG MARKDOWNFMT_VERSION=v3.1.0`；两份 Dockerfile 已删除，现由统一 CI 镜像提供 `markdownfmt`。
 - 提交 `b76ad72`：用 markdownfmt 替换 Prettier 格式化 Markdown，并移除 goveralls 与 arm64 构建。

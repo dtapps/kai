@@ -1,6 +1,6 @@
 # Kai 文档索引与写作规范
 
-> status: 有效 · last_verified: 2026-10-27 · 基线 `de28c9e`（master，`go.mod` 依赖 Wails v3.0.0）
+> status: 有效 · last_verified: 2026-11-05 · 基线 `5e2b532`（master，`go.mod` 依赖 Wails v3.0.0）
 
 这是 `docs/` 的入口。先按读者找到对应文档；每篇文档头部都标注 `status` 与 `last_verified`，没有标注的旧文按「历史快照」看待。
 
@@ -36,7 +36,7 @@
 | [configuration.md](configuration.md) | `settings.json` 全字段、`config.db` 引擎配置、代理/DNS/日志/更新优先级 | 2026-10-27 |
 | [release.md](release.md)             | 版本规则、Release 工作流、产物矩阵、签名、CNB/GitLab/Gitee 同步、回滚  | 2026-10-27 |
 | [ci/README.md](ci/README.md)         | GitHub / CNB / GitLab / Gitee 流水线总览与 secret 清单（GitCode 保留） | 2026-10-27 |
-| [ci-image.md](ci-image.md)           | CNB 与 GitHub 两份 CI Dockerfile 的差异与排错                          | 2026-10-27 |
+| [ci-image.md](ci-image.md)（已归档） | 旧自建 CI 镜像方案：两份 Dockerfile 的差异与排错，仅作历史追溯         | 2026-11-05 |
 | [codecov.md](codecov.md)             | Codecov 覆盖率 / bundle / 测试分析                                     | 2026-10-26 |
 | [coveralls.md](coveralls.md)         | Coveralls 单 job 双 flag                                               | 2026-10-26 |
 | [gitlab-ci.md](gitlab-ci.md)         | GitLab 发布同步（覆盖率方案已下线）                                    | 2026-10-26 |

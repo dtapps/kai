@@ -5,19 +5,19 @@
 - 上报入口：`.github/workflows/coveralls.yml`，独立工作流，不依赖 Codecov 流程。
 - 上报内容：Go 与前端两条覆盖率，分别打 `go` / `node` 两个 flag，落在同一个 build 里。
 - 仓库内**没有** `.coveralls.yml`：阈值、PR 注释、徽章都在 Coveralls 后台仓库设置里配。
-- 上传用 **`coverallsapp/github-action@v2`**，镜像里**没有** Coveralls CLI；`gotestsum` 已预装在 CI 镜像中。
+- 上传用 **`coverallsapp/github-action@v2`**，镜像里**没有** Coveralls CLI；`gotestsum` 已预装在统一 CI 镜像中。
 
 ## 1. 涉及文件
 
-| 文件                              | 作用                                                                                                          |
-|-----------------------------------|---------------------------------------------------------------------------------------------------------------|
-| `.github/workflows/coveralls.yml` | 唯一入口：装依赖 → 跑 Go/前端测试 → 分别上传 `flag=go` / `flag=node`                                          |
-| `.github/ci/Dockerfile`           | 提供 `ghcr.io/<owner>/<repo>/ci:latest` 镜像（Go/Node/pnpm/GTK4/WebKit6，含 `gotestsum v1.13.0`）             |
-| `Makefile`（`deps` 目标）         | `go mod download` + `pnpm --dir ./frontend install`                                                           |
-| `coverage.out`                    | Go 原始覆盖率（`-coverprofile` 产物），**保持模块前缀原样**交给官方 Action（`format: golang` 自己会还原路径） |
-| `frontend/coverage/lcov.info`     | 前端覆盖率产物（`pnpm test:coverage` 生成）                                                                   |
+| 文件                                  | 作用                                                                                                                 |
+|---------------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| `.github/workflows/coveralls.yml`     | 唯一入口：装依赖 → 跑 Go/前端测试 → 分别上传 `flag=go` / `flag=node`                                                 |
+| `ghcr.io/dtapps/golang/wails3:latest` | 外部统一镜像：Go/Node/pnpm/GTK4/WebKit6 与 `gotestsum` 全在里面，由 `container:` 直接拉取，本仓库不再维护 Dockerfile |
+| `Makefile`（`deps` 目标）             | `go mod download` + `pnpm --dir ./frontend install`                                                                  |
+| `coverage.out`                        | Go 原始覆盖率（`-coverprofile` 产物），**保持模块前缀原样**交给官方 Action（`format: golang` 自己会还原路径）        |
+| `frontend/coverage/lcov.info`         | 前端覆盖率产物（`pnpm test:coverage` 生成）                                                                          |
 
-> 历史提醒：本仓库曾用 `goveralls` CLI 上报 Go 覆盖率，2026-10-24 前后已改为官方 Action，镜像里的 `GOVERALLS_VERSION` 也一并移除。**不要再加回来**——多一个不受工作流版本控制的二进制，只会让「版本只在 Dockerfile 的 ARG 里」这条唯一事实来源失效。
+> 历史提醒：本仓库曾用 `goveralls` CLI 上报 Go 覆盖率，2026-10-24 前后已改为官方 Action，镜像里的 `GOVERALLS_VERSION` 也一并移除。**不要再加回来**——多一个不受统一镜像管理的二进制，只会让「工具版本由镜像侧统一维护」这条事实来源失效。
 
 ## 2. 工作流结构
 
@@ -34,10 +34,17 @@ permissions:
 
 concurrency:
   group: coveralls-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+  queue: max
 ```
 
-同一分支连续 push 会取消上一次运行，避免同一 commit 重复上传。
+同一分支的多次触发**串行排队、依次执行，不取消任何运行**：
+
+- `cancel-in-progress: false`：新运行进入 pending 等待，不抢占正在运行的旧运行。
+- `queue: max`：同组最多保留 100 个 pending，按进入等待的先后 FIFO 执行；默认的 `queue: single` 只留 1 个，新的会顶掉旧的 pending。仅队列满时的溢出运行被取消。
+- `queue: max` 不能与 `cancel-in-progress: true` 组合（workflow 校验失败）。
+
+四个 GitHub workflow 的并发策略一致，详见 `docs/ci/README.md` §2。
 
 ### 2.2 为什么是单个 job
 
@@ -54,16 +61,16 @@ Coveralls 以 **build** 为单位聚合报告。`go` / `node` 两份数据必须
 
 ## 3. 运行环境
 
-| 项          | 值                                                                       |
-|-------------|--------------------------------------------------------------------------|
-| Runner      | `ubuntu-latest`                                                          |
-| 容器        | `ghcr.io/${{ github.repository }}/ci:latest`（预构建，见 `ci-image.md`） |
-| Go          | 镜像内 Go 工具链（`GOPATH=/go`、`/go/bin` 已在 PATH）                    |
-| Node / pnpm | 镜像内 Node + pnpm；pnpm store 目录动态读取后缓存                        |
-| 缓存        | Go module、Go build、pnpm store 三份                                     |
-| 超时        | 默认（未单独设置）                                                       |
+| 项          | 值                                                              |
+|-------------|-----------------------------------------------------------------|
+| Runner      | `ubuntu-latest`                                                 |
+| 容器        | `ghcr.io/dtapps/golang/wails3:latest`（外部统一镜像，直接拉取） |
+| Go          | 镜像内 Go 工具链（`GOPATH=/go`、`/go/bin` 已在 PATH）           |
+| Node / pnpm | 镜像内 Node + pnpm；pnpm store 目录动态读取后缓存               |
+| 缓存        | Go module、Go build、pnpm store 三份                            |
+| 超时        | 默认（未单独设置）                                              |
 
-`make deps` 负责下载 Go 模块与前端依赖；镜像已装好 GTK4/WebKit6，无需再 `apt-get install`，也无需 `setup-go` / `setup-node`。
+`make deps` 负责下载 Go 模块与前端依赖；统一镜像已装好 GTK4/WebKit6，无需再 `apt-get install`，也无需 `setup-go` / `setup-node`。
 
 ## 4. 上报细节
 
@@ -152,12 +159,12 @@ cd frontend && pnpm test:coverage && ls -lh coverage/lcov.info
 | `flag-name` 不生效、两份报告互相覆盖             | 没设 `flag-name`，或两次上传不在同一个 build（确认没有拆 job / 改过 `github-token` 或 build 标识） |
 | Go 覆盖率路径显示异常（带模块前缀 / 找不到文件） | 用了 `format: lcov` 或漏了 `format: golang`；Go 的 `coverage.out` 必须走 `format: golang`          |
 | 前端覆盖率 0% / 文件对不上                       | `lcov.info` 路径错（应为 `./frontend/coverage/lcov.info`），或 vitest 覆盖率 include/exclude 改了  |
-| `gotestsum: command not found`                   | 用了未预装 `gotestsum` 的镜像（如 CNB 那份），或 `/go/bin` 不在 PATH                               |
+| `gotestsum: command not found`                   | 镜像未预装 `gotestsum`（CNB 侧统一镜像不需要它），或 `/go/bin` 不在 PATH                           |
 | 上传返回 422 / 401                               | `COVERALLS_REPO_TOKEN` 失效、仓库未在 Coveralls 开通，或 token 与仓库不匹配                        |
 
 ## 7. 注意事项
 
 - **Coveralls 与 Codecov 各跑一遍测试**：两边独立，任何一边挂都不影响另一边；不要为了省时间把两者合并成一个 job（故障会互相传导）。
-- **不要在工作流里 `go install`**：`gotestsum` 等工具由 CI 镜像提供，工作流里装 `@latest` 会覆盖钉死版本。
+- **不要在工作流里 `go install`**：`gotestsum` 等工具由统一 CI 镜像提供，工作流里装 `@latest` 会覆盖镜像内的固定版本。
 - **Go 与前端 flag 名固定为 `go` / `node`**：与 CNB `testing:coverage` 的 `key`、Codecov 的 `flags` 保持一致，便于跨平台对照。
 - **文档命名**：`docs/*-*-*.md`（双横线）会被 `.gitignore` 忽略，本文档用单横线命名（`docs/coveralls.md`）。

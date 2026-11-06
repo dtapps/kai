@@ -149,7 +149,7 @@ CNB 语义：事件键下的值是 **Pipeline 数组**，同事件多个条目 =
     - runner:
         tags: cnb:arch:amd64
       docker:
-        build: .cnb/ci/Dockerfile # 复用已预装 Node + pnpm 的构建环境
+        image: docker.cnb.cool/dtapp/golang/wails3 # 使用统一 Docker 镜像，避免各仓库重复打包
         volumes:
           - /root/.cache/go-build:copy-on-write
           - /root/.local/share/pnpm/store:copy-on-write # pnpm 存储缓存

@@ -366,7 +366,7 @@ setup: deps bindings sqlc ## 完整项目初始化
 
 # ==================== 更新 / 拉取 ====================
 
-sync: sync-github sync-cnb push ## 拉取所有远程最新（先 GitHub，后 CNB 镜像）然后推送
+sync: sync-cnb sync-github push ## 拉取所有远程最新（先 CNB 后 GitHub 镜像）然后推送
 
 sync-github: ## 拉取 GitHub 最新并以 fast-forward 合并（保留本地未提交改动）
 	git fetch origin

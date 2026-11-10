@@ -1,5 +1,25 @@
 .PHONY: help icons build-assets dev darwin-build darwin-package darwin-dmg windows-build windows-package linux-build linux-package tidy bindings sqlc swift-build lint-go lint-fe fmt-fe format-swift check-cross
 
+# 环境变量优先级高于 .env：include 的赋值会覆盖环境值，先暂存一份
+ifeq ($(origin GIT_REMOTE),environment)
+    GIT_REMOTE_ENV := $(GIT_REMOTE)
+endif
+
+# 加载 .env 文件（如果存在）
+ifneq (,$(wildcard ./.env))
+    include .env
+    export
+endif
+
+ifneq ($(GIT_REMOTE_ENV),)
+    GIT_REMOTE := $(GIT_REMOTE_ENV)
+endif
+
+# 同步/推送目标远程，逗号分隔：GIT_REMOTE=origin,github,gitlab
+# 可通过 .env / 环境变量 / 命令行覆盖，未配置时默认 origin。
+GIT_REMOTE ?= origin
+export GIT_REMOTE
+
 # ==================== 构建配置 ====================
 
 # 开发服务器端口
@@ -366,34 +386,25 @@ setup: deps bindings sqlc ## 完整项目初始化
 
 # ==================== 更新 / 拉取 ====================
 
-sync: sync-cnb sync-github push ## 拉取所有远程最新（先 CNB 后 GitHub 镜像）然后推送
-
-sync-github: ## 拉取 GitHub 最新并以 fast-forward 合并（保留本地未提交改动）
-	git fetch origin
-	git merge --ff-only origin/master
-	@echo "已同步 origin/master 最新代码，本地未提交改动已保留"
-
-sync-cnb: ## 拉取 CNB 最新并以 fast-forward 合并（保留本地未提交改动）
-	git fetch cnb
-	git merge --ff-only cnb/master
-	@echo "已同步 cnb/master 最新代码，本地未提交改动已保留"
+# 按 GIT_REMOTE 顺序先全部拉取合并，再统一推送（保留本地未提交改动）
+.PHONY: sync
+sync:
+	@IFS=,; for r in $$GIT_REMOTE; do \
+		git fetch "$$r" && git merge --ff-only "$$r/master" || exit 1; \
+	done
+	@IFS=,; for r in $$GIT_REMOTE; do git push "$$r" HEAD || exit 1; done
+	@echo "同步完成！"
 
 # ==================== 推送 ====================
 
-push: ## 推送到所有远程仓库
-	git push origin HEAD
-	git push cnb HEAD
-	git push gitea HEAD
-	git push gitlab HEAD
-	git push gitee HEAD
-	git push gitcode HEAD
+# 推送到所有远程仓库
+.PHONY: push
+push:
+	@IFS=,; for r in $$GIT_REMOTE; do git push "$$r" HEAD || exit 1; done
 	@echo "推送完成！"
 
-push-force: ## 强制推送到所有远程仓库（忽略冲突）
-	git push --force origin HEAD
-	git push --force cnb HEAD
-	git push --force gitea HEAD
-	git push --force gitlab HEAD
-	git push --force gitee HEAD
-	git push --force gitcode HEAD
+# 强制推送到所有远程仓库（忽略冲突）
+.PHONY: push-force
+push-force:
+	@IFS=,; for r in $$GIT_REMOTE; do git push --force "$$r" HEAD || exit 1; done
 	@echo "强制推送完成！"

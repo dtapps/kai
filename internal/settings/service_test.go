@@ -48,7 +48,7 @@ func TestDefaultSettings(t *testing.T) {
 	if d.TTS.Engine != "system" || d.TTS.Speed != 1.0 {
 		t.Fatalf("TTS 默认值不符: %+v", d.TTS)
 	}
-	if !d.HttpLog.Enabled || d.HttpLog.RetentionDays != 30 {
+	if !d.HttpLog.Enabled || d.HttpLog.RetentionDays != 7 {
 		t.Fatalf("HttpLog 默认值不符: %+v", d.HttpLog)
 	}
 	if d.Log.Level != "info" || d.Log.RetentionDays != 30 || !d.Log.Compress {

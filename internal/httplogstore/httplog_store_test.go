@@ -220,23 +220,17 @@ func TestStartCleanupLifecycle(t *testing.T) {
 	setupEnabled(t)
 	logger := slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil))
 
-	// 保留期 <= 0：不启动 goroutine。
+	// 已启用存储：无论保留期是否为 0 都启动 goroutine（运行中可经
+	// SetRetentionDays 动态更新，<=0 时 tick 内清理为 no-op）。
 	StartCleanup(0, logger)
-	mu.RLock()
-	d := cleanupDone
-	mu.RUnlock()
-	if d != nil {
-		t.Fatal("retentionDays=0 不应启动清理 goroutine")
-	}
-
-	// 正常启动，重复调用不应启动第二个。
-	StartCleanup(30, logger)
 	mu.RLock()
 	first := cleanupDone
 	mu.RUnlock()
 	if first == nil {
 		t.Fatal("StartCleanup 应启动清理 goroutine")
 	}
+
+	// 重复调用不应启动第二个。
 	StartCleanup(30, logger)
 	mu.RLock()
 	second := cleanupDone

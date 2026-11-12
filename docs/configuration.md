@@ -41,7 +41,7 @@
 | `auto_clipboard`      | bool `false`                                           | 按输入翻译键时直接读剪贴板，不模拟复制         | 输入窗口     |
 | `copy_key_snapshot`   | object / `null`                                        | 开启自动剪贴板时快照的复制键状态，关闭时恢复   | 无（内部）   |
 | `tts`                 | `{engine:"system", speed:1.0}`                         | 语音合成配置；当前没有使用方与 UI              | 无           |
-| `http_log`            | `{enabled:true, retention_days:30}`                    | HTTP 请求日志开关与保留天数                    | 无           |
+| `http_log`            | `{enabled:true, retention_days:7}`                     | HTTP 请求日志开关与保留天数                    | 保留天数在通用页 |
 | `log`                 | `{level:"info", retention_days:30, compress:true}`     | 主日志等级、保留天数、归档压缩                 | 无           |
 | `proxy`               | `{enabled:false, protocol:"http", port:8080, ...}`     | HTTP/HTTPS/SOCKS5 代理                         | 无           |
 | `updater`             | `{prerelease:true, source:""}`                         | 预发布通道；更新源 `""`（自动）/`github`/`cnb` | 预发布在托盘 |
@@ -54,9 +54,9 @@
 ### 2.2 热重载与写回
 
 - 文件变更由 fsnotify 监听，**防抖 500ms**；`saving` 标记避免自身写盘触发回调（`internal/settings/service.go:283`）。
-- 热重载后的回调只同步：后端 i18n 语言、日志等级/保留/压缩、更新器语言/主题。**不会**重新注册全局快捷键，也**不会**重建引擎 HTTP 客户端或更新器实例。
+- 热重载后的回调只同步：后端 i18n 语言、日志等级/保留/压缩、HTTP 日志保留天数、更新器语言/主题。**不会**重新注册全局快捷键，也**不会**重建引擎 HTTP 客户端或更新器实例。
 - `writeConfig` 用全新 viper 实例只写已知字段，因此文件里已废弃的旧 key 会被清掉。
-- 前端 `SaveConfig` 只回写固定子集：`language`、`theme`、`default_to`、`default_from`、`hotkeys`、`tts`、`execkeys`、`auto_clipboard`、`copy_key_snapshot`、`analytics_enabled`（`internal/service/config_wrapper.go:79`）。`proxy`、`http_log`、`log`、`updater`、`dns_configs` 不会从前端保存。
+- 前端 `SaveConfig` 只回写固定子集：`language`、`theme`、`default_to`、`default_from`、`hotkeys`、`tts`、`execkeys`、`auto_clipboard`、`copy_key_snapshot`、`analytics_enabled`、`http_log.retention_days`（`internal/service/config_wrapper.go:79`）。`proxy`、`http_log.enabled`、`log`、`updater`、`dns_configs` 不会从前端保存。
 
 ### 2.3 生效时机
 
@@ -66,6 +66,7 @@
 | 快捷键 / 复制键             | 设置页保存后立即 `Register()` 重注册；手改文件需重启                              |
 | 代理 / DNS                  | 启动时构建 HTTP client；改后需重启（或触发一次引擎重载）                          |
 | HTTP 日志开关               | 启动时 `httplogstore.Init`；改后需重启                                            |
+| HTTP 日志保留天数           | 设置页保存后立即清理一次并更新定时任务；手改文件热重载生效                        |
 | 日志等级 / 保留 / 压缩      | 热重载立即生效                                                                    |
 | 更新源 `updater.source`     | 启动时 `SetSource`；改后需重启                                                    |
 | 预发布 `updater.prerelease` | 托盘复选框写配置；更新器 provider 启动时读取，改后需重启                          |

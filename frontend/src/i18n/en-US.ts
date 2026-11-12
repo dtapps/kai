@@ -79,6 +79,10 @@ export const en: Dict = {
     analytics: 'Anonymous analytics',
     analyticsHint:
       'Send anonymous usage data (translation counts, feature usage, etc.) to help us improve. No personal data is collected, and you can disable it anytime.',
+    httpLogRetention: 'Request log cleanup',
+    httpLogRetentionHint:
+      'Periodically delete HTTP request logs in httplog.db older than the retention period; set to 0 to disable cleanup.',
+    httpLogRetentionUnit: 'days',
     engines: 'Engines',
     enginesTitle: 'Translation Engines',
     engineList: 'Engine list',
@@ -327,6 +331,7 @@ export const en: Dict = {
     engineLoadAddFieldsFailed: '[engine] Failed to load add-engine fields',
     generalSaveLangFailed: '[general] Failed to save language settings',
     generalSaveAnalyticsFailed: '[general] Failed to save anonymous analytics toggle',
+    generalSaveHttpLogRetentionFailed: '[general] Failed to save request log cleanup setting',
     shortcutCheckAccessibilityFailed: '[shortcut] Failed to check Accessibility permission',
     shortcutOpenAccessibilityFailed: '[shortcut] Failed to open Accessibility settings',
     shortcutCheckScreenRecordingFailed: '[shortcut] Failed to check Screen Recording permission',

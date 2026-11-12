@@ -76,6 +76,10 @@ export const zh = {
     analytics: '匿名统计',
     analyticsHint:
       '发送匿名使用数据（翻译次数、功能使用等），帮助我们改进产品。数据不含任何个人信息，可随时关闭。',
+    httpLogRetention: '请求日志清理',
+    httpLogRetentionHint:
+      '定期删除 httplog.db 中超过保留天数的 HTTP 请求日志；设为 0 表示不清理。',
+    httpLogRetentionUnit: '天',
     engines: '引擎',
     enginesTitle: '翻译引擎',
     engineList: '引擎列表',
@@ -317,6 +321,7 @@ export const zh = {
     engineLoadAddFieldsFailed: '[引擎] 加载新增引擎字段失败',
     generalSaveLangFailed: '[通用] 保存语言设置失败',
     generalSaveAnalyticsFailed: '[通用] 保存匿名统计开关失败',
+    generalSaveHttpLogRetentionFailed: '[通用] 保存请求日志清理设置失败',
     shortcutCheckAccessibilityFailed: '[快捷键] 检测辅助功能授权失败',
     shortcutOpenAccessibilityFailed: '[快捷键] 打开辅助功能设置失败',
     shortcutCheckScreenRecordingFailed: '[快捷键] 检测屏幕录制授权失败',

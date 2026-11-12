@@ -168,8 +168,9 @@ grep -n '"deepl"\|"openai"\|"baidu"' -A30 internal/engine/engine.go
 
 - 语言/主题：保存即生效；手改文件会热重载。
 - 快捷键：保存后重注册；手改文件需重启。
-- 代理/DNS/HTTP 日志/更新源：重启。
-- `proxy` / `http_log` / `log` / `updater` / `dns_configs` 没有设置页 UI，只能改 `settings.json`；`SaveConfig` 不会回写它们。
+- 代理/DNS/HTTP 日志开关/更新源：重启。
+- HTTP 日志保留天数：设置页保存后立即清理一次；手改文件热重载生效。
+- `proxy` / `http_log.enabled` / `log` / `updater` / `dns_configs` 没有设置页 UI，只能改 `settings.json`；`SaveConfig` 不会回写它们（`http_log.retention_days` 除外）。
 - `dns_configs` 还会被 `writeConfig` 丢弃（已知缺陷）。
 
 ### 7.3 重置

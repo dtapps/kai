@@ -87,7 +87,7 @@ CREATE INDEX IF NOT EXISTS http_log_created_at ON http_log (created_at DESC);
 
 - append-only：常驻连接只 INSERT；DELETE 由 Cleanup 用临时连接执行。
 - 请求/响应头以 JSON 文本存储；请求/响应体只在非空时写入，并会把字面量 `\uXXXX` 解码成正常文本。
-- **可能包含敏感信息**（Authorization 头、请求体中的文本）。默认 `http_log.enabled=true`、保留 30 天；不需要时在 `settings.json` 关掉，或定期清理。
+- **可能包含敏感信息**（Authorization 头、请求体中的文本）。默认 `http_log.enabled=true`、保留 7 天（设置 → 通用 → 请求日志清理，`0` 表示不清理）；不需要时在 `settings.json` 关掉，或定期清理。
 
 ## 3. sqlc 生成
 
@@ -189,7 +189,7 @@ sqlite3 ~/.kai/data/httplog.db 'vacuum;'
 sqlite3 ~/.kai/data/history.db 'delete from history;'
 ```
 
-`httplogstore.StartCleanup` 每小时按 `http_log.retention_days` 删过期行；`retention_days<=0` 时不清理。
+`httplogstore.StartCleanup` 每小时按 `http_log.retention_days` 删过期行；`retention_days<=0` 时不清理。设置页修改保留天数后会立即清理一次，并同步给定时任务（运行中无需重启）。
 
 ### 6.3 备份
 

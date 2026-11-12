@@ -4,11 +4,11 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 
 	"cnb.cool/dtapp/kai/internal/events"
+	"cnb.cool/dtapp/kai/internal/hotkey"
+	"cnb.cool/dtapp/kai/internal/httplogstore"
 	"cnb.cool/dtapp/kai/internal/i18n"
 	"cnb.cool/dtapp/kai/internal/model"
 	"cnb.cool/dtapp/kai/internal/settings"
-
-	"cnb.cool/dtapp/kai/internal/hotkey"
 )
 
 // ConfigWrapper 负责 UI 配置（语言/主题/默认引擎/热键/TTS/执行键）的持久化与读取，
@@ -83,6 +83,7 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	}
 	langChanged := cur.Language != cfg.Language
 	themeChanged := cur.Theme != cfg.Theme
+	httpLogRetentionChanged := cur.HttpLog.RetentionDays != cfg.HttpLog.RetentionDays
 	cur.Language = cfg.Language
 	cur.Theme = cfg.Theme
 	cur.DefaultTo = cfg.DefaultTo
@@ -93,8 +94,14 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	cur.AutoClipboard = cfg.AutoClipboard
 	cur.CopyKeySnapshot = cfg.CopyKeySnapshot
 	cur.AnalyticsEnabled = cfg.AnalyticsEnabled
+	// 前端只维护保留天数；http_log.enabled 仍由 settings.json 控制，避免误关日志。
+	cur.HttpLog.RetentionDays = cfg.HttpLog.RetentionDays
 	if err := w.settingsSvc.Save(); err != nil {
 		return err
+	}
+	// httplog 保留天数变更后立即按新策略清理一次，并同步给定时清理 goroutine。
+	if httpLogRetentionChanged {
+		httplogstore.SetRetentionDays(cur.HttpLog.RetentionDays)
 	}
 	// 热键配置同步后直接重注册，保证保存即生效
 	if w.hotkeyMgr != nil {

@@ -67,7 +67,7 @@ export interface HotkeyEntry {
 }
 
 /**
- * HttpLogConfig HTTP 请求日志配置（暂不同步到前端 UI）。
+ * HttpLogConfig HTTP 请求日志配置（保留天数可在设置中心调整）。
  */
 export interface HttpLogConfig {
     /**
@@ -76,7 +76,7 @@ export interface HttpLogConfig {
     "enabled": boolean;
 
     /**
-     * RetentionDays 日志保留天数。
+     * RetentionDays 日志保留天数（<=0 表示不清理）。
      */
     "retention_days": number;
 }
@@ -206,7 +206,7 @@ export interface Settings {
     "tts": TTSConfig;
 
     /**
-     * HttpLog HTTP 请求日志配置（暂不同步到前端 UI）。
+     * HttpLog HTTP 请求日志配置（保留天数可在设置中心调整）。
      */
     "http_log": HttpLogConfig;
 

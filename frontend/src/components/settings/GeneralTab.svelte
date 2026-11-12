@@ -15,6 +15,8 @@
 
   // 匿名统计开关：初始值从配置读取，变更经 SaveConfig 落盘（Go 侧 analytics 据此决定是否上报）。
   let analyticsEnabled = $state(false);
+  // httplog.db 请求日志保留天数：0 表示不清理；变更后 Go 侧立即清理并同步定时任务。
+  let httpLogRetention = $state(7);
 
   const themeOptions = $derived.by<{ mode: ThemeMode; label: string }[]>(() => [
     { mode: THEME.Auto, label: t('settings.themeAuto') },
@@ -25,7 +27,10 @@
   onMount(async () => {
     try {
       const cfg = await GetConfig();
-      if (cfg) analyticsEnabled = cfg.analytics_enabled ?? false;
+      if (cfg) {
+        analyticsEnabled = cfg.analytics_enabled ?? false;
+        httpLogRetention = cfg.http_log?.retention_days ?? 7;
+      }
     } catch {
       /* 忽略读取失败，回退默认关 */
     }
@@ -56,6 +61,25 @@
       track('feature_toggled', { feature: 'anonymous_analytics', enabled });
     } catch (err) {
       console.error(t('log.generalSaveAnalyticsFailed'), err);
+    }
+  }
+
+  // 保存 httplog 保留天数：非法/负数按 0（不清理）处理，并回填规范化后的值。
+  async function changeHttpLogRetention(e: Event) {
+    const input = e.target as HTMLInputElement;
+    // 空值不视为 0，回填原值避免误把清理关掉。
+    if (input.value.trim() === '') {
+      input.value = String(httpLogRetention);
+      return;
+    }
+    const days = Math.max(0, Math.floor(Number(input.value) || 0));
+    httpLogRetention = days;
+    input.value = String(days);
+    try {
+      const cfg = (await GetConfig()) ?? ({} as any);
+      await SaveConfig({ ...cfg, http_log: { ...cfg.http_log, retention_days: days } });
+    } catch (err) {
+      console.error(t('log.generalSaveHttpLogRetentionFailed'), err);
     }
   }
 </script>
@@ -104,4 +128,21 @@
     <input type="checkbox" checked={analyticsEnabled} onchange={toggleAnalytics} />
     <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
   </label>
+</div>
+
+<div class="u-card u-card--panel p-5">
+  <div class="mb-1 text-sm font-medium">{t('settings.httpLogRetention')}</div>
+  <p class="u-muted mb-3 text-xs">{t('settings.httpLogRetentionHint')}</p>
+  <div class="flex items-center gap-2">
+    <input
+      class="u-field w-24 px-3 py-2 text-sm"
+      type="number"
+      min="0"
+      step="1"
+      value={httpLogRetention}
+      onchange={changeHttpLogRetention}
+      aria-label={t('settings.httpLogRetention')}
+    />
+    <span class="u-muted text-sm">{t('settings.httpLogRetentionUnit')}</span>
+  </div>
 </div>

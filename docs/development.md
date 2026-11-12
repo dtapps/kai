@@ -165,7 +165,7 @@ make lint-frontend
 
 ### 6.8 改了 `settings.json` 字段但前端读不到
 
-- 原因：`ConfigWrapper.SaveConfig` 只同步固定字段（语言、主题、默认语言、快捷键、TTS、执行键、自动剪贴板、统计开关），不含 `proxy` / `http_log` / `log` / `updater` / `dns_configs`（`internal/service/config_wrapper.go:79`）。
+- 原因：`ConfigWrapper.SaveConfig` 只同步固定字段（语言、主题、默认语言、快捷键、TTS、执行键、自动剪贴板、统计开关、HTTP 日志保留天数），不含 `proxy` / `http_log.enabled` / `log` / `updater` / `dns_configs`（`internal/service/config_wrapper.go:79`）。
 - 解法：这些字段直接编辑 `settings.json`，保存后由 viper 热重载；不要在设置页里找开关。
 
 ### 6.9 改了 i18n split 文件但界面没变

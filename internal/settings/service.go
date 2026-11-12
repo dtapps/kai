@@ -38,7 +38,7 @@ type Settings struct {
 	CopyKeySnapshot *ExecKeyEntry `json:"copy_key_snapshot" mapstructure:"copy_key_snapshot"`
 	// TTS 语音合成配置。
 	TTS TTSConfig `json:"tts" mapstructure:"tts"`
-	// HttpLog HTTP 请求日志配置（暂不同步到前端 UI）。
+	// HttpLog HTTP 请求日志配置（保留天数可在设置中心调整）。
 	HttpLog HttpLogConfig `json:"http_log" mapstructure:"http_log"`
 	// Log 应用运行日志配置（等级 / 清理 / 压缩）。
 	Log LogConfig `json:"log" mapstructure:"log"`
@@ -103,11 +103,11 @@ type TTSConfig struct {
 	Speed float64 `json:"speed" mapstructure:"speed"`
 }
 
-// HttpLogConfig HTTP 请求日志配置（暂不同步到前端 UI）。
+// HttpLogConfig HTTP 请求日志配置（保留天数可在设置中心调整）。
 type HttpLogConfig struct {
 	// Enabled 是否开启 HTTP 请求日志。
 	Enabled bool `json:"enabled" mapstructure:"enabled"`
-	// RetentionDays 日志保留天数。
+	// RetentionDays 日志保留天数（<=0 表示不清理）。
 	RetentionDays int `json:"retention_days" mapstructure:"retention_days"`
 }
 
@@ -185,7 +185,7 @@ func DefaultSettings() *Settings {
 			Copy: ExecKeyEntry{Key: defaultCopyHotkey(), Enabled: true, Fallback: false},
 		},
 		TTS:     TTSConfig{Engine: "system", Speed: 1.0},
-		HttpLog: HttpLogConfig{Enabled: true, RetentionDays: 30},
+		HttpLog: HttpLogConfig{Enabled: true, RetentionDays: 7},
 		Log:     LogConfig{Level: "info", RetentionDays: 30, Compress: true},
 		Proxy:   ProxyConfig{Enabled: false, Protocol: "http", Port: 8080},
 		Updater: UpdaterConfig{Prerelease: true},

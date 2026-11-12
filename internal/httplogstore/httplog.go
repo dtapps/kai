@@ -24,6 +24,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf16"
 
@@ -43,6 +44,9 @@ var (
 	mu          sync.RWMutex
 	once        sync.Once
 	cleanupDone chan struct{}
+	// retentionDays 当前日志保留天数，支持运行中经 SetRetentionDays 更新，
+	// 清理 goroutine 每小时读取一次；<=0 表示不清理。
+	retentionDays atomic.Int64
 )
 
 // ---------------------------------------------------------------------------
@@ -323,12 +327,11 @@ func Cleanup(retentionDays int) (int, error) {
 	return int(n), nil
 }
 
-// StartCleanup 启动定时清理 goroutine，每 1 小时清理一次过期日志。
-// goroutine 在 Close() 时自动停止。
-func StartCleanup(retentionDays int, logger *slog.Logger) {
-	if retentionDays <= 0 {
-		return
-	}
+// StartCleanup 启动定时清理 goroutine，每 1 小时按当前保留天数（可经
+// SetRetentionDays 运行中更新）清理一次过期日志；天数 <=0 时该次清理为 no-op。
+// goroutine 在 Close() 时自动停止。未启用存储（无 connDSN）时不启动。
+func StartCleanup(days int, logger *slog.Logger) {
+	retentionDays.Store(int64(days))
 	mu.RLock()
 	dsn := connDSN
 	mu.RUnlock()
@@ -352,7 +355,7 @@ func StartCleanup(retentionDays int, logger *slog.Logger) {
 		for {
 			select {
 			case <-ticker.C:
-				n, err := Cleanup(retentionDays)
+				n, err := Cleanup(int(retentionDays.Load()))
 				if err != nil {
 					logger.Error(i18n.T("log.httplog_cleanup_failed"), slog.Any("error", err))
 				} else if n > 0 {
@@ -361,6 +364,30 @@ func StartCleanup(retentionDays int, logger *slog.Logger) {
 			case <-done:
 				return
 			}
+		}
+	}()
+}
+
+// SetRetentionDays 运行时更新日志保留天数（<=0 表示不清理），并立即异步执行
+// 一次清理，使新策略即刻生效；之后的每小时定时清理同样按新值执行。
+func SetRetentionDays(days int) {
+	// 值未变化时不重复触发清理（手改 settings.json 等场景可能频繁回调）。
+	if retentionDays.Swap(int64(days)) == int64(days) {
+		return
+	}
+	// 先确认存储已启用，避免无谓 goroutine。
+	mu.RLock()
+	dsn := connDSN
+	mu.RUnlock()
+	if dsn == "" {
+		return
+	}
+	go func() {
+		n, err := Cleanup(days)
+		if err != nil {
+			slog.Default().Error(i18n.T("log.httplog_cleanup_failed"), slog.Any("error", err))
+		} else if n > 0 {
+			slog.Default().Info(i18n.T("log.httplog_cleaned"), slog.Int("count", n))
 		}
 	}()
 }

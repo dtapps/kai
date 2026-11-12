@@ -171,6 +171,9 @@ func main() {
 	settingsService.OnChange(func(cfg *settings.Settings) {
 		i18n.SetLocale(cfg.Language)
 		applyLogConfig(logRotator, frontendLogSvc, cfg.Log, homeDir)
+		// 外部修改 settings.json 的 http_log.retention_days 时同步清理策略
+		// （设置页保存走 ConfigWrapper.SaveConfig，已直接调用 SetRetentionDays）。
+		httplogstore.SetRetentionDays(cfg.HttpLog.RetentionDays)
 	})
 
 	// 启动即应用一次日志配置（等级/清理策略/压缩可被 settings.json 的 log 段覆盖），

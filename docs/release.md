@@ -24,8 +24,7 @@
 | Windows NSIS、macOS plist（`build/config.yml` 的 `info.version`） | `0.2.8`      | 必须 `X.Y.Z`。NSIS 模板自己补 `.0` 成 4 段，传 `0.2.8-rc.1` 会报 `invalid VIFileVersion format, should be X.X.X.X` |
 | deb / rpm / arch（nfpm）                                          | `0.2.8~rc.1` | 不允许 `-`：rpm 的 `Version` 字段用 `-` 分隔 Version/Release；换成 `~` 后 deb/rpm 都表示「低于正式版」             |
 
-四个渠道统一处理：`0.2.8-nightly.20260101` 同样派生为 `0.2.8`（NSIS / plist）与 `0.2.8~nightly.20260101`（deb/rpm/arch）。
-预发布版本在 Windows 文件属性、macOS App 元数据里显示的是去掉后缀的 `0.2.8`，这是 `X.Y.Z` 限制导致的取舍；预发布标识保留在 tag、Release 标题与 App 内版本串里。
+四个渠道统一处理：`0.2.8-nightly.20260101` 同样派生为 `0.2.8`（NSIS / plist）与 `0.2.8~nightly.20260101`（deb/rpm/arch）。 预发布版本在 Windows 文件属性、macOS App 元数据里显示的是去掉后缀的 `0.2.8`，这是 `X.Y.Z` 限制导致的取舍；预发布标识保留在 tag、Release 标题与 App 内版本串里。
 
 改了映射先跑 `bash scripts/ci/resolve-prerelease.sh --self-test`。
 
@@ -53,11 +52,11 @@ Actions → Release → Run workflow
 
 输入：
 
-| 输入           | 必填 | 说明                                             |
-|----------------|------|--------------------------------------------------|
+| 输入           | 必填 | 说明                                                                       |
+|----------------|------|----------------------------------------------------------------------------|
 | `version`      | 是   | 版本号；预发布看后缀，例如 `0.2.8`、`0.2.8-rc.1`、`0.2.8-nightly.20260101` |
-| `commit`       | 否   | 要构建的提交；留空用默认分支最新提交             |
-| `nsis_version` | 否   | NSIS 版本，留空用 `3.13`                         |
+| `commit`       | 否   | 要构建的提交；留空用默认分支最新提交                                       |
+| `nsis_version` | 否   | NSIS 版本，留空用 `3.13`                                                   |
 
 `prerelease` 输入已移除：是否预发布只由版本号后缀决定。布尔输入会和版本号打架 （曾出现 `v0.2.8-rc.1` 没勾 prerelease、正文按正式版渲染的情况）。
 
@@ -165,9 +164,7 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 - **附件名**：与 GitHub 逐字一致（`Kai-0.2.8-darwin-arm64.zip`，版本段不带 `v`）。
 - **正文**：全部镜像 GitHub 正文，只替换各自平台的链接；Gitee 侧正文里的链接会退化成文字，「更新内容」保留标题、明细换成一句「请前往 GitHub Release 查看」（完整清单在 GitHub 上更有价值）。
 - **附件清单**：CNB / GitLab / GitCode 全量搬运；Gitee 的下载脚本只有一条过滤规则——**单文件 >100MB 就跳过**（`AppImage` 112~117MB 因此不在 Gitee），其余（`updater-*`、`BUILD_TIME`/`GIT_COMMIT`、`SHA256SUMS`）都照常上传。
-- **Gitee 容量**：单附件 100MB（GVP 项目 200MB），**仓库附件总量 1GB**（含仓库附件与发行版附件）。
-  脚本另有 `MAX_TOTAL_BYTES=800MB` 的单次安全阈值；发布侧遇到「附件配额不足」会跳过后续更大的文件、只打警告不判失败，并提示去 GitHub 下载。
-  想让 Gitee 长期保留多个版本，需要定期删旧 Release（删 Release 会连附件一起释放）——可以在 `gitee-release-publish.js` 里加一步按 `DELETE /api/v5/repos/{owner}/{repo}/releases/{id}` 清理，`KAI_GITEE_TOKEN` 已具备该权限。
+- **Gitee 容量**：单附件 100MB（GVP 项目 200MB），**仓库附件总量 1GB**（含仓库附件与发行版附件）。 脚本另有 `MAX_TOTAL_BYTES=800MB` 的单次安全阈值；发布侧遇到「附件配额不足」会跳过后续更大的文件、只打警告不判失败，并提示去 GitHub 下载。 想让 Gitee 长期保留多个版本，需要定期删旧 Release（删 Release 会连附件一起释放）——可以在 `gitee-release-publish.js` 里加一步按 `DELETE /api/v5/repos/{owner}/{repo}/releases/{id}` 清理，`KAI_GITEE_TOKEN` 已具备该权限。
 
 ## 6. 更新源与产物对应
 

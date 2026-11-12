@@ -19,6 +19,15 @@ updates:
       - 'dependencies'
       - 'frontend'
 
+  # Docker 依赖（扫描 build/docker 下的 Dockerfile 基础镜像版本）
+  - package-ecosystem: 'docker'
+    directory: '/build/docker'
+    schedule:
+      interval: 'daily'
+    labels:
+      - 'dependencies'
+      - 'docker'
+
   # GitHub Actions 依赖（扫描 .github/workflows 下的第三方 action 版本）
   - package-ecosystem: 'github-actions'
     directory: '/'

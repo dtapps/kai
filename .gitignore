@@ -21,6 +21,7 @@ pkg/swiftbridge/internal/swift/libkai_bridge.dylib
 .codebuddy/
 .mimocode/
 .vscode/
+.trae/
 
 /docs/*-*-*.md
 /docs/*.png

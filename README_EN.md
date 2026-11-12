@@ -77,7 +77,7 @@ Notes:
 ### Releases
 
 - **Stable release**: manually trigger the Release workflow with a version number; macOS / Windows (arm64 + amd64) are built and published as a GitHub Release
-- **Pre-release**: check `prerelease` in the same workflow (or pass `pre_release=true` on the CNB side); there is no daily Nightly build anymore
+- **Pre-release**: a version suffix of `-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD` (e.g. `0.2.8-nightly.20260101`) marks a pre-release — no checkbox needed; there is no daily Nightly build anymore
 - Build artifacts are mirrored from the GitHub Release to CNB / GitLab / Gitee
 
 ## 5. Documentation

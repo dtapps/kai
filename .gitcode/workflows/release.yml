@@ -2,7 +2,7 @@
 #
 # 触发方式：GitHub Release 发布后由 .github/workflows/release.yml 的 sync-gitcode job 调 workflow_dispatch
 #   POST /api/v8/repos/:owner/:repo/actions/workflows/release.yml/dispatches
-#   传入 inputs.version / inputs.prerelease
+#   只传 inputs.version：是否预发布由版本号后缀判定，不再有 prerelease 输入
 # 也可在 GitCode 页面手动 Run workflow（补发历史版本时最省事）。
 #
 # 前置条件（仓库 → 设置 → Secrets → 新建仓库密钥；名称只能大写/数字/下划线，不能以 ATOMGIT_ 开头）：
@@ -20,12 +20,8 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（如 1.2.3 或 v1.2.3）'
+        description: '版本号（如 1.2.3；预发布看后缀：1.2.3-rc.1 / 1.2.3-nightly.20260101）'
         required: true
-      prerelease:
-        description: '是否发布为预发布（true/false）'
-        required: false
-        default: 'false'
 
 jobs:
   sync:
@@ -36,7 +32,6 @@ jobs:
           GITCODE_TOKEN: ${{ secrets.GITCODE_TOKEN }}
           KAI_GITHUB_TOKEN: ${{ secrets.KAI_GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
-          PRERELEASE: ${{ inputs.prerelease }}
         shell: bash
         run: |
           set -euo pipefail
@@ -45,12 +40,20 @@ jobs:
 
           # 版本号归一（允许传 1.2.3 或 v1.2.3）
           TAG="${VERSION:?未传入 version}"
-          case "$TAG" in v*) ;; *) TAG="v${TAG}" ;; esac
+          case "$TAG" in v* | V*) ;; *) TAG="v${TAG}" ;; esac
 
-          PRE="${PRERELEASE:-false}"
-          [ "$PRE" = "true" ] || PRE="false"
+          # 是否预发布只看版本号后缀（与 GitHub / CNB 同口径）：布尔输入会和版本号打架，
+          # 导致 rc 版本被标成 latest，所以本工作流不再声明也不接受 prerelease 输入。
+          TAG_LC="$(printf '%s' "$TAG" | tr '[:upper:]' '[:lower:]')"
+          case "$TAG_LC" in
+            *-rc* | *-beta* | *-alpha* | *-nightly*) PRE="true" ;;
+            *) PRE="false" ;;
+          esac
           if [ "$PRE" = "true" ]; then STATUS="pre"; else STATUS="latest"; fi
-          echo "版本号: ${TAG}  预发布: ${PRE} (release_status=${STATUS})"
+          # 标题与 GitHub / CNB / GitLab / Gitee 同口径：项目名 + tag，预发布加后缀
+          NAME="Kai ${TAG}"
+          if [ "$PRE" = "true" ]; then NAME="Kai ${TAG} (预发布)"; fi
+          echo "版本号: ${TAG}  预发布: ${PRE} (release_status=${STATUS})  标题: ${NAME}"
 
           command -v jq >/dev/null 2>&1 || { echo "环境缺少 jq"; exit 1; }
 
@@ -106,7 +109,7 @@ jobs:
 
           PAYLOAD=$(jq -n \
             --arg tag "$TAG" \
-            --arg name "$TAG" \
+            --arg name "$NAME" \
             --arg body "$(cat body.md)" \
             --arg tc "$BRANCH" \
             --arg st "$STATUS" \

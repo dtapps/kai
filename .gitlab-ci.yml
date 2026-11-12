@@ -39,7 +39,8 @@ default:
 # ---------------------------------------------------------------------------
 # 只在 trigger 源流水线跑（GitHub Release 发布后由 .github/workflows/release.yml 的 sync-gitlab job 触发，
 # 也可手动 POST）：
-#   POST /api/v4/projects/:id/trigger/pipeline  variables[VERSION]=v1.2.3 variables[PRERELEASE]=false
+#   POST /api/v4/projects/:id/trigger/pipeline  variables[VERSION]=v1.2.3
+#   （PRERELEASE 已废弃：是否预发布只看版本号后缀，传了也不采信）
 #
 # 附件存放：GitLab 没有「Release 二进制附件」API，所以走 **Generic Package Registry**，
 # Release 的 assets link 指向 package 地址，并用 direct_asset_path 生成直链
@@ -59,7 +60,7 @@ release:
   rules:
     # 主路径：GitHub Actions 用 trigger token 自动触发
     - if: $CI_PIPELINE_SOURCE == "trigger"
-    # 手动路径：CI/CD → Pipelines → Run pipeline，在「变量」区填 VERSION（可加 PRERELEASE）
+    # 手动路径：CI/CD → Pipelines → Run pipeline，在「变量」区填 VERSION（预发布看版本号后缀）
     # 要求 VERSION 非空，没填就不创建这个 job，避免空跑一次必然失败的发布
     - if: $CI_PIPELINE_SOURCE == "web" && $VERSION
   script:
@@ -67,10 +68,22 @@ release:
       set -euo pipefail
 
       TAG="${VERSION:?未传入 VERSION —— 网页手动执行时请在 Run pipeline 的变量区填写（如 VERSION=v0.2.19）}"
-      case "$TAG" in v*) ;; *) TAG="v${TAG}" ;; esac
-      PRE="${PRERELEASE:-false}"
-      [ "$PRE" = "true" ] || PRE="false"
-      echo "版本号: ${TAG}  预发布: ${PRE}"
+      case "$TAG" in v* | V*) ;; *) TAG="v${TAG}" ;; esac
+      # 是否预发布只看版本号后缀（与 GitHub / CNB / GitCode 同口径），
+      # 不采信人工传入的 PRERELEASE：布尔输入会和版本号打架。
+      TAG_LC="$(printf '%s' "$TAG" | tr '[:upper:]' '[:lower:]')"
+      case "$TAG_LC" in
+        *-rc* | *-beta* | *-alpha* | *-nightly*) PRE="true" ;;
+        *) PRE="false" ;;
+      esac
+      if [ -n "${PRERELEASE:-}" ] && [ "${PRERELEASE}" != "${PRE}" ]; then
+        echo "提示：传入 PRERELEASE=${PRERELEASE} 与版本号后缀推导结果 ${PRE} 不一致，以后者为准"
+      fi
+      # 标题与 GitHub / CNB / GitCode / Gitee 同口径：项目名 + tag，预发布加后缀。
+      # GitLab Release 没有 prerelease 字段，预发布只能靠标题体现。
+      RELEASE_NAME="Kai ${TAG}"
+      if [ "$PRE" = "true" ]; then RELEASE_NAME="Kai ${TAG} (预发布)"; fi
+      echo "版本号: ${TAG}  预发布: ${PRE}  标题: ${RELEASE_NAME}"
 
       GH_API="https://api.github.com/repos/dtapps/kai"
       API="${CI_API_V4_URL}/projects/${CI_PROJECT_ID}"
@@ -161,7 +174,7 @@ release:
 
       # tag 不存在时由 ref 自动创建，指向默认分支最新提交
       PAYLOAD=$(jq -n \
-        --arg name "$TAG" \
+        --arg name "$RELEASE_NAME" \
         --arg tag "$TAG" \
         --arg desc "$(cat body.md)" \
         --arg ref "$CI_DEFAULT_BRANCH" \

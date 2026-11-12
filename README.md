@@ -77,7 +77,7 @@
 ### 发布
 
 - **正式发布**：手动触发 Release 工作流并输入版本号，构建 macOS / Windows 双平台（arm64 + amd64）并发布 GitHub Release
-- **预发布**：同一工作流勾选 `prerelease`（CNB 侧传 `pre_release=true`）发布预发布版本，不再有每日 Nightly 定时构建
+- **预发布**：版本号后缀带 `-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `0.2.8-nightly.20260101`）即为预发布，不用勾选开关；不再有每日 Nightly 定时构建
 - 构建产物从 GitHub Release 同步到 CNB / GitLab / Gitee
 
 ## 5. 文档

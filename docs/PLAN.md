@@ -194,7 +194,7 @@ kai/
 | M6 跨平台 & 打包 | ✅   | macOS / Windows 双平台打包（dmg / nsis / msix）；GitHub Release                        |
 | 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB / GitLab / Gitee 镜像同步、CI 体系 |
 
-当前发版：GitHub Release 触发后同步到 CNB / GitLab / Gitee；Gitea / GitCode 仅作代码镜像，不发布 Release。每日 Nightly 已取消，预发布改为手动 `prerelease`。
+当前发版：GitHub Release 触发后同步到 CNB / GitLab / Gitee；Gitea / GitCode 仅作代码镜像，不发布 Release。每日 Nightly 已取消，预发布改为按版本号后缀（`-rc` / `-beta` / `-alpha` / `-nightly`）判定，不再勾选开关。
 
 ---
 

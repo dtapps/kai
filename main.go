@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
 
 	"cnb.cool/dtapp/kai/internal/analytics"
@@ -30,11 +31,11 @@ import (
 	"cnb.cool/dtapp/kai/internal/translate"
 	"cnb.cool/dtapp/kai/internal/webview"
 	"cnb.cool/dtapp/kai/pkg/swiftbridge"
-	kupdater "cnb.cool/dtapp/kai/pkg/wails-updater-providers"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/wailsapp/wails/v3/pkg/updater"
+	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
 
 //go:embed all:frontend/dist
@@ -42,41 +43,6 @@ var assets embed.FS
 
 //go:embed build/trayicon.png
 var trayIcon []byte
-
-// parseBuildTime 把构建时注入的 RFC3339 字符串解析为 time.Time。
-// 本地 dev 构建注入的是 "unknown" 等占位串，解析失败时返回零值，
-// 更新器据此（buildTime.IsZero()）跳过 nightly 比较。
-func parseBuildTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
-}
-
-// resolveUpdaterLocale 把 settings 里的语言（可能含 auto）解析为第三方库接受的真实取值。
-// auto 由 i18n 当前生效语言决定（项目内已按系统语言解析），非 auto 直接透传。
-func resolveUpdaterLocale(lang string) string {
-	if lang == string(model.LocaleAuto) || lang == "" {
-		return i18n.GetLocale()
-	}
-	return lang
-}
-
-// resolveUpdaterTheme 把 settings 里的主题（可能含 auto）解析为第三方库接受的真实取值。
-// auto 用系统真实外观（IsDarkMode）解析为 light/dark；非 auto 直接透传。
-func resolveUpdaterTheme(theme string, app *application.App) string {
-	if theme == string(model.ThemeAuto) || theme == "" {
-		if app != nil && app.Env.IsDarkMode() {
-			return string(model.ThemeDark)
-		}
-		return string(model.ThemeLight)
-	}
-	return theme
-}
 
 func init() {
 	// 注册自定义事件类型，供后端 emit / 前端监听（对齐 certflow 的 RegisterEvent 模式）。
@@ -106,6 +72,15 @@ func formatBuildTime(raw string) string {
 		return raw
 	}
 	return t.Local().Format("2006-01-02 15:04:05")
+}
+
+// resolveIsDark 把 settings 里的主题（可能含 auto）解析为「是否深色」。
+// auto 用系统真实外观（IsDarkMode）决定；非 auto 按取值判断。
+func resolveIsDark(theme string, app *application.App) bool {
+	if theme == string(model.ThemeAuto) || theme == "" {
+		return app != nil && app.Env.IsDarkMode()
+	}
+	return theme == string(model.ThemeDark)
 }
 
 func main() {
@@ -146,9 +121,6 @@ func main() {
 	analytics.Init(dataDir, settingsService)
 	logCfg := settingsService.Get().Log
 
-	// 更新器 Provider 句柄（初始化段赋值）；运行时语言/主题变更时通过
-	// SetLocale/SetTheme 动态同步，使更新弹窗文案与配色实时跟随。
-	var updaterProvider *kupdater.MirrorProvider
 	// app 提升为函数级变量，使前置注册的 OnChange 闭包（早于 application.New）可引用。
 	var app *application.App
 
@@ -199,14 +171,6 @@ func main() {
 	settingsService.OnChange(func(cfg *settings.Settings) {
 		i18n.SetLocale(cfg.Language)
 		applyLogConfig(logRotator, frontendLogSvc, cfg.Log, homeDir)
-		// 语言/主题变更同步到更新器（auto 解析为真实语言/系统外观），刷新后续 Check/Download 文案。
-		if updaterProvider != nil {
-			kupdater.SetLocale(kupdater.Locale(resolveUpdaterLocale(cfg.Language)))
-			// 主题变更同步到更新器（auto 解析为系统真实外观 light/dark）。
-			kupdater.SetTheme(kupdater.Theme(resolveUpdaterTheme(cfg.Theme, app)))
-			// 同步刷新内置更新窗口（库内原地重建窗口以应用最新语言/主题文案）。
-			kupdater.SetUpdaterLocaleTheme(app)
-		}
 	})
 
 	// 启动即应用一次日志配置（等级/清理策略/压缩可被 settings.json 的 log 段覆盖），
@@ -363,11 +327,11 @@ func main() {
 	})
 
 	// 三个常驻窗口（设置 / 翻译 / 截图）原生标题栏基调：
-	// 创建时按“应用内主题”设置，与更新窗口（pkg/wails-updater-providers）保持一致。
+	// 创建时按“应用内主题”设置，与更新窗口（updater_window.html）保持一致。
 	// beta.15 的 Wails 在 Go/前端 runtime 均无“运行时切换常驻窗口主题”的公开 API，
 	// 故这里只保证“启动时跟随应用内主题”；运行时实时跟随由前端 theme store 尝试调用
 	// window.runtime.Window.SetDarkTheme 等完成（若运行时支持）。
-	startupDark := resolveUpdaterTheme(settingsService.Get().Theme, app) == "dark"
+	startupDark := resolveIsDark(settingsService.Get().Theme, app)
 	macAppearance := application.NSAppearanceNameAqua
 	winTheme := application.Light
 	if startupDark {
@@ -486,11 +450,6 @@ func main() {
 				} else if p.Language != "" {
 					i18n.SetLocale(p.Language)
 				}
-				// 同步更新 updater 的库全局语言（包级全局，matcher/窗口直接读取），
-				// 使更新检查日志与弹窗文案跟随语言切换。
-				kupdater.SetLocale(kupdater.Locale(resolveUpdaterLocale(settingsService.Get().Language)))
-				// 同步刷新内置更新窗口（库内原地重建窗口以应用最新语言文案）。
-				kupdater.SetUpdaterLocaleTheme(app)
 				// 同步当前界面语言给 Swift 桥接层，使 kai-bridge.log 调试日志跟随切换。
 				engine.SetBridgeLocale(i18n.GetLocale())
 			}
@@ -503,63 +462,87 @@ func main() {
 		rebuildTrayMenu(app, hm, configSvc, settingsService)
 	})
 
-	// 配置自更新功能
-	// https://v3.wails.io/guides/updater/
-	// 更新器复用全局 HTTP 客户端（含 UA 注入、代理、自定义 DNS），
-	// 而非自建裸 client，避免丢失全局注入与可观测性。
-	// 更新器作为独立 package（pkg/wails-updater-providers）使用：slog/client 注入。
-	// updater 的 Locale/Theme/Source 不接受 auto（第三方库已移除 auto 取值），
-	// 必须把 settings 里的 auto 解析为真实值：语言取 i18n 当前生效语言，
-	// 主题用系统真实外观（IsDarkMode）解析为 light/dark。这些值写入库全局
-	// （SetLocale/SetTheme/SetSource），库内部（matcher/provider/窗口）直接读取。
-	updLocale := resolveUpdaterLocale(settingsService.Get().Language)
-	updTheme := resolveUpdaterTheme(settingsService.Get().Theme, app)
-	updClient := network.BuildHTTPClient(*settingsService.Get())
-	// 库全局配置：语言/主题/主源/日志器/HTTP 客户端（一次设置，运行时亦可经 SetXxx 动态切换）。
-	kupdater.SetLogger(slog.Default())
-	kupdater.SetClient(updClient)
-	kupdater.SetLocale(kupdater.Locale(updLocale))
-	kupdater.SetTheme(kupdater.Theme(updTheme))
-	kupdater.SetSource(kupdater.Source(settingsService.Get().Updater.Source))
-	updOpts := kupdater.Options{
-		CnbRepo:     "dtapp/kai",
-		GithubRepo:  "dtapps/kai",
-		GithubToken: buildinfo.GithubToken,
-		CnbToken:    buildinfo.CnbToken,
-		BuildTime:   parseBuildTime(buildinfo.BuildTime),
-		GitCommit:   buildinfo.GitCommit,
-		Prerelease:  settingsService.Get().Updater.Prerelease,
-
-		// 自定义资源匹配：仅匹配 updater- 前缀的升级专用压缩包。
-		// matcher 直接读库全局语言，语言切换时只需调用 SetLocale，matcher 闭包自动跟随。
-		AssetMatcher: kupdater.NewUpdaterAssetMatcher()}
-	updaterProvider, err = kupdater.NewMirrorProvider(&updOpts)
+	// 配置自更新功能（方案对齐 certflow）
+	updaterCheckClient := network.BuildHTTPClient(*settingsService.Get())
+	updaterDownloadClient := network.BuildHTTPClient(*settingsService.Get())
+	updaterDownloadClient.Timeout = 0
+	gh, err := newMirrorProvider(github.Config{
+		Repository:    "dtapps/kai",
+		Token:         buildinfo.GithubToken,
+		Prerelease:    settingsService.Get().Updater.Prerelease,
+		ChecksumAsset: "SHA256SUMS",
+		// 自定义资源匹配：仅匹配「升级专用文件」（文件名以 updater- 开头）。
+		// 打包/安装文件只用于首次安装，不用于自更新；升级文件统一压缩
+		//（Windows/macOS 为 .zip，Linux 为 .tar.gz），内含单一二进制，
+		// 由 updater 下载、校验（SHA256SUMS）后替换自身。
+		AssetMatcher: func(req updater.CheckRequest, assets []github.ReleaseAsset) int {
+			plat := strings.ToLower(req.Platform)
+			arch := strings.ToLower(req.Arch)
+			slog.Debug(i18n.T("log.updater_matcher_start", "Plat", plat, "Arch", arch, "Count", len(assets)))
+			for i, a := range assets {
+				name := strings.ToLower(a.Name)
+				slog.Debug(i18n.T("log.updater_matcher_check", "Index", i, "Name", a.Name))
+				if !strings.HasPrefix(name, "updater-") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_not_updater"))
+					continue
+				}
+				if strings.HasSuffix(name, ".sig") || strings.HasSuffix(name, ".asc") || strings.HasSuffix(name, ".zsync") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_sig"))
+					continue
+				}
+				if !strings.HasSuffix(name, ".zip") &&
+					!strings.HasSuffix(name, ".tar.gz") &&
+					!strings.HasSuffix(name, ".tgz") {
+					slog.Debug(i18n.T("log.updater_matcher_skip_format"))
+					continue
+				}
+				if plat != "" && !strings.Contains(name, plat) {
+					slog.Debug(i18n.T("log.updater_matcher_skip_plat", "Plat", plat))
+					continue
+				}
+				if arch != "" && !strings.Contains(name, arch) {
+					slog.Debug(i18n.T("log.updater_matcher_skip_arch", "Arch", arch))
+					continue
+				}
+				slog.Debug(i18n.T("log.updater_matcher_hit", "Index", i, "Name", a.Name))
+				return i
+			}
+			slog.Debug(i18n.T("log.updater_matcher_none"))
+			return -1
+		},
+	}, updaterCheckClient, updaterDownloadClient, buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken)
 	if err != nil {
 		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
+	} else if err := app.Updater.Init(updater.Config{
+		CurrentVersion: buildinfo.Version,
+		Providers:      []updater.Provider{gh},
+		// 使用框架内置更新窗口（默认模板），只覆盖标题与尺寸等 chrome。
+		Window: &updater.BuiltinWindow{
+			Options: updater.WindowOptions{
+				Title: i18n.T("updater.title"),
+			},
+		},
+	}); err != nil {
+		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else {
-		// 自带更新窗口（BYO）：由库（wails-updater-providers）自创建并管理窗口，
-		// 在 OpenUpdaterWindow 内监听 wails:updater:resize（HTML 侧 ResizeObserver
-		// 触发）后调 SetSize，实现内容自适应（框架 Builtin 模式的写死常量尺寸不随
-		// notes 内容变化，且 HTML 侧无法直接调 Window.SetSize）。句柄不实现
-		// WindowSizer，框架 transition() 不会用写死常量覆盖我们的尺寸。
-		// 窗口默认 Hidden，启动不弹窗；Close 复用为 Hide，点 x 不销毁实例。
-		winOpt := kupdater.OpenUpdaterWindow(app)
-		if err := app.Updater.Init(updater.Config{
-			CurrentVersion: buildinfo.Version,
-			Providers:      []updater.Provider{updaterProvider},
-			Window:         winOpt,
-		}); err != nil {
-			slog.Error(i18n.T("log.updater_init_failed"), "error", err)
-		} else {
-			// 更新就绪：打印日志，由用户在托盘菜单选择重启安装。
-			// 运行时回调，语言跟随库全局（已随切换更新），不用构造期快照。
-			app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
-				slog.Info(i18n.T("log.updater_ready"))
-			})
-			// 启动时静默检查（dev 构建跳过，避免噪音）。
-			if !buildinfo.IsDev() {
-				checkUpdateOnStart(app, notifySvc)
-			}
+		// 更新就绪：自动重启以安装更新（用于验证自更新链路；不需要自动重启时删掉 Restart 调用即可）。
+		app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
+			slog.Info(i18n.T("log.updater_ready"))
+			go func() {
+				// 稍等片刻让日志与界面落盘，再走 updater 的 helper 替换流程。
+				time.Sleep(500 * time.Millisecond)
+				if err := app.Updater.Restart(context.Background()); err != nil {
+					slog.Error(i18n.T("log.updater_restart_failed"), "error", err)
+				}
+			}()
+		})
+		// 诊断：更新窗口发来 ready 握手时打一条日志，便于确认窗口事件通道是否正常。
+		app.Event.On(updater.EventWindowReady, func(e *application.CustomEvent) {
+			slog.Debug(i18n.T("log.updater_window_ready"))
+		})
+		// 启动时静默检查（dev 构建跳过，避免噪音）。
+		if !buildinfo.IsDev() {
+			checkUpdateOnStart(app, notifySvc)
 		}
 	}
 
@@ -596,12 +579,6 @@ func main() {
 		sysTheme := model.ThemeLight
 		if app != nil && app.Env.IsDarkMode() {
 			sysTheme = model.ThemeDark
-		}
-		// 系统真实外观变更同步到更新器（auto 模式下跟随系统），刷新弹窗配色。
-		if updaterProvider != nil {
-			kupdater.SetTheme(kupdater.Theme(resolveUpdaterTheme(configSvc.Theme(), app)))
-			// 同步刷新内置更新窗口配色（auto 模式下随系统外观变化）。
-			kupdater.SetUpdaterLocaleTheme(app)
 		}
 		app.Event.Emit(kevents.EventThemeChanged, kevents.ThemeChangedPayload{
 			Mode:  configSvc.Theme(),
@@ -699,15 +676,23 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 	})
 	// 分隔符隔开
 	trayMenu.AddSeparator()
-	// 检查更新：弹出内置升级窗口（updater_window.html 模板），用户确认后下载安装，就绪重启生效
+	// 检查更新：弹出内置升级窗口（updater_window.html 模板），用户确认后下载安装，就绪重启生效。
+	// 注意：必须异步执行。CheckAndInstall 内含网络检查与数十 MB 下载（数秒到数十秒），
+	// 在托盘点击回调（主线程）里同步调用会冻结 UI，并让更新窗口在加载完成前收不到事件。
 	trayMenu.Add(i18n.T("menu.check_update")).OnClick(func(ctx *application.Context) {
-		if app.Updater.State() != updater.StateUnconfigured {
-			// BYO 模式下框架不负责显示窗口。Wails 关闭窗口会销毁并移出注册表，
-			// 故不能靠 app.Window.Get 取其句柄 Show；统一走包内 ShowUpdaterWindow
-			// 确保窗口存活/重建后再显示，保证「关闭后再检查更新」仍能弹出。
-			kupdater.ShowUpdaterWindow(app)
-			_ = app.Updater.CheckAndInstall(context.Background())
+		if app.Updater.State() == updater.StateUnconfigured {
+			return
 		}
+		go func() {
+			defer func() {
+				if r := recover(); r != nil {
+					slog.Error(i18n.T("log.check_update_panic"), "panic", r)
+				}
+			}()
+			if err := app.Updater.CheckAndInstall(context.Background()); err != nil {
+				slog.Warn(i18n.T("log.check_update_failed"), "error", err)
+			}
+		}()
 	})
 	// 预发布版更新通道开关：紧贴「检查更新」，切换后写回设置并持久化。
 	// 初始勾选状态读当前配置；点击由 Wails 自动翻转 checked，回调里读新值落盘。

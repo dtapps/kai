@@ -3,6 +3,7 @@
   "app.name_version": "Kai {{.Version}}",
   "notification.update_available_subtitle": "New version {{.version}} found, click \"Check for Updates\" to install",
   "notification.update_available_title": "Kai update available",
+  "updater.title": "Check for Updates",
   "window.screenshot_title": "Kai Screenshot Translate",
   "window.selection_title": "Kai Selection",
   "window.settings_title": "Kai Settings",

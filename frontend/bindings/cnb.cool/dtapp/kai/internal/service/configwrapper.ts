@@ -27,14 +27,14 @@ import * as $models from "./models.js";
  * GetConfig 返回当前配置指针。
  */
 export function GetConfig(): $CancellablePromise<settings$0.Settings | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.GetConfig");
+    return $Call.ByID(651119548);
 }
 
 /**
  * GetLanguages 返回支持的语言 (value=code, name=展示名)。
  */
 export function GetLanguages(lang: string): $CancellablePromise<$models.NamedItem[] | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.GetLanguages", lang);
+    return $Call.ByID(3807973897, lang);
 }
 
 /**
@@ -43,35 +43,35 @@ export function GetLanguages(lang: string): $CancellablePromise<$models.NamedIte
  * 因此由后端通过 application.Env.IsDarkMode() 提供唯一可信来源。
  */
 export function GetSystemTheme(): $CancellablePromise<string> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.GetSystemTheme");
+    return $Call.ByID(1303942916);
 }
 
 /**
  * GetTheme 返回当前主题配置（可能含 auto）。
  */
 export function GetTheme(): $CancellablePromise<string> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.GetTheme");
+    return $Call.ByID(3923435619);
 }
 
 /**
  * SaveConfig 持久化 UI 配置到 settings.json；语言/主题变更会全局同步。
  */
 export function SaveConfig(cfg: settings$0.Settings | null): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.SaveConfig", cfg);
+    return $Call.ByID(1150430385, cfg);
 }
 
 /**
  * SetApp 在 app 就绪后注入。
  */
 export function SetApp(app: application$0.App | null): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.SetApp", app);
+    return $Call.ByID(600301637, app);
 }
 
 /**
  * SetTheme 持久化主题配置。
  */
 export function SetTheme(theme: string): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.SetTheme", theme);
+    return $Call.ByID(995726519, theme);
 }
 
 /**
@@ -79,12 +79,12 @@ export function SetTheme(theme: string): $CancellablePromise<void> {
  * 仅 darwin 可用；非 darwin 平台见 apple_langs_other.go。
  */
 export function SystemLanguages(): $CancellablePromise<string[] | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.SystemLanguages");
+    return $Call.ByID(2181419198);
 }
 
 /**
  * Theme 返回用户配置的主题（auto/light/dark，未配置回退 auto）。
  */
 export function Theme(): $CancellablePromise<string> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.ConfigWrapper.Theme");
+    return $Call.ByID(1167934511);
 }

@@ -25,56 +25,56 @@ import * as application$0 from "../../../../../github.com/wailsapp/wails/v3/pkg/
  * CheckAccessibility 检查 macOS 辅助功能是否已授权（跨平台：非 darwin 直接返回 true）。
  */
 export function CheckAccessibility(): $CancellablePromise<boolean> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.CheckAccessibility");
+    return $Call.ByID(1415430577);
 }
 
 /**
  * CheckScreenRecording 检查 macOS 屏幕录制是否已授权（截图翻译依赖，跨平台：非 darwin 直接返回 true）。
  */
 export function CheckScreenRecording(): $CancellablePromise<boolean> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.CheckScreenRecording");
+    return $Call.ByID(3709400350);
 }
 
 /**
  * EmitHotkeysChanged 供外层（快捷键管理器）调用，广播当前生效快捷键清单。
  */
 export function EmitHotkeysChanged(active: string[] | null): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.EmitHotkeysChanged", active);
+    return $Call.ByID(2762446195, active);
 }
 
 /**
  * GetVersion 返回应用版本。
  */
 export function GetVersion(): $CancellablePromise<string> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.GetVersion");
+    return $Call.ByID(240241073);
 }
 
 /**
  * OpenAccessibilitySettings 打开系统辅助功能设置面板（仅 darwin 生效）。
  */
 export function OpenAccessibilitySettings(): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.OpenAccessibilitySettings");
+    return $Call.ByID(1595068374);
 }
 
 /**
  * OpenScreenRecordingSettings 弹系统「屏幕录制」授权框（仅 darwin 生效）。
  */
 export function OpenScreenRecordingSettings(): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.OpenScreenRecordingSettings");
+    return $Call.ByID(61251697);
 }
 
 /**
  * ScreenshotOCR 截图 OCR（无参，使用默认 OCR 引擎，委托 translate.Service）。
  */
 export function ScreenshotOCR(): $CancellablePromise<model$0.OcrResult | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.ScreenshotOCR");
+    return $Call.ByID(3108408259);
 }
 
 /**
  * SetApp 在 app 就绪后注入（启动编排阶段）。
  */
 export function SetApp(app: application$0.App | null): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.SetApp", app);
+    return $Call.ByID(2741950910, app);
 }
 
 /**
@@ -82,12 +82,12 @@ export function SetApp(app: application$0.App | null): $CancellablePromise<void>
  * 作为全局 HTTP 请求的默认 User-Agent（经 useragent 包注入到各引擎的 http.Client）。
  */
 export function SetUserAgent(ua: string): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.SetUserAgent", ua);
+    return $Call.ByID(587101401, ua);
 }
 
 /**
  * TranslateMulti 批量翻译（委托 translate.Service，供前端 AppService.TranslateMulti 调用）。
  */
 export function TranslateMulti(req: model$0.TranslateRequest): $CancellablePromise<model$0.TranslateMultiResult | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.AppService.TranslateMulti", req);
+    return $Call.ByID(787669562, req);
 }

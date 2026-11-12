@@ -19,26 +19,26 @@ import * as $models from "./models.js";
  * ClearHistory 清空历史。
  */
 export function ClearHistory(): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.HistoryWrapper.ClearHistory");
+    return $Call.ByID(2073293877);
 }
 
 /**
  * CountHistory 返回符合关键词的历史总条数，供前端分页计算总页数。
  */
 export function CountHistory(keyword: string): $CancellablePromise<number> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.HistoryWrapper.CountHistory", keyword);
+    return $Call.ByID(534557787, keyword);
 }
 
 /**
  * DeleteHistory 删除一条历史。
  */
 export function DeleteHistory(id: number): $CancellablePromise<void> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.HistoryWrapper.DeleteHistory", id);
+    return $Call.ByID(3674865607, id);
 }
 
 /**
  * GetHistory 分页查询翻译历史。
  */
 export function GetHistory(keyword: string, offset: number, limit: number): $CancellablePromise<$models.HistoryItem[] | null> {
-    return $Call.ByName("cnb.cool/dtapp/kai/internal/service.HistoryWrapper.GetHistory", keyword, offset, limit);
+    return $Call.ByID(1672926790, keyword, offset, limit);
 }

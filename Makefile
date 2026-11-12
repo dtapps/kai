@@ -70,7 +70,7 @@ install: ## 安装前端依赖
 # -i 使用 TS 接口
 # -names 使用名称而非 ID
 bindings: ## 生成 Wails 绑定
-	wails3 generate bindings -clean=true -ts -i -names
+	wails3 generate bindings -clean=true -ts -i
 
 icons: ## 生成图标资源
 	wails3 task common:generate:icons

@@ -14,11 +14,12 @@ require (
 	github.com/go-vgo/robotgo v1.3.7
 	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
-	github.com/openai/openai-go/v3 v3.96.0
+	github.com/openai/openai-go/v3 v3.97.0
 	github.com/posthog/posthog-go v1.42.0
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.1.0
 	go.dtapp.net/library/contrib/http_log v1.0.13
+	golang.org/x/mod v0.42.0
 	golang.org/x/sys v0.49.0
 	golang.org/x/text v0.43.0
 	google.golang.org/genai v1.77.0
@@ -96,7 +97,6 @@ require (
 	golang.org/x/crypto v0.58.0 // indirect
 	golang.org/x/exp v0.0.0-20261106192419-47ce03d25ef0 // indirect
 	golang.org/x/image v0.47.0 // indirect
-	golang.org/x/mod v0.42.0 // indirect
 	golang.org/x/net v0.62.0 // indirect
 	golang.org/x/sync v0.24.0 // indirect
 	golang.org/x/term v0.47.0 // indirect

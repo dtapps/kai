@@ -8,9 +8,25 @@
 
 - 版本形如 `vMAJOR.MINOR.PATCH`，当前是 `v0.2.x`（最新 tag `v0.2.7`）。
 - 版本号目前**手动**在 Release 工作流里输入，没有从 commit 自动推导。
-- 输入只填数字部分（例如 `0.2.8`），工作流会拼成 tag `v0.2.8`；不要输入 `v0.2.8`，否则会得到 `vv0.2.8`。
-- `buildinfo.Version` 由同一个输入经 `-ldflags` 注入；`v` 只属于 tag，不属于二进制版本串。
-- 预发布用同一个工作流勾选 `prerelease`，不再有每日 Nightly。
+- 输入 `0.2.8` 与 `v0.2.8` 等价，统一归一成 tag `v0.2.8`（归一化与格式校验见 `scripts/ci/resolve-prerelease.sh`）。
+- 只允许字母、数字和 `. _ + -`；引号、分号、`@`、`/` 会被拒绝，避免拼出非法 tag 或破坏 Release 配置。
+- `buildinfo.Version` 由同一版本号经 `-ldflags` 注入，**不带** `v`；`v` 只属于 tag，不属于二进制版本串。
+- 预发布**不接受勾选**，只看版本号后缀：`v0.2.8-rc.1` / `-beta.1` / `-alpha.1` 是预发布，其余是正式版。
+- 不再有每日 Nightly。
+
+### 1.1 打包版本派生
+
+不同打包工具对版本串的格式要求不一样，派生只有一份实现（`scripts/ci/resolve-prerelease.sh` 的 `derive_packaging_versions`），工作流 `prepare` job 统一输出：
+
+| 用途                                                              | 值           | 约束                                                                                                               |
+|-------------------------------------------------------------------|--------------|--------------------------------------------------------------------------------------------------------------------|
+| tag / Release 标题 / 二进制 `buildinfo.Version`                   | `0.2.8-rc.1` | 原样，用户看到的版本                                                                                               |
+| Windows NSIS、macOS plist（`build/config.yml` 的 `info.version`） | `0.2.8`      | 必须 `X.Y.Z`。NSIS 模板自己补 `.0` 成 4 段，传 `0.2.8-rc.1` 会报 `invalid VIFileVersion format, should be X.X.X.X` |
+| deb / rpm / arch（nfpm）                                          | `0.2.8~rc.1` | 不允许 `-`：rpm 的 `Version` 字段用 `-` 分隔 Version/Release；换成 `~` 后 deb/rpm 都表示「低于正式版」             |
+
+预发布版本在 Windows 文件属性、macOS App 元数据里显示的是去掉后缀的 `0.2.8`，这是 `X.Y.Z` 限制导致的取舍；预发布标识保留在 tag、Release 标题与 App 内版本串里。
+
+改了映射先跑 `bash scripts/ci/resolve-prerelease.sh --self-test`。
 
 ## 2. 发布前检查
 
@@ -36,50 +52,71 @@ Actions → Release → Run workflow
 
 输入：
 
-| 输入           | 必填 | 说明                                     |
-|----------------|------|------------------------------------------|
-| `version`      | 是   | 数字版本，例如 `0.2.8`                   |
-| `commit`       | 否   | 要构建的提交；留空用默认分支最新提交     |
-| `prerelease`   | 否   | 勾选后发布为预发布（`prerelease: true`） |
-| `nsis_version` | 否   | NSIS 版本，留空用 `3.13`                 |
+| 输入           | 必填 | 说明                                             |
+|----------------|------|--------------------------------------------------|
+| `version`      | 是   | 版本号；预发布看后缀，例如 `0.2.8`、`0.2.8-rc.1` |
+| `commit`       | 否   | 要构建的提交；留空用默认分支最新提交             |
+| `nsis_version` | 否   | NSIS 版本，留空用 `3.13`                         |
+
+`prerelease` 输入已移除：是否预发布只由版本号后缀决定。布尔输入会和版本号打架 （曾出现 `v0.2.8-rc.1` 没勾 prerelease、正文按正式版渲染的情况）。
 
 job 顺序：
 
-1. `prepare`：生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 `GIT_COMMIT`。
+1. `prepare`：解析版本号（归一化 / 校验 / 预发布判定），生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 `GIT_COMMIT`，输出 `tag` / `prerelease` / `release_title` / `version`。
 2. `build`：矩阵构建 4 个组合。
-3. `release`：汇总产物、生成 `SHA256SUMS` 与发布说明、发布 GitHub Release。
+3. `release`：汇总产物 → 校验版本号与 tag（tag 不存在、tag 数非零、正式版不比已有正式版旧）→ 生成 `SHA256SUMS` → 校验可发布产物数非零 → 生成发布说明 → 发布 GitHub Release。
 4. `sync-cnb` / `sync-gitee` / `sync-gitlab` / `sync-gitcode`：并行触发各平台同步。
 5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。
 
+发布说明由 `scripts/ci/render-release-body.sh` 生成，结构固定为 「预发布警示（仅预发布）→ 发布信息 → 下载 → 校验 → 更新内容」； 「更新内容」由 `scripts/ci/release-changelog.sh` 计算：rc 对 rc、beta 对 beta、正式版对正式版， 首次发某渠道时回退到上一个正式版，挑不出基准会直接让 job 失败而不是谎报「首次发布」。
+
+CNB / Gitee / GitLab / GitCode 全部镜像 GitHub 的正文，所以正文格式只改这两个脚本。 改了先本地自检：
+
+```bash
+bash scripts/ci/resolve-prerelease.sh --self-test
+sh scripts/ci/render-release-body.sh --self-test
+```
+
 构建矩阵：
 
-| Runner           | GOOS      | GOARCH  | 打包任务                  |
-|------------------|-----------|---------|---------------------------|
-| `macos-26`       | `darwin`  | `arm64` | `darwin:package`          |
-| `macos-26-intel` | `darwin`  | `amd64` | `darwin:package`          |
-| `windows-2025`   | `windows` | `amd64` | `windows:package`（NSIS） |
-| `windows-11-arm` | `windows` | `arm64` | `windows:package`（NSIS） |
+| Runner             | GOOS      | GOARCH  | 打包任务                                 |
+|--------------------|-----------|---------|------------------------------------------|
+| `macos-26`         | `darwin`  | `arm64` | `darwin:package`                         |
+| `macos-26-intel`   | `darwin`  | `amd64` | `darwin:package`                         |
+| `windows-2025`     | `windows` | `amd64` | `windows:package`（NSIS）                |
+| `windows-11-arm`   | `windows` | `arm64` | `windows:package`（NSIS）                |
+| `ubuntu-26.04`     | `linux`   | `amd64` | `linux:package`（AppImage/deb/rpm/arch） |
+| `ubuntu-26.04-arm` | `linux`   | `arm64` | `linux:package`（AppImage/deb/rpm/arch） |
 
-Linux 构建已注释掉（`release.yml` 矩阵），当前不发布 Linux 产物。
+Linux 单独成 `build-linux` job，跑在组织镜像 `ghcr.io/dtapps/golang/wails3:latest` 里（amd64 / arm64 各一份原生镜像）： 镜像已带 Go / Node / pnpm / wails3 CLI / GTK4 / WebKitGTK 6.0 / gcc，省掉原生 runner 上 apt 装依赖、setup-go、`go install wails3` 这几步的分钟级开销。macOS / Windows 用不了容器，仍在 `build` job。
 
-SQLite 驱动：Windows 用 `modernc.org/sqlite`（纯 Go，`CGO_ENABLED=0`）；macOS 用 `sqlite_mattn` + `CGO_ENABLED=1`（`EXTRA_TAGS=sqlite_mattn`）。
+容器内没有 `/dev/fuse`，靠 `APPIMAGE_EXTRACT_AND_RUN=1` 让 appimagetool 解包运行； 容器内进程是 root、工作区属主是 runner 用户，所以要先 `git config --add safe.directory`，否则 `go build` 的 VCS 盖章会失败。
+
+SQLite 驱动：Windows 用 `modernc.org/sqlite`（纯 Go，`CGO_ENABLED=0`）；macOS / Linux 用 `sqlite_mattn` + `CGO_ENABLED=1`（`EXTRA_TAGS=sqlite_mattn`）。
 
 ## 4. 产物与签名
 
 ### 4.1 产物命名
 
-| 文件                                 | 用途                   | 是否出现在 Release 下载表 |
-|--------------------------------------|------------------------|---------------------------|
-| `Kai-<v>-darwin-arm64.zip`           | macOS Apple 芯片安装包 | 是                        |
-| `Kai-<v>-darwin-amd64.zip`           | macOS Intel 安装包     | 是                        |
-| `Kai-<v>-windows-amd64-install.exe`  | Windows x64 安装包     | 是                        |
-| `Kai-<v>-windows-arm64-install.exe`  | Windows ARM64 安装包   | 是                        |
-| `updater-Kai-<v>-darwin-<arch>.zip`  | macOS 自更新包         | 否（隐藏）                |
-| `updater-Kai-<v>-windows-<arch>.zip` | Windows 自更新包       | 否（隐藏）                |
-| `SHA256SUMS`                         | 全局校验和             | 资产有，下载表不列        |
-| `BUILD_TIME` / `GIT_COMMIT`          | 仅预发布版本附带       | 资产有，下载表不列        |
+| 文件                                  | 用途                   | 是否出现在 Release 下载表 |
+|---------------------------------------|------------------------|---------------------------|
+| `Kai-<v>-darwin-arm64.zip`            | macOS Apple 芯片安装包 | 是                        |
+| `Kai-<v>-darwin-amd64.zip`            | macOS Intel 安装包     | 是                        |
+| `Kai-<v>-windows-amd64-install.exe`   | Windows x64 安装包     | 是                        |
+| `Kai-<v>-windows-arm64-install.exe`   | Windows ARM64 安装包   | 是                        |
+| `Kai-<v>-linux-<arch>.AppImage`       | Linux 便携版           | 是                        |
+| `Kai-<v>-linux-<arch>.deb`            | Debian/Ubuntu 安装包   | 是                        |
+| `Kai-<v>-linux-<arch>.rpm`            | Fedora/RHEL 安装包     | 是                        |
+| `Kai-<v>-linux-<arch>.pkg.tar.zst`    | Arch Linux 安装包      | 是                        |
+| `updater-Kai-<v>-darwin-<arch>.zip`   | macOS 自更新包         | 否（隐藏）                |
+| `updater-Kai-<v>-windows-<arch>.zip`  | Windows 自更新包       | 否（隐藏）                |
+| `updater-Kai-<v>-linux-<arch>.tar.gz` | Linux 自更新包         | 否（隐藏）                |
+| `SHA256SUMS`                          | 全局校验和             | 资产有，下载表不列        |
+| `BUILD_TIME` / `GIT_COMMIT`           | 仅预发布版本附带       | 资产有，下载表不列        |
 
 macOS 产物是 `.app` 的 zip，不是 dmg。自更新包必须是 `.app` 归档，才能保留签名。
+
+产物名里的版本段不参与平台解析：`scripts/ci/render-release-body.sh` 按「最后一个 `-darwin-` / `-windows-` / `-linux-` 段」定位平台和架构，所以版本号怎么变都不会把 `Kai-0.2.8-darwin-arm64.zip` 解析错。新增产物格式时同时更新那里的 `parse_artifact_name` / `describe_artifact`，否则会落进「附件（…），解压即用」的兜底行。
 
 ### 4.2 Windows Authenticode
 
@@ -110,15 +147,23 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 |--------|------------------------------------------------------------------|----------------------------------------------|----------|
 | CNB    | `sync-cnb` 调 `POST /-/build/start`，event `api_trigger_release` | `SYNC_CNB_TOKEN`、可选 `CNB_API_ENDPOINT`    | 跳过     |
 | Gitee  | `sync-gitee` 调 Gitee Go Webhook（eventType `kai-release`）      | `SYNC_GITEE_WEBHOOK_URL`、`SYNC_GITEE_TOKEN` | 跳过     |
-| GitLab | `sync-gitlab` 调 Trigger API，VERSION / PRERELEASE               | `SYNC_GITLAB_TRIGGER_TOKEN`                  | 跳过     |
+| GitLab | `sync-gitlab` 调 Trigger API，只传 VERSION                       | `SYNC_GITLAB_TRIGGER_TOKEN`                  | 跳过     |
 | Gitea  | 无 Release 同步，只作代码镜像                                    | —                                            | —        |
 
-- CNB 侧 `.cnb.yml` 的 `api_trigger_release` 会下载 GitHub 产物、删除同名 Release/Tag、重建 Release 并上传附件。
+- CNB 侧 `.cnb.yml` 的 `api_trigger_release` 会下载 GitHub 产物、删除同名 Release/Tag、重建 Release 并上传附件；是否预发布同样由版本号后缀推导（`pre_release` 传了也不采信）。
 - GitLab 侧 `.gitlab-ci.yml` 的 `release` job 把附件传到 Generic Package Registry，再建 Release 与直链。
 - Gitee 侧 `.workflow/release.yml` 由 Webhook 拉起，负责把资产搬到 Gitee Release。
 - 所有同步 job 都“尽力而为”：失败只打 `::warning::`，不回滚 GitHub Release。
 
 > **GitCode 当前不发布**：仓库里仍保留 `sync-gitcode` job 与 `.gitcode/workflows/release.yml`，但它们不在当前发布链路中；文档与发布 checklist 均按 GitHub / CNB / GitLab / Gitee 四个平台执行。
+
+四端一致性约定（改任何一端都要对照这张表）：
+
+- **预发布**：只看版本号后缀，不接受人工勾选；各端都不再接收 `PRERELEASE` / `pre_release` 布尔值。
+- **标题**：统一 `Kai <tag>`，预发布追加 `(预发布)`（GitLab Release 没有 prerelease 字段，只能靠标题体现）。
+- **附件名**：与 GitHub 逐字一致（`Kai-0.2.8-darwin-arm64.zip`，版本段不带 `v`）。
+- **正文**：全部镜像 GitHub 正文，只替换各自平台的链接；Gitee 的插件只能存纯文本，正文里的链接会退化成文字。
+- **附件清单**：CNB / GitLab / GitCode 全量搬运；Gitee 走白名单（9 项），预发布时不含 `BUILD_TIME` / `GIT_COMMIT`（白名单无法按条件增减，列进去会让正式版失败）。
 
 ## 6. 更新源与产物对应
 
@@ -131,20 +176,25 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 ## 7. 回滚与补发
 
 1. GitHub：`gh release delete v<version> --yes --cleanup-tag`，或页面上删除 Release 与 tag。
-2. 用同一版本号重跑 Release 工作流；工作流会先删除同名旧 Release（`--cleanup-tag`）再发布。
-3. 镜像平台：CNB 会删旧 Release/Tag 再重建；GitLab 会删旧 Release 但保留 tag；Gitee 按页面删除后重跑同步。
+2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`校验版本号与 tag` 步骤发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。
+3. 镜像平台：CNB 幂等重建（删旧 Release/Tag 再上传，tag 唯一性由 GitHub 侧保证）；GitLab 会删旧 Release 但保留 tag；Gitee 按页面删除后重跑同步。
 4. 只想补发某个镜像：单独重跑对应 job 或手动触发其工作流；不要重新构建 GitHub Release，除非产物本身要换。
 
 ## 8. 已知缺口（发布前务必核对）
 
-- `prepare` job 只声明了 `build_time` / `git_commit` 两个 output（`release.yml:51`），但「同步版本到构建资源」步骤引用了 `needs.prepare.outputs.version`（`release.yml:372`）。该表达式当前解析为空，可能把 `build/config.yml` 的 `info.version` 写成空值，进而影响 `Info.plist` 的 `CFBundleShortVersionString`。二进制内的 `Version` 由 `BUILD_ARGS` 的 `VERSION` 正确注入，但 App 包元数据需要发布后抽查。
-- `build/config.yml` 的初始 `info.version` 是 `0.0.1`；发版前手动改成目标版本，或确认工作流已正确覆盖。
+- `build/config.yml` 的初始 `info.version` 是 `0.0.1`；工作流会用 `prepare` 输出的 `version` 覆盖它，但 App 包内的 `Info.plist` 仍建议发布后抽查。
 - `scripts/get-build-time.sh` 生成的是 UTC RFC3339；预发布比较依赖这个格式，不要手改成其它格式。
-- Release 说明的「更新内容」取 `git log <prev_tag>..HEAD`；如果 tag 顺序不规范，说明会不准。
+- 「更新内容」只认 `vX.Y.Z` / `vX.Y.Z-<rc|beta|alpha>.N` 形式的 tag；命名不合规的 tag 不会进入对比基准。
+- tag 必须拉全（`release` job 的 `fetch-depth: 0`）：一个 tag 都没有时工作流直接失败，而不是发出一份「首次发布」的错误正文。
+- 版本号比已有正式版旧、或 tag 已存在时，`release` job 会在发布前失败，需要先手工清理旧 tag 再重跑。
+- Linux 包元数据版本由 `build/linux/Taskfile.yml` 的 `generate:*` 任务注入到 `nfpm.yaml` 的 `${VERSION}`：优先用 `VERSION_PKG`（`~` 代替 `-`），退回 `VERSION`，都没有时是 `0.0.0`（见 §1.1）。
+- Linux 打包在 `ghcr.io/dtapps/golang/wails3:latest` 容器里跑，镜像自带 GTK4 + WebKitGTK 6.0 + gcc；appimagetool 靠 `APPIMAGE_EXTRACT_AND_RUN=1` 免 FUSE 运行。镜像若未包含 aarch64 版 appimagetool，`build-linux` 的 arm64 腿会在打包阶段失败。
 
 ## 9. 发布后验证清单
 
-- [ ] GitHub Release 有 4 个安装包 + 2/4 个 `updater-` 包 + `SHA256SUMS`（预发布另有 `BUILD_TIME` / `GIT_COMMIT`）。
+- [ ] GitHub Release 有 12 个安装包（macOS 2 / Windows 2 / Linux 8）+ 6 个 `updater-` 包 + `SHA256SUMS`（预发布另有 `BUILD_TIME` / `GIT_COMMIT`）。
+- [ ] 正文含「发布信息」表（版本号 / 发布类型 / 提交 / 构建时间）与「校验」节，且 `updater-` 包、`BUILD_TIME`、`GIT_COMMIT` 没有出现在下载表格里。
+- [ ] 预发布版本的 Release 标题带「(预发布)」且勾选了 Pre-release；正式版两者都不带。
 - [ ] 下载 macOS arm64 包，`unzip` 后 `Kai.app` 能启动；`defaults read .../Info.plist CFBundleShortVersionString` 与版本一致。
 - [ ] 下载 Windows 安装包，安装后 `Kai.exe` 能启动，版本号正确。
 - [ ] 托盘「检查更新」能识别新版本；预发布版本能被预发布通道识别。

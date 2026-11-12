@@ -9,7 +9,9 @@
 #                           只有补发历史版本才需要填，**带不带 v 都行**（v1.2.3 / 1.2.3），脚本自己归一化
 #   - KAI_GITHUB_TOKEN      可选，GitHub 只读令牌，仅用于避开 api.github.com 60 次/小时匿名限额
 #                           （与 .cnb.yml / GitLab / GitCode 同名，源头是 cnb.cool/dtapp/envs 的 github.yml）
-#   - PRERELEASE            可选，填 true / false 强制指定预发布；不建则自动判断
+#
+# 没有预发布开关：是否预发布只看版本号后缀（与 GitHub / CNB / GitCode 同口径），
+# 不再提供 PRERELEASE 全局参数，避免人工值把 rc 版本标成正式版。
 #
 # 正文：download-stage 请求 GitHub API 拿到 release.body（markdown），
 # 用 marked 转成 HTML，处理后压成单行写进 GITEE_PARAMS 的 RELEASE_BODY，
@@ -24,9 +26,9 @@
 #      → 块级元素之间插 <!--/-->，用注释里的 / 把路径切成短段，走 ENOENT 降级；
 #   3. KEY=VALUE 不能跨行 → 拼成单行，HTML 交给 Gitee 渲染。
 #
-# 预发布：默认按 GitHub 的 prerelease 字段判断，并用 tag 后缀（-rc/-beta/-alpha）
-# 和正文里的「预发布 / Pre-release」等字样兜底；结果写入 GITEE_PARAMS，
-# 由 release-stage 的 prerelease: ${PRERELEASE} 取用。
+# 预发布：只看版本号后缀（-rc/-beta/-alpha），与 GitHub / CNB / GitCode 同口径；
+# 后缀判不出来时才退回 GitHub Release 的 prerelease 字段（补发历史版本等场景）。
+# 结果写入 GITEE_PARAMS，由 release-stage 的 prerelease: ${PRERELEASE} 取用。
 #
 # 两个 stage 的职责（stage 之间串行；同一 stage 内的 step 是并行的）：
 #   1) download-stage  build@nodejs —— 云端容器（ubuntu:plugin-24，没有 python3，脚本只用 node 内置模块），
@@ -68,9 +70,6 @@ strategy:
 ref_variable:
   - VERSION
   - KAI_GITHUB_TOKEN
-  # 预发布开关，可选。填 true / false 就强制指定；不建这个参数也没关系，
-  # 脚本会按 GitHub 的 prerelease 字段自动判断。
-  - PRERELEASE
   # Release 正文。download-stage 用 marked 把 GitHub 的 body 转成单行 HTML
   # 写进 GITEE_PARAMS，下游 description: ${RELEASE_BODY} 取值。
   - RELEASE_BODY
@@ -107,12 +106,6 @@ stages:
               echo "VERSION 为空：按 GitHub 最新 Release 自动判定"
               echo "     想指定版本：全局参数 VERSION 填 v0.2.19，或 Webhook 的 payload.params 里带 VERSION"
             fi
-
-            # 预发布开关：全局参数 PRERELEASE 可选，填 true / false 则强制指定，
-            # 不配（或值不是这两种）就由脚本按 GitHub 的 prerelease 字段自动判断。
-            # 用 printenv 而不是直接展开：参数没建时平台不做插值，留下的是字面 ${...}，
-            # 直接展开会把占位符塞进脚本，这里读出来再在 node 里判掉。
-            export PRERELEASE_MANUAL="$(printenv PRERELEASE 2>/dev/null || true)"
 
             # 正文转换依赖：marked 把 markdown 转 HTML。走 npmmirror 国内镜像，
             # 装到当前工作目录，下面的 stdin 脚本按 cwd 解析 require('marked')。
@@ -339,8 +332,7 @@ stages:
               return readText(relUrl).then(async function (raw) {
                 const rel = JSON.parse(raw);
                 // 未指定版本时用 tag_name 回填，并写回 GITEE_PARAMS 的 VERSION ——
-                // 下游 releaseName / tagName / assertFiles 都是 VERSION 插值，
-                // 不回填的话文件名会变成 Kai--darwin-amd64.zip。
+                // 下游 tagName 用它插值；不回填会发出一个空 tag 的 Release。
                 if (!TAG) {
                   TAG = String(rel.tag_name || '').trim();
                   if (!TAG) {
@@ -397,36 +389,56 @@ stages:
                 // 而不是 ENAMETOOLONG 直接崩掉。
                 // 不能再用 <!--/-->：实测平台会把 HTML 注释删掉、把 // 压成 /，
                 // 分隔符被清掉后整串又变成一个超长分量（8:30 那次就是这么崩的）。
-                // 切分只落在「标签」与「文本」的边界上，不会把多字节汉字或标签切断。
                 function withBreaks(block, LIMIT) {
                   const tokens = block.match(/<[^>]*>|[^<]+/g) || [];
                   let out = '', size = 0;
+                  // 平台是按「/」切片的，只有 <br/> 自带的 / 才算分隔符。三处细节：
+                  //   1) 切在 <br/> 的 / 上时，前半段末尾会带上 "<br"（3 字节），
+                  //      后半段开头会带上 ">"（1 字节），所以每段内容最多占 LIMIT - 4；
+                  //   2) 标签（<p>、</td>、<strong>）本身不含 /，会算进同一片段，
+                  //      所以写标签前也要检查一次，否则「196 字节文本 + <p>」就是 199 字节；
+                  //   3) 文本按 UTF-8 字符边界回退，不会切出半个汉字。
+                  const BUDGET = LIMIT - '<br>'.length;
+                  function push(seg) {
+                    const n = Buffer.byteLength(seg, 'utf8');
+                    if (size + n > BUDGET) { out += '<br/>'; size = 0; }
+                    out += seg;
+                    size += n;
+                  }
                   for (const t of tokens) {
                     if (t.charAt(0) === '<') {
-                      out += t;
-                      size += Buffer.byteLength(t, 'utf8');
-                    } else {
-                      let buf = Buffer.from(t, 'utf8');
-                      while (buf.length > 0) {
-                        if (size >= LIMIT) { out += '<br/>'; size = 0; continue; }
-                        let end = Math.min(LIMIT - size, buf.length);
-                        // 往回退到 UTF-8 字符边界，避免切出乱码
-                        while (end > 0 && (buf[end] & 0xc0) === 0x80) end--;
-                        out += buf.slice(0, end).toString('utf8');
-                        size += end;
-                        buf = buf.slice(end);
-                      }
+                      push(t);
+                      continue;
                     }
-                    if (size >= LIMIT) { out += '<br/>'; size = 0; }
+                    let buf = Buffer.from(t, 'utf8');
+                    while (buf.length > 0) {
+                      if (size >= BUDGET) { out += '<br/>'; size = 0; continue; }
+                      let end = Math.min(BUDGET - size, buf.length);
+                      // 往回退到 UTF-8 字符边界，避免切出乱码
+                      while (end > 0 && (buf[end] & 0xc0) === 0x80) end--;
+                      // 剩余空间放不下一个完整字符（size 卡在 195、下一个是 3 字节汉字）时
+                      // end 会退到 0：这里必须换行，否则 buf 不变、size 不涨，成了死循环。
+                      if (end === 0) { out += '<br/>'; size = 0; continue; }
+                      out += buf.slice(0, end).toString('utf8');
+                      size += end;
+                      buf = buf.slice(end);
+                    }
                   }
                   return out;
                 }
-                const oneLine = notesHtml
-                  .split('\n')
-                  .map(function (l) { return l.trim(); })
-                  .filter(Boolean)
-                  .map(function (l) { return withBreaks(l, 200); })
-                  .join('');
+                // 先把所有行拼成一条，再整体分段 —— 不能逐行 withBreaks 后 join：
+                // 逐行处理时 size 每行都从 0 重新计，行尾不满 200 就不插 <br/>，
+                // 多行拼起来就是一个超长、且不含 '/' 的片段（实测 540 字节），
+                // 平台按「/」切分后仍拿到超长分量，open 时报 file name too long。
+                // 整段处理时 size 跨行累计，才会在行与行的接缝处补 <br/>。
+                const oneLine = withBreaks(
+                  notesHtml
+                    .split('\n')
+                    .map(function (l) { return l.trim(); })
+                    .filter(Boolean)
+                    .join(''),
+                  200
+                );
                 if (oneLine.indexOf('=') !== -1) {
                   throw new Error('正文里还有裸 =，会被参数解析截断');
                 }
@@ -442,22 +454,23 @@ stages:
                   notes.length + ' 字符 → 单行 HTML ' + oneLine.length + ' 字符' +
                   '（无裸 =，最长路径片段 ' + longest + ' 字节）');
 
-                // 预发布标记：全局参数 PRERELEASE 显式指定时最优先；否则
-                // GitHub 的 prerelease 字段最权威，再叠加 tag 后缀和正文关键词兜底。
+                // 预发布判定：只看版本号后缀（与 GitHub / CNB / GitCode 同口径）。
+                // VERSION 留空时 VER 由 /releases/latest 的 tag_name 回填，后缀照样能判；
+                // 后缀判不出来才退回 GitHub Release 的 prerelease 字段（补发历史版本时的兜底）。
+                // 不接受人工指定的布尔值：全局参数会和版本号打架。
                 // 结果写进 GITEE_PARAMS，供下游 prerelease 字段插值（布尔）。
-                const manual = (process.env.PRERELEASE_MANUAL || '').trim().toLowerCase();
                 const preByTag = /[-.](rc|beta|alpha|pre|preview)\d*(\.|\b)/i.test(VER);
-                const preByBody = /(预发布|测试版|抢先版|pre-?release|release candidate)/i.test(body);
-                let PRE;
-                if (manual === 'true' || manual === 'false') {
-                  PRE = manual === 'true';
-                  console.log('预发布：按全局参数 PRERELEASE=' + manual + ' 指定');
-                } else {
-                  PRE = rel.prerelease === true || preByTag || preByBody;
-                  console.log('预发布：' + PRE + '（GitHub prerelease=' + rel.prerelease +
-                    '，tag 后缀=' + preByTag + '，正文关键词=' + preByBody + '）');
-                }
+                const PRE = preByTag || rel.prerelease === true;
+                console.log('预发布：' + PRE + '（tag 后缀=' + preByTag +
+                  '，GitHub prerelease=' + rel.prerelease + '）');
                 fs.appendFileSync(pf, 'PRERELEASE=' + (PRE ? 'true' : 'false') + '\n', 'utf8');
+
+                // Release 标题与 GitHub / CNB 同口径：项目名 + tag，预发布加后缀。
+                // ASSET_VER 是**不带 v** 的版本段：GitHub 的附件名是 Kai-0.2.8-...，
+                // assertFiles 用它拼文件名，保证与 GitHub / CNB / GitLab / GitCode 逐字一致。
+                const title = 'Kai ' + TAG + (PRE ? ' (预发布)' : '');
+                fs.appendFileSync(pf, 'RELEASE_TITLE=' + title + '\n', 'utf8');
+                fs.appendFileSync(pf, 'ASSET_VER=' + VER + '\n', 'utf8');
 
                 // 落盘名直接用 GitHub 资产原名，目录上传不看名字，
                 // 所以附件名能和 GitHub / CNB / GitLab 逐字一致。
@@ -468,11 +481,11 @@ stages:
                 const total = assets.length;
                 let seq = 0;
 
-                // GitHub 资产名里的版本段不带 v（Kai-0.2.19-darwin-amd64.zip），
-                // 而下游 assertFiles 用 VERSION 参数拼文件名。两者必须一致，
-                // 所以落盘时把版本段统一替换成 VERSION 原文（带 v 就带 v）。
+                // 附件名保持 GitHub 原名（Kai-0.2.19-darwin-amd64.zip），不再把版本段
+                // 改写成 VERSION 原文（带 v 会变成 Kai-v0.2.19-...，与另外三端不一致）。
+                // 下游 assertFiles 用不带 v 的 ASSET_VER 拼名，两边逐字对齐。
                 function localName(name) {
-                  return name.split('Kai-' + VER).join('Kai-' + RAW);
+                  return name;
                 }
 
                 function downloadOne(asset) {
@@ -535,9 +548,11 @@ stages:
       - step: release@gitee
         name: release_gitee
         displayName: 创建 Gitee Release 并上传附件
+        # 标题与 GitHub / CNB 同口径（Kai v0.2.8 / Kai v0.2.8 (预发布)），
+        # download-stage 判定后写进 GITEE_PARAMS，这里插值取用。
+        releaseName: ${RELEASE_TITLE}
         # tag 直接用 VERSION 原文（填 v0.2.19 就是 v0.2.19）。
         # 这里不能写 v${VERSION}：VERSION 已带 v 时会拼成 vv0.2.19。
-        releaseName: ${VERSION}
         tagName: ${VERSION}
         # 正文取自全局参数 RELEASE_BODY：download-stage 用 marked 把 GitHub 的 body
         # 转成 HTML，处理掉 = 和超长分量后写成单行，经 GITEE_PARAMS 到这里插值。
@@ -547,29 +562,38 @@ stages:
           - GH_ASSETS
         # 必须逐个列文件名。插件不支持目录：填 assets 会把整个目录压成
         # assets.tar.gz 去上传，然后 400 失败。
-        # 文件名里的版本段用 ${VERSION}，与脚本落盘名保持一致。
+        # 文件名里的版本段用 ${ASSET_VER}（**不带 v**），与 GitHub 资产原名逐字一致；
+        # 不能用 ${VERSION}：那是 tag 原文，填 v0.2.8 时拼出的 Kai-v0.2.8-... 在 assets/ 里不存在。
         #
         # 清单必须与 .github/workflows/release.yml 的 matrix 逐平台对齐：
-        # 当前只构建 darwin / windows（amd64 + arm64），Linux 那几行在 release.yml 里是注释掉的，
-        # 所以这里不列 .AppImage / .deb / .rpm / .pkg.tar.zst —— 列了就是重启 Linux 构建时才有的文件，
-        # 会让每次发版都在 assert 阶段失败。等 Linux 放开时两边一起加。
+        # darwin(amd64+arm64) / windows(amd64+arm64) / linux(amd64+arm64)。
+        # GitHub 侧增减任何产物，这里都要跟着改，否则 Gitee 会在 assert 阶段失败。
         #
         # BUILD_TIME / GIT_COMMIT 不列：release.yml 只在**预发布**时才生成这两个文件，
         # 列进来会让正式版必然失败（正式版只有 SHA256SUMS）。
         assertFiles:
-          - assets/Kai-${VERSION}-darwin-amd64.zip
-          - assets/Kai-${VERSION}-darwin-arm64.zip
-          - assets/Kai-${VERSION}-windows-amd64-install.exe
-          - assets/Kai-${VERSION}-windows-arm64-install.exe
-          - assets/updater-Kai-${VERSION}-darwin-amd64.zip
-          - assets/updater-Kai-${VERSION}-darwin-arm64.zip
-          - assets/updater-Kai-${VERSION}-windows-amd64.zip
-          - assets/updater-Kai-${VERSION}-windows-arm64.zip
+          - assets/Kai-${ASSET_VER}-darwin-amd64.zip
+          - assets/Kai-${ASSET_VER}-darwin-arm64.zip
+          - assets/Kai-${ASSET_VER}-windows-amd64-install.exe
+          - assets/Kai-${ASSET_VER}-windows-arm64-install.exe
+          - assets/Kai-${ASSET_VER}-linux-amd64.AppImage
+          - assets/Kai-${ASSET_VER}-linux-arm64.AppImage
+          - assets/Kai-${ASSET_VER}-linux-amd64.deb
+          - assets/Kai-${ASSET_VER}-linux-arm64.deb
+          - assets/Kai-${ASSET_VER}-linux-amd64.rpm
+          - assets/Kai-${ASSET_VER}-linux-arm64.rpm
+          - assets/Kai-${ASSET_VER}-linux-amd64.pkg.tar.zst
+          - assets/Kai-${ASSET_VER}-linux-arm64.pkg.tar.zst
+          - assets/updater-Kai-${ASSET_VER}-darwin-amd64.zip
+          - assets/updater-Kai-${ASSET_VER}-darwin-arm64.zip
+          - assets/updater-Kai-${ASSET_VER}-windows-amd64.zip
+          - assets/updater-Kai-${ASSET_VER}-windows-arm64.zip
+          - assets/updater-Kai-${ASSET_VER}-linux-amd64.tar.gz
+          - assets/updater-Kai-${ASSET_VER}-linux-arm64.tar.gz
           - assets/SHA256SUMS
         # 预发布：download-stage 判定后写入 GITEE_PARAMS，这里插值取 true / false。
-        # 判定优先级：GitHub 的 prerelease 字段 > tag 后缀（-rc/-beta/-alpha）> 正文关键词。
-        # 想强制指定，就在流水线全局参数里新建 PRERELEASE（值为 true 或 false），
-        # 脚本会优先用它（见下方 download-stage 的 preManual 判断）。
+        # 判定口径与 GitHub 一致：版本号后缀（-rc/-beta/-alpha）为准，判不出来才看
+        # GitHub Release 的 prerelease 字段。不再有可手工覆盖的全局参数。
         prerelease: ${PRERELEASE}
         # 同 tag 已存在时覆盖，代替之前手写的「先删旧 Release」
         allowUpdate: true

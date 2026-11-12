@@ -1,7 +1,23 @@
 # 发布工作流
-# 手动触发，输入版本号后自动构建四个构建组合（darwin/windows × amd64/arm64）并发布 GitHub Release，
+#
+# 手动触发，输入版本号后自动构建六个组合（macOS / Windows 跑原生 runner，Linux 跑统一容器镜像），
+# 并发布 GitHub Release，
 # 随后触发 CNB / Gitee / GitLab 三个平台的发布同步（各自 secret 未配置则跳过）；
 # GitCode 同步 job 保留，但当前发布链路只覆盖上述三个平台；Gitea 仅作代码镜像、不发布 Release。
+#
+# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+#   1.2.3          -> 正式版，Release 不勾选 prerelease
+#   v1.2.3         -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
+#   1.2.3-rc.1     -> 预发布，Release 勾选 prerelease
+#   1.2.3-beta.1   -> 预发布
+#   1.2.3-alpha.1  -> 预发布
+#
+# 「是不是预发布」不接受人工勾选，只看版本号后缀：布尔输入会和版本号打架
+# （曾经出现 v0.2.8-rc.1 没勾 prerelease、正文按正式版渲染的情况）。
+#
+# Release 正文（下载表格 / 校验说明 / 更新内容）由 scripts/ci/render-release-body.sh 生成，
+# 更新内容由 scripts/ci/release-changelog.sh 按渠道计算；CNB / Gitee / GitLab / GitCode 都镜像
+# GitHub 正文，所以格式只在这一处维护。
 # https://github.com/actions/runner-images
 # https://github.com/actions/checkout
 # https://github.com/actions/cache
@@ -18,7 +34,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: '版本号（例如 1.0.0）'
+        description: '版本号。预发布看后缀：0.2.8-rc.1 / 0.2.8-beta.1 / 0.2.8-alpha.1；没有后缀就是正式版'
         required: true
         type: string
       commit:
@@ -26,11 +42,6 @@ on:
         required: false
         type: string
         default: ''
-      prerelease:
-        description: '标记为预发布版本'
-        required: false
-        type: boolean
-        default: false
       nsis_version:
         description: 'NSIS 版本号（例如 3.13，留空用默认 3.13）'
         required: false
@@ -51,24 +62,67 @@ concurrency:
   queue: max
 
 jobs:
-  # 统一生成构建参数（BUILD_TIME / GIT_COMMIT），确保「所有平台注入的 build_time」
+  # 统一解析版本号并生成构建参数（BUILD_TIME / GIT_COMMIT / 归一化 tag / 预发布标志），
+  # 确保「所有平台注入的 build_time」与「Release 正文里写的构建时间」完全一致。
   prepare:
     runs-on: ubuntu-latest
     outputs:
       build_time: ${{ steps.gen.outputs.build_time }}
       git_commit: ${{ steps.gen.outputs.git_commit }}
+      commit_sha: ${{ steps.gen.outputs.commit_sha }}
+      version: ${{ steps.gen.outputs.version }}
+      # 打包平台专用版本：X.Y.Z（Windows NSIS / macOS plist）与 X.Y.Z~rc.1（deb/rpm/arch）
+      version_base: ${{ steps.gen.outputs.version_base }}
+      version_pkg: ${{ steps.gen.outputs.version_pkg }}
+      tag: ${{ steps.gen.outputs.tag }}
+      prerelease: ${{ steps.gen.outputs.prerelease }}
+      release_title: ${{ steps.gen.outputs.release_title }}
     steps:
       - name: 检出代码
         uses: actions/checkout@v7
         with:
           ref: ${{ inputs.commit || github.sha }}
-      - name: 生成构建参数
+      - name: 解析版本号（归一化 + 预发布判定）
         id: gen
         shell: bash
+        env:
+          VERSION: ${{ inputs.version }}
         run: |
-          echo "build_time=$(bash scripts/get-build-time.sh)" >> $GITHUB_OUTPUT
-          echo "git_commit=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+          set -euo pipefail
 
+          # 归一化（补 v 前缀）/ 格式校验 / 预发布判定的唯一实现，
+          # CNB 的 .cnb.yml 也 source 这一份，避免两边口径跑偏。
+          # shellcheck source=scripts/ci/resolve-prerelease.sh
+          . scripts/ci/resolve-prerelease.sh
+          # 版本号为空或含非法字符（引号/分号/@ 等，会破坏 tag 与 Release 配置）时返回 1，
+          # 让 job 直接失败，而不是打出 :v 这种非法 tag。
+          resolve_version "${VERSION}"
+          echo "${PRE_NOTE}"
+
+          # 二进制里注入的 Version 不带 v（v 只属于 tag）
+          BIN_VERSION="${TAG#v}"
+
+          # 标题统一带项目名前缀，预发布在末尾标注，Release 列表里一眼能区分
+          RELEASE_TITLE="Kai ${TAG}"
+          if [ "${PRERELEASE}" = "true" ]; then
+            RELEASE_TITLE="Kai ${TAG} (预发布)"
+          fi
+
+          {
+            echo "build_time=$(bash scripts/get-build-time.sh)"
+            echo "git_commit=$(git rev-parse --short HEAD)"
+            echo "commit_sha=$(git rev-parse HEAD)"
+            echo "version=${BIN_VERSION}"
+            # 打包用的两个派生版本，口径见 scripts/ci/resolve-prerelease.sh 的
+            # derive_packaging_versions：NSIS/plist 只吃 X.Y.Z，deb/rpm/arch 不许有 '-'
+            echo "version_base=${VERSION_BASE}"
+            echo "version_pkg=${VERSION_PKG}"
+            echo "tag=${TAG}"
+            echo "prerelease=${PRERELEASE}"
+            echo "release_title=${RELEASE_TITLE}"
+          } >> "$GITHUB_OUTPUT"
+
+  # macOS / Windows 只能跑原生 runner，Linux 走下面的 build-linux（统一镜像，省掉 apt / go install）。
   build:
     needs: prepare
     strategy:
@@ -81,12 +135,6 @@ jobs:
           - os: macos-26-intel
             goos: darwin
             goarch: amd64
-          # - os: ubuntu-26.04
-          #   goos: linux
-          #   goarch: amd64
-          # - os: ubuntu-26.04-arm
-          #   goos: linux
-          #   goarch: arm64
           - os: windows-2025
             goos: windows
             goarch: amd64
@@ -131,7 +179,8 @@ jobs:
         shell: bash
         run: |
           echo "BUILD_TIME=${{ needs.prepare.outputs.build_time }}"
-          echo "VERSION=${{ inputs.version }}"
+          echo "VERSION=${{ needs.prepare.outputs.version }}"
+          echo "TAG=${{ needs.prepare.outputs.tag }} (prerelease=${{ needs.prepare.outputs.prerelease }})"
           echo "GIT_COMMIT=${{ needs.prepare.outputs.git_commit }}"
           echo "PLATFORM=${{ matrix.goos }}/${{ matrix.goarch }}"
 
@@ -141,23 +190,6 @@ jobs:
           echo "操作系统: $(uname -a)"
           echo "内核版本: $(uname -r)"
           cat /etc/os-release 2>/dev/null || sw_vers 2>/dev/null || ver 2>/dev/null || true
-
-      # 缓存 apt 已下载的 .deb 包，避免每次 apt-get install 重新从源拉取
-      # libgtk-4-dev / libwebkitgtk-6.0-dev 等大依赖（ubuntu runner 有效）。
-      - name: 缓存 apt 包
-        if: ${{ runner.os == 'Linux' }}
-        uses: actions/cache@v6
-        with:
-          path: /var/cache/apt/archives
-          key: apt-${{ runner.os }}-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            apt-${{ runner.os }}-
-
-      - name: 安装系统依赖
-        if: ${{ runner.os == 'Linux' }}
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: 安装 Go
         uses: actions/setup-go@v7
@@ -343,7 +375,7 @@ jobs:
 
       # 固定 SQLite 驱动策略（不提供手动选择）：
       # - Windows 平台使用 modernc（纯 Go，避免 CGO/MinGW 麻烦）
-      # - 其他平台（macOS / Linux）使用 mattn（CGO，性能更佳，且这些平台 runner 自带 C 编译器）
+      # - macOS 使用 mattn（CGO）；Linux 在 build-linux job 里硬编码同一策略（镜像自带 gcc）
       # 将 EXTRA_TAGS / CGO_FLAG 写入 $GITHUB_ENV，供后续构建与打包步骤复用。
       - name: 配置 SQLite 驱动
         env:
@@ -375,8 +407,13 @@ jobs:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
         run: |
-          sed -i.bak -E "s/^([[:space:]]*)version:[[:space:]]*\"[^\"]*\"/\1version: \"${{ needs.prepare.outputs.version }}\"/" build/config.yml && rm -f build/config.yml.bak
-          echo "✔ build/config.yml 版本号已同步为 ${{ needs.prepare.outputs.version }}"
+          # 这里必须写**不带后缀的三段数字**（version_base），不能用 version：
+          # info.version 会流到 Windows NSIS 的 VIProductVersion（模板自己补 ".0"，要求 4 段纯数字，
+          # "0.2.8-rc.1" 会拼成 0.2.8-rc.1.0 → makensis 报 invalid VIFileVersion format）
+          # 和 macOS 的 CFBundleShortVersionString（同样只接受 X.Y.Z）。
+          # 用户看到的预发布标识在 tag / Release 标题 / 二进制内 buildinfo.Version 里。
+          sed -i.bak -E "s/^([[:space:]]*)version:[[:space:]]*\"[^\"]*\"/\1version: \"${{ needs.prepare.outputs.version_base }}\"/" build/config.yml && rm -f build/config.yml.bak
+          echo "✔ build/config.yml 版本号已同步为 ${{ needs.prepare.outputs.version_base }}"
 
       # 生成图标资源（icns/ico/Assets.car）。所有平台均执行。
       - name: 生成图标资源
@@ -406,7 +443,7 @@ jobs:
           if [ -n "$EXTRA_TAGS" ]; then
             EXTRA_ARGS="EXTRA_TAGS=$EXTRA_TAGS"
           fi
-          BUILD_ARGS="PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ inputs.version }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN POSTHOG_TOKEN=$POSTHOG_TOKEN POSTHOG_PROJECT_ID=$POSTHOG_PROJECT_ID $CGO_FLAG $EXTRA_ARGS"
+          BUILD_ARGS="PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ needs.prepare.outputs.version }} VERSION_PKG=${{ needs.prepare.outputs.version_pkg }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN POSTHOG_TOKEN=$POSTHOG_TOKEN POSTHOG_PROJECT_ID=$POSTHOG_PROJECT_ID $CGO_FLAG $EXTRA_ARGS"
           echo "BUILD_ARGS=$BUILD_ARGS" >> "$GITHUB_ENV"
           echo "BUILD_ARGS=$BUILD_ARGS"
 
@@ -486,7 +523,9 @@ jobs:
       - name: 重命名产物
         shell: bash
         run: |
-          VERSION="${{ inputs.version }}"
+          # 产物名里的版本段必须与 Release 正文解析口径一致：
+          # Kai-<版本>-<os>-<arch>[-install].<ext>（见 scripts/ci/render-release-body.sh）。
+          VERSION="${{ needs.prepare.outputs.version }}"
           PLATFORM="${{ matrix.goos }}"
           ARCH="${{ matrix.goarch }}"
 
@@ -523,26 +562,8 @@ jobs:
             mv Kai-*-install.exe renamed/
           fi
 
-          # Linux: 升级专用文件（updater- 前缀，不在下载表格显示）
-          # 用 $PLATFORM 守卫，避免 macOS/Linux 通用的 kai 二进制被误判为
-          # Linux 产物（每个 matrix job 只构建一个平台）。
-          if [ "$PLATFORM" = "linux" ] && [ -f "Kai" ]; then
-            tar -czf "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.tar.gz" Kai
-            mv "updater-Kai-${VERSION}-${PLATFORM}-${ARCH}.tar.gz" renamed/
-          fi
-          # Linux: 各格式安装包（打包文件，显示在下载表格）
-          for f in *.AppImage; do
-            [ -f "$f" ] && mv "$f" "Kai-${VERSION}-${PLATFORM}-${ARCH}.AppImage" && mv Kai-*.AppImage renamed/
-          done
-          for f in *.deb; do
-            [ -f "$f" ] && mv "$f" "Kai-${VERSION}-${PLATFORM}-${ARCH}.deb" && mv Kai-*.deb renamed/
-          done
-          for f in *.rpm; do
-            [ -f "$f" ] && mv "$f" "Kai-${VERSION}-${PLATFORM}-${ARCH}.rpm" && mv Kai-*.rpm renamed/
-          done
-          for f in *.pkg.tar.zst; do
-            [ -f "$f" ] && mv "$f" "Kai-${VERSION}-${PLATFORM}-${ARCH}.pkg.tar.zst" && mv Kai-*.pkg.tar.zst renamed/
-          done
+          # Linux 产物（AppImage / deb / rpm / arch）在 build-linux job 里重命名，
+          # 这个 job 只跑 macOS / Windows，所以这里不再有 Linux 分支。
 
           # 生成本平台的 SHA256 校验和
           cd renamed
@@ -566,9 +587,167 @@ jobs:
           if-no-files-found: warn
           retention-days: 1
 
+  # Linux 单独成 job：跑在组织统一镜像里（amd64 / arm64 原生镜像），
+  # 免掉 apt 装 GTK4/WebKitGTK、setup-go、go install wails3 这几步（原生 runner 上是分钟级开销）。
+  # macOS / Windows 用不了容器，仍留在上面的 build job。
+  build-linux:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-26.04
+            goarch: amd64
+          - os: ubuntu-26.04-arm
+            goarch: arm64
+
+    runs-on: ${{ matrix.os }}
+    container:
+      # 预装了 Go / Node / pnpm / wails3 / GTK4 / WebKitGTK 6.0 / gcc
+      image: ghcr.io/dtapps/golang/wails3:latest
+
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      UPDATER_TOKEN: ${{ secrets.UPDATER_TOKEN }}
+      CNB_TOKEN: ${{ secrets.CNB_TOKEN }}
+      POSTHOG_TOKEN: ${{ secrets.POSTHOG_TOKEN }}
+      POSTHOG_PROJECT_ID: ${{ secrets.POSTHOG_PROJECT_ID }}
+      # 容器内没有 /dev/fuse：appimagetool 是 AppImage，必须解包执行
+      APPIMAGE_EXTRACT_AND_RUN: '1'
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.commit || github.sha }}
+
+      # 容器工作区是 runner 挂进来的 bind mount（属主是 runner 用户），容器内进程却是 root，
+      # 不做这一步 go build 的 VCS 盖章会因 dubious ownership 失败（日志只剩 error obtaining VCS status）。
+      - name: 让容器内的 git 可用
+        shell: bash
+        run: |
+          git config --system --add safe.directory '*' 2>/dev/null || true
+          git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
+          if git status --porcelain > /dev/null 2>&1; then
+            echo "✓ 容器内 git 可用，COMMIT=$(git rev-parse --short HEAD)"
+          else
+            echo "⚠️ 容器内 git 仍不可用"
+          fi
+
+      - name: 打印构建参数
+        shell: bash
+        run: |
+          echo "BUILD_TIME=${{ needs.prepare.outputs.build_time }}"
+          echo "VERSION=${{ needs.prepare.outputs.version }}"
+          echo "VERSION_PKG=${{ needs.prepare.outputs.version_pkg }}"
+          echo "PLATFORM=linux/${{ matrix.goarch }}"
+
+      # 镜像内 GOPATH=/go、工具在 /go/bin 且已在 PATH，缓存路径按容器内实际目录写
+      - name: 缓存 Go module
+        uses: actions/cache@v6
+        with:
+          path: /go/pkg/mod
+          key: ${{ runner.os }}-${{ matrix.goarch }}-go-mod-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-mod-
+
+      - name: 缓存 Go build 缓存
+        uses: actions/cache@v6
+        with:
+          path: ${{ format('{0}/.cache/go-build', env.HOME) }}
+          key: ${{ runner.os }}-${{ matrix.goarch }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
+
+      - name: 缓存 pnpm store
+        uses: actions/cache@v6
+        with:
+          path: /root/.local/share/pnpm/store
+          key: pnpm-${{ runner.os }}-${{ matrix.goarch }}-${{ hashFiles('frontend/pnpm-lock.yaml') }}
+          restore-keys: |
+            pnpm-${{ runner.os }}-
+
+      - name: 下载 Go 依赖
+        run: go mod download
+
+      - name: 安装前端依赖
+        run: pnpm install
+        working-directory: frontend
+
+      # 镜像带 wails3 CLI，但没有 go-task；`wails3 task` 依赖它
+      - name: 安装 go-task
+        uses: arduino/setup-task@v3
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # info.version 必须是 X.Y.Z（Linux 包用 version_pkg，见下方打包步骤）
+      - name: 同步版本到构建资源
+        shell: bash
+        run: |
+          sed -i -E "s/^([[:space:]]*)version:[[:space:]]*\"[^\"]*\"/\1version: \"${{ needs.prepare.outputs.version_base }}\"/" build/config.yml
+          grep -n 'version: "' build/config.yml
+
+      - name: 生成图标与构建资源
+        shell: bash
+        run: |
+          wails3 task common:generate:icons
+          wails3 task common:update:build-assets
+
+      # Linux 固定 mattn（CGO）+ sqlite_mattn，镜像自带 gcc；
+      # 包版本用 version_pkg（'-'→'~'），rpm 的 Version 不允许出现 '-'
+      - name: 打包（linux / ${{ matrix.goarch }}）
+        shell: bash
+        run: |
+          BUILD_ARGS="PRODUCTION=true BUILD_TIME=${{ needs.prepare.outputs.build_time }} VERSION=${{ needs.prepare.outputs.version }} VERSION_PKG=${{ needs.prepare.outputs.version_pkg }} GIT_COMMIT=${{ needs.prepare.outputs.git_commit }} GITHUB_TOKEN=$UPDATER_TOKEN CNB_TOKEN=$CNB_TOKEN POSTHOG_TOKEN=$POSTHOG_TOKEN POSTHOG_PROJECT_ID=$POSTHOG_PROJECT_ID CGO_ENABLED=1 EXTRA_TAGS=sqlite_mattn"
+          wails3 task linux:package ARCH=${{ matrix.goarch }} $BUILD_ARGS
+
+      - name: 重命名产物
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+
+          VERSION="${{ needs.prepare.outputs.version }}"
+          ARCH="${{ matrix.goarch }}"
+          # 与 scripts/ci/render-release-body.sh 的解析口径一致：Kai-<版本>-linux-<arch>.<ext>
+          BASE="Kai-${VERSION}-linux-${ARCH}"
+
+          cd bin
+          rm -rf renamed
+          mkdir -p renamed
+
+          # 升级专用包（updater- 前缀，不进下载表格）
+          tar -czf "renamed/updater-${BASE}.tar.gz" Kai
+
+          found=0
+          for pkg in *.AppImage *.deb *.rpm *.pkg.tar.zst; do
+            # .pkg.tar.zst 是双后缀，不能只取最后一个点之后
+            case "$pkg" in
+              *.pkg.tar.zst) ext=".pkg.tar.zst" ;;
+              *) ext=".${pkg##*.}" ;;
+            esac
+            mv "$pkg" "renamed/${BASE}${ext}"
+            found=1
+          done
+
+          if [ "$found" -ne 1 ]; then
+            echo "::error::未找到 linux/${ARCH} 的打包产物"
+            ls -la
+            exit 1
+          fi
+          ls -lh renamed
+
+      - name: 上传产物
+        uses: actions/upload-artifact@v7
+        with:
+          name: kai-linux-${{ matrix.goarch }}
+          path: bin/renamed/*
+          if-no-files-found: error
+          retention-days: 1
+
   # 所有平台构建完成后，发布 GitHub Release
   release:
-    needs: [build, prepare]
+    needs: [build, build-linux, prepare]
     runs-on: ubuntu-latest
 
     env:
@@ -591,6 +770,51 @@ jobs:
       - name: 显示发布文件
         run: ls -lh release/
 
+      # 发版前先把版本号这件事验干净。这几件事出错都不会让构建失败，
+      # 但会发出一个「看起来成功、内容是错的」Release：
+      #   1) tag 没拉全 → changelog 算不出基准，正文变成「首次发布」
+      #   2) tag 已经存在 → 覆盖已有 tag，历史 Release 的对比基准跟着变
+      #   3) 版本号比已有的还旧 → 正文里的 diff 是反的
+      - name: 校验版本号与 tag
+        shell: bash
+        env:
+          VERSION: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          set -euo pipefail
+          echo "版本号: ${VERSION}"
+
+          # checkout 已带 fetch-depth: 0，这里再补一次兜底
+          git fetch --tags --quiet --force || true
+          count=$(git tag -l 'v*' | wc -l | tr -d ' ')
+          echo "本地版本 tag: ${count} 个"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::一个版本 tag 都没有，changelog 会退化成「首次发布」"
+            echo "   检查 checkout 是否带 tag（fetch-depth: 0），或手动 git fetch --tags"
+            exit 1
+          fi
+
+          # tag 不能已经存在：重跑同一次发布会把 tag 挪到新提交上，
+          # 历史 Release 的对比基准跟着变。确需补发先手动删掉旧 Release + tag。
+          if git rev-parse -q --verify "refs/tags/${VERSION}" >/dev/null; then
+            echo "::error::tag ${VERSION} 已存在，不能重复发布"
+            echo "   已有指向: $(git rev-parse --short "${VERSION}")"
+            echo "   当前 HEAD: $(git rev-parse --short HEAD)"
+            echo "   确需重发：gh release delete ${VERSION} --yes --cleanup-tag，再重跑本工作流"
+            exit 1
+          fi
+          echo "✅ tag ${VERSION} 不存在，可以发布"
+
+          # 新版本必须比已有的正式版更新，否则正文里的 diff 是反的
+          if [ "${PRERELEASE}" = "false" ]; then
+            latest=$(git tag -l 'v*' | grep -Ev -- '-(rc|beta|alpha)' | grep -v '\.rc' | sort -V | tail -n 1 || true)
+            if [ -n "$latest" ] && [ "$(printf '%s\n%s\n' "$latest" "${VERSION}" | sort -V | tail -n 1)" != "${VERSION}" ]; then
+              echo "::error::版本号 ${VERSION} 比已有的正式版 ${latest} 旧"
+              exit 1
+            fi
+            echo "✅ 比上一个正式版 ${latest:-（无）} 新"
+          fi
+
       - name: 生成 SHA256SUMS
         shell: bash
         run: |
@@ -598,7 +822,7 @@ jobs:
           # 预发布版本：生成 BUILD_TIME / Git 提交 文件，供 updater 检查更新使用；
           # 文件名 GIT_COMMIT / BUILD_TIME 与 updater provider 默认 gitCommitFile / buildTimeFile 对齐。
           # 正式版不需要这两个文件（正式版通过 tag 比对来更新）。
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then
             printf '%s\n' "${{ needs.prepare.outputs.build_time }}" > BUILD_TIME
             printf '%s\n' "${{ needs.prepare.outputs.git_commit }}" > GIT_COMMIT
             echo "已生成 BUILD_TIME / GIT_COMMIT（预发布版本）"
@@ -606,7 +830,7 @@ jobs:
           # 生成 SHA256SUMS：用 GLOBIGNORE 排除自身及不纳入校验的文件，
           # 输出裸文件名（无 "./" 前缀），与 updater 解析逻辑匹配。
           rm -f SHA256SUMS
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then
             GLOBIGNORE='SHA256SUMS:BUILD_TIME:GIT_COMMIT'
           else
             GLOBIGNORE='SHA256SUMS'
@@ -620,96 +844,64 @@ jobs:
           echo "SHA256SUMS："
           cat SHA256SUMS
 
-      - name: 生成发布说明
+      # 打包没出产物就别往下走：否则会发出一个零附件的 Release，正文表格是空的，
+      # 看起来「成功」，用户点开什么都下不到。
+      - name: 校验可发布产物
         shell: bash
         run: |
-          VERSION="${{ inputs.version }}"
-          TAG="v${VERSION}"
-          REPO="${{ github.repository }}"
-          RELEASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
-
-          PREV_TAG=$(git tag --sort=-v:refname | head -2 | tail -1)
-          if [ -z "$PREV_TAG" ]; then
-            CHANGES="首次发布"
-          else
-            CHANGES=$(git log --pretty=format:"- %s" "${PREV_TAG}..HEAD" 2>/dev/null || echo "- 版本更新")
+          set -euo pipefail
+          count=$(find release -maxdepth 1 -type f \
+            ! -name 'SHA256SUMS' ! -name 'BUILD_TIME' ! -name 'GIT_COMMIT' ! -name 'updater-*' \
+            | wc -l | tr -d ' ')
+          if [ "$count" -eq 0 ]; then
+            echo "::error::release/ 里没有任何可发布的安装包，先看 build job 日志"
+            ls -lh release/ || true
+            exit 1
           fi
+          echo "可发布产物 ${count} 个"
 
-          # 生成下载表格
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
-            echo "## ⚠️ 预发布版本" > release_body.md
-            echo "" >> release_body.md
-            echo "> 这是预发布版本，可能包含未充分测试的功能。" >> release_body.md
-            echo "> 如需稳定版本，请使用 [正式发布](https://github.com/${REPO}/releases)。" >> release_body.md
-            echo "" >> release_body.md
-          else
-            echo "## 下载" > release_body.md
-            echo "" >> release_body.md
-          fi
-          echo "| 平台 | 架构 | 文件 | 大小 | 说明 |" >> release_body.md
-          echo "|------|------|------|------|------|" >> release_body.md
-
-          for f in release/*; do
-            fname=$(basename "$f")
-            [ "$fname" = "SHA256SUMS" ] && continue
-            [ -d "$f" ] && continue
-            # 升级专用文件（updater- 前缀）不在下载表格显示
-            case "$fname" in
-              updater-*) continue ;;
-            esac
-            fsize=$(ls -lh "$f" | awk '{print $5}')
-
-            # 从文件名提取平台和架构
-            PLAT=""
-            ARCH=""
-            case "$fname" in
-              *-darwin-*)  PLAT="macOS"; ARCH="${fname##*-darwin-}"; ARCH="${ARCH%%.*}" ;;
-              *-windows-*) PLAT="Windows"; ARCH="${fname##*-windows-}"; ARCH="${ARCH%%.*}" ;;
-              *-linux-*)   PLAT="Linux"; ARCH="${fname##*-linux-}"; ARCH="${ARCH%%.*}" ;;
-            esac
-
-            case "$fname" in
-              *-install.exe)
-                echo "| ${PLAT} | ${ARCH} | [${fname}](${RELEASE_URL}/${fname}) | ${fsize} | Windows 安装包 |" >> release_body.md
-                ;;
-              *.AppImage)
-                echo "| ${PLAT} | ${ARCH} | [${fname}](${RELEASE_URL}/${fname}) | ${fsize} | AppImage 便携版 |" >> release_body.md
-                ;;
-              *.deb)
-                echo "| ${PLAT} | ${ARCH} | [${fname}](${RELEASE_URL}/${fname}) | ${fsize} | Debian/Ubuntu |" >> release_body.md
-                ;;
-              *.rpm)
-                echo "| ${PLAT} | ${ARCH} | [${fname}](${RELEASE_URL}/${fname}) | ${fsize} | Fedora/RHEL |" >> release_body.md
-                ;;
-              *.pkg.tar.zst)
-                echo "| ${PLAT} | ${ARCH} | [${fname}](${RELEASE_URL}/${fname}) | ${fsize} | Arch Linux |" >> release_body.md
-                ;;
-              *.zip)
-                appname="${fname%.zip}.app"
-                echo "| ${PLAT} | ${ARCH} | [${appname}](${RELEASE_URL}/${fname}) | ${fsize} | Mac 应用 |" >> release_body.md
-                ;;
-            esac
-          done
-
-          echo "" >> release_body.md
-          echo "## 更新内容" >> release_body.md
-          echo "" >> release_body.md
-          echo "${CHANGES}" >> release_body.md
-
-      - name: 删除同名旧 Release（如果存在）
+      # 正文格式只有一份实现（scripts/ci/render-release-body.sh），
+      # 更新内容的渠道对比、分组、截断只有一份实现（scripts/ci/release-changelog.sh）。
+      - name: 生成发布说明
+        shell: bash
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.prepare.outputs.tag }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+          REPO_URL: https://github.com/${{ github.repository }}
+          COMMIT_SHA: ${{ needs.prepare.outputs.commit_sha }}
+          BUILD_TIME: ${{ needs.prepare.outputs.build_time }}
+          ARTIFACT_DIR: release
+          OUT_FILE: release_body.md
         run: |
-          TAG="v${{ inputs.version }}"
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          set -euo pipefail
+
+          # 下载基址在脚本里拼，不写进 env：整条 URL 太长，yamlfmt 会把表达式折行
+          DL_BASE="${REPO_URL}/releases/download/${VERSION}"
+          STABLE_URL="${REPO_URL}/releases/latest"
+          export DL_BASE STABLE_URL
+
+          # changelog：按渠道选对比基准（rc 对 rc、beta 对 beta、正式版对正式版；
+          # 首次发某渠道则回退到上一个正式版）。GitHub 的提交路径是 /commit/<sha>，
+          # 与 CNB 的 /-/commit 不同，前缀显式传。
+          # 脚本挑不出基准时会 exit 1（而不是谎报「首次发布」），这里显式接住。
+          if ! CHANGELOG=$(COMMIT_URL="${REPO_URL}/commit" sh scripts/ci/release-changelog.sh "${VERSION}"); then
+            echo "::error::生成更新内容失败，见上面的错误信息"
+            exit 1
+          fi
+          # 直接 export 给同一步的脚本：写 $GITHUB_ENV 只对**后续** step 生效，
+          # 本 step 里读不到，之前那样写 CHANGELOG 会是空的。
+          export CHANGELOG
+
+          sh scripts/ci/render-release-body.sh
 
       - name: 发布 Release
         uses: softprops/action-gh-release@v3
         with:
-          tag_name: v${{ inputs.version }}
-          name: v${{ inputs.version }}
+          tag_name: ${{ needs.prepare.outputs.tag }}
+          name: ${{ needs.prepare.outputs.release_title }}
           draft: false
-          prerelease: ${{ inputs.prerelease }}
+          # 版本号带 rc/beta/alpha 才勾选预发布，正式版不勾；不接受人工输入
+          prerelease: ${{ needs.prepare.outputs.prerelease }}
           body_path: release_body.md
           files: release/*
 
@@ -735,11 +927,11 @@ jobs:
           API="${CNB_API_ENDPOINT%/}"
           REPO="dtapp/kai"
           EVENT="api_trigger_release"
-          PRERELEASE="${{ inputs.prerelease }}"
+          PRERELEASE="${{ needs.prepare.outputs.prerelease }}"
           if [ "$PRERELEASE" = "true" ]; then
-            TITLE="同步预发布版 v${{ inputs.version }}"
+            TITLE="同步预发布版 ${{ needs.prepare.outputs.tag }}"
           else
-            TITLE="同步正式版 v${{ inputs.version }}"
+            TITLE="同步正式版 ${{ needs.prepare.outputs.tag }}"
           fi
 
           echo "触发 CNB 同步构建: ${API}/${REPO}/-/build/start (event=${EVENT})"
@@ -751,9 +943,8 @@ jobs:
               --arg branch "master" \
               --arg event "$EVENT" \
               --arg title "$TITLE" \
-              --arg version "v${{ inputs.version }}" \
-              --arg prerelease "${{ inputs.prerelease }}" \
-              '{branch: $branch, event: $event, title: $title, env: {version: $version, pre_release: $prerelease}}')" \
+              --arg version "${{ needs.prepare.outputs.tag }}" \
+              '{branch: $branch, event: $event, title: $title, env: {version: $version}}')" \
             "${API}/${REPO}/-/build/start")
 
           echo "CNB build/start 响应 HTTP=${HTTP}"
@@ -791,16 +982,14 @@ jobs:
 
           # VERSION 显式传过去，Gitee 端就不用再靠「取最新 Release」猜；
           # 万一 payload.params 不生效，那边的脚本会自己回落到 latest。
-          # PRERELEASE 传的是 release job 建 Release 时用的同一个 inputs.prerelease，
-          # 与之写入的 prerelease 字段天然一致，Gitee 端拿到即用，省掉再查一次 GitHub API。
-          VERSION="v${{ inputs.version }}"
-          PRERELEASE="${{ inputs.prerelease }}"
-          echo "触发 Gitee 流水线: ${VERSION}（prerelease=${PRERELEASE}）"
+          # 只传 VERSION：是否预发布由版本号后缀判定（Gitee 侧的全局参数 PRERELEASE 已移除）。
+          VERSION="${{ needs.prepare.outputs.tag }}"
+          echo "触发 Gitee 流水线: ${VERSION}"
 
           HTTP=$(curl -s -o /tmp/gitee.json -w "%{http_code}" -X POST \
             -H "Authorization: Bearer ${GITEE_TOKEN}" \
             -H "Content-Type: application/json" \
-            -d "{\"eventType\":\"kai-release\",\"payload\":{\"params\":{\"VERSION\":\"${VERSION}\",\"PRERELEASE\":\"${PRERELEASE}\"}}}" \
+            -d "{\"eventType\":\"kai-release\",\"payload\":{\"params\":{\"VERSION\":\"${VERSION}\"}}}" \
             "${GITEE_WEBHOOK_URL}")
 
           echo "Gitee webhook 响应 HTTP=${HTTP}"
@@ -816,7 +1005,8 @@ jobs:
   # 用项目级 trigger token，只触发流水线、不绑用户。
   # 令牌：GitLab 项目 → Settings → CI/CD → Pipeline trigger tokens → Add new token（形如 glptt-xxx），
   # 创建后填到 GitHub 仓库 secret SYNC_GITLAB_TRIGGER_TOKEN。
-  # 传的变量只有 VERSION / PRERELEASE —— .gitlab-ci.yml 的 rules 只认这两个，没有 EVENT。
+  # 只传 VERSION：.gitlab-ci.yml 的 rules 只看 CI_PIPELINE_SOURCE 与 VERSION，
+  # 预发布由版本号后缀判定，不再传 PRERELEASE。
   sync-gitlab:
     needs: [release, prepare]
     runs-on: ubuntu-latest
@@ -841,8 +1031,7 @@ jobs:
           HTTP=$(curl -s -o /tmp/gitlab_trigger.json -w "%{http_code}" -X POST \
             --form "token=${GITLAB_TRIGGER_TOKEN}" \
             --form "ref=${REF}" \
-            --form "variables[VERSION]=v${{ inputs.version }}" \
-            --form "variables[PRERELEASE]=${{ inputs.prerelease }}" \
+            --form "variables[VERSION]=${{ needs.prepare.outputs.tag }}" \
             "${API}/projects/${PROJ}/trigger/pipeline")
 
           echo "GitLab trigger/pipeline 响应 HTTP=${HTTP}"
@@ -882,9 +1071,8 @@ jobs:
             -H "Content-Type: application/json" \
             -d "$(jq -n \
               --arg ref "$REF" \
-              --arg version "v${{ inputs.version }}" \
-              --arg prerelease "${{ inputs.prerelease }}" \
-              '{ref: $ref, inputs: {version: $version, prerelease: $prerelease}}')" \
+              --arg version "${{ needs.prepare.outputs.tag }}" \
+              '{ref: $ref, inputs: {version: $version}}')" \
             "${API}/repos/${REPO}/actions/workflows/${WORKFLOW}/dispatches?access_token=${GITCODE_TOKEN}")
 
           echo "GitCode dispatches 响应 HTTP=${HTTP}"
@@ -926,8 +1114,8 @@ jobs:
           # 注意：URL 含 sendkey（密钥），禁止整体打印，仅打印域名避免日志泄露密钥
           echo "推送 ServerChan3 通知: ${URL%%/*}"
 
-          VERSION="${{ inputs.version }}"
-          TAG="v${{ inputs.version }}"
+          VERSION="${{ needs.prepare.outputs.version }}"
+          TAG="${{ needs.prepare.outputs.tag }}"
           BUILD_TIME="${{ needs.prepare.outputs.build_time }}"
           # 将 UTC 构建时间转换为中国时区（UTC+8）用于通知展示，SHA256SUMS 比对仍用原始 UTC。
           BUILD_TIME_CN=$(date -d "${BUILD_TIME}" -u +'%Y-%m-%d %H:%M:%S' 2>/dev/null)
@@ -937,7 +1125,7 @@ jobs:
 
           TITLE="Kai v${VERSION} 构建完成"
           TAGS="Kai|stable"
-          if [ "${{ inputs.prerelease }}" = "true" ]; then
+          if [ "${{ needs.prepare.outputs.prerelease }}" = "true" ]; then
             TITLE="Kai v${VERSION} (预发布) 构建完成"
             TAGS="Kai|prerelease"
           fi

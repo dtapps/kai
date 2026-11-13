@@ -3,30 +3,30 @@
 #
 # The lines below are called `modelines`. See `:help modeline`
 
-name: "Kai"
+name: 'Kai'
 arch: ${GOARCH}
-platform: "linux"
+platform: 'linux'
 # 版本由 build/linux/Taskfile.yml 的 generate:* 任务通过 VERSION 环境变量注入
 # （wails3 tool package 没有 -version 参数，nfpm 配置支持 ${VAR} 展开）。
 # 不要写死版本号：写死会让 deb/rpm 的元数据永远停在旧版本，与文件名/Release 对不上。
-version: "${VERSION}"
-section: "default"
-priority: "extra"
+version: '${VERSION}'
+section: 'default'
+priority: 'extra'
 # maintainer 固定值：CI runner 上没有 GIT_COMMITTER_NAME/EMAIL，占位符展开成空串会让 nfpm 直接报错
-maintainer: "DTApp <dtapps@users.noreply.github.com>"
-description: "常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。"
-vendor: "DTApp"
-homepage: "https://wails.io"
-license: "MIT"
-release: "1"
+maintainer: 'DTApp <dtapps@users.noreply.github.com>'
+description: '常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。'
+vendor: 'DTApp'
+homepage: 'https://wails.io'
+license: 'MIT'
+release: '1'
 
 contents:
-  - src: "./bin/Kai"
-    dst: "/usr/local/bin/Kai"
-  - src: "./build/appicon.png"
-    dst: "/usr/share/icons/hicolor/128x128/apps/Kai.png"
-  - src: "./build/linux/Kai.desktop"
-    dst: "/usr/share/applications/Kai.desktop"
+  - src: './bin/Kai'
+    dst: '/usr/local/bin/Kai'
+  - src: './build/appicon.png'
+    dst: '/usr/share/icons/hicolor/128x128/apps/Kai.png'
+  - src: './build/linux/Kai.desktop'
+    dst: '/usr/share/applications/Kai.desktop'
 
 # Default dependencies for the GTK4 + WebKitGTK 6.0 stack (Ubuntu 24.04+ / Debian 13+)
 depends:
@@ -49,7 +49,7 @@ overrides:
 
 # scripts section to ensure desktop database is updated after install
 scripts:
-  postinstall: "./build/linux/nfpm/scripts/postinstall.sh"
+  postinstall: './build/linux/nfpm/scripts/postinstall.sh'
   # You can also add preremove, postremove if needed
   # preremove: "./build/linux/nfpm/scripts/preremove.sh"
   # postremove: "./build/linux/nfpm/scripts/postremove.sh"

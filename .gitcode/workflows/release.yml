@@ -5,6 +5,8 @@
 #   只传 inputs.version：是否预发布由版本号后缀判定，不再有 prerelease 输入
 # 也可在 GitCode 页面手动 Run workflow（补发历史版本时最省事）。
 #
+# 发布成功后会清理过期 nightly：只保留最近 3 个（与 GitHub 同口径），正式版 / rc 等不触发清理。
+#
 # 前置条件（仓库 → 设置 → Secrets → 新建仓库密钥；名称只能大写/数字/下划线，不能以 ATOMGIT_ 开头）：
 #   - GITCODE_TOKEN：个人访问令牌，repo 读写
 #   - KAI_GITHUB_TOKEN：GitHub 只读令牌，与 .cnb.yml 用的是同一个（匿名调 API 只有 60 次/小时）
@@ -155,3 +157,59 @@ jobs:
 
           echo ""
           echo "完成：https://gitcode.com/${REPO_PATH}/releases/tag/${TAG}"
+
+          # ---- 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）----
+          # 只在本次发布的是 nightly 时执行；判据是 tag 名里的 -nightly.（跨平台唯一一致的信号）。
+          # 清理是旁路：任何一步失败只告警，不影响本次发布结果。
+          case "$TAG_LC" in
+            *-nightly.*)
+              (
+                set +eu
+                KEEP=3
+                : > nightlies.tsv
+                PAGE=1
+                while [ "$PAGE" -le 20 ]; do
+                  LIST_CODE=$(curl -sS -o "list_${PAGE}.json" -w "%{http_code}" \
+                    "${API}/repos/${REPO_PATH}/releases?access_token=${GITCODE_TOKEN}&per_page=100&page=${PAGE}&direction=desc") || LIST_CODE="000"
+                  if [ "$LIST_CODE" = "000" ]; then
+                    echo "⚠ 查询 Release 列表失败（网络错误），跳过清理"
+                    break
+                  fi
+                  if [ "$LIST_CODE" != "200" ]; then
+                    echo "⚠ 查询 Release 列表失败 HTTP=${LIST_CODE}，跳过清理"
+                    break
+                  fi
+                  if ! jq -e 'type == "array"' "list_${PAGE}.json" >/dev/null 2>&1; then
+                    echo "⚠ Release 列表不是数组（响应：$(head -c 200 "list_${PAGE}.json")），跳过清理"
+                    break
+                  fi
+                  CNT=$(jq 'length' "list_${PAGE}.json")
+                  [ "$CNT" = "0" ] && break
+                  jq -r '.[] | select(.tag_name | test("-nightly\\.")) | [.tag_name, (.created_at // "")] | @tsv' \
+                    "list_${PAGE}.json" >> nightlies.tsv 2>/dev/null
+                  [ "$CNT" -lt 100 ] && break
+                  PAGE=$((PAGE + 1))
+                done
+
+                # 按创建时间倒序取第 KEEP+1 个之后的（先按 tag 去重，防止分页参数失效导致重复计数）
+                STALE=$(sort -u -k1,1 nightlies.tsv 2>/dev/null | sort -k2,2r | cut -f1 | tail -n "+$((KEEP + 1))")
+                if [ -z "$STALE" ]; then
+                  echo "nightly 不足 ${KEEP} 个，无需清理"
+                  exit 0
+                fi
+
+                echo "$STALE" | while IFS= read -r OLD; do
+                  [ -n "$OLD" ] || continue
+                  echo "删除旧 nightly Release: ${OLD}"
+                  DEL=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+                    "${API}/repos/${REPO_PATH}/releases/${OLD}?access_token=${GITCODE_TOKEN}") || DEL="000"
+                  case "$DEL" in
+                    200|204) echo "  ✓ 已删除 ${OLD}" ;;
+                    404) echo "  - ${OLD} 不存在（跳过）" ;;
+                    000) echo "  ⚠ 删除 ${OLD} 失败（网络错误）" ;;
+                    *) echo "  ⚠ 删除 ${OLD} 失败 HTTP=${DEL}" ;;
+                  esac
+                done
+              ) || echo "⚠ nightly 清理异常（已忽略，不影响发布）"
+              ;;
+          esac

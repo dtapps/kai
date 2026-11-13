@@ -393,7 +393,7 @@ func (w *EngineWrapper) RemoveEngine(id int64) error {
 	if engs, err := w.configStore.LoadEngines(ctx); err == nil {
 		for _, e := range engs {
 			if e.ID == id && builtinEngine[e.Engine] {
-				return fmt.Errorf(i18n.T("err.service_builtin_cannot_delete"))
+				return errors.New(i18n.T("err.service_builtin_cannot_delete"))
 			}
 		}
 	}

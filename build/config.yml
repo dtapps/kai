@@ -5,13 +5,14 @@ version: '3'
 
 # This information is used to generate the build assets.
 info:
-  companyName: "DTApp" # The name of the company
-  productName: "Kai" # The name of the application
-  productIdentifier: "net.dtapp.kai" # The unique product identifier
-  description: "常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。" # The application description
-  copyright: "(c) 2026, liguangchun" # Copyright text
-  comments: "A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR." # Comments
-  version: "0.0.1" # The application version
+  companyName: 'DTApp' # The name of the company
+  productName: 'Kai' # The name of the application
+  productIdentifier: 'net.dtapp.kai' # The unique product identifier
+  description: '常驻系统托盘的翻译工具，支持输入翻译、截图翻译与复制键取词翻译，并内置 OCR。' # The application description
+  copyright: '(c) 2026, liguangchun' # Copyright text
+  comments: 'A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and
+    copy-key selection translation, plus built-in OCR.' # Comments
+  version: '0.0.1' # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension
   #                               # If not set and Assets.car exists, defaults to "appicon"
@@ -20,15 +21,16 @@ info:
 # Note: Keys under `ios` OVERRIDE values under `info` when set.
 ios:
   # The iOS bundle identifier used in the generated Xcode project (CFBundleIdentifier)
-  bundleID: "net.dtapp.kai"
+  bundleID: 'net.dtapp.kai'
   # The display name shown under the app icon (CFBundleDisplayName/CFBundleName)
-  displayName: "Kai"
+  displayName: 'Kai'
   # The app version to embed in Info.plist (CFBundleShortVersionString/CFBundleVersion)
-  version: "0.0.1"
+  version: '0.0.1'
   # The company/organisation name for templates and project settings
-  company: "DTApp"
+  company: 'DTApp'
   # Additional comments to embed in Info.plist metadata
-  comments: "A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and copy-key selection translation, plus built-in OCR."
+  comments: 'A translation tool that lives in the system tray, with input translation, screenshot translation (macOS), and
+    copy-key selection translation, plus built-in OCR.'
 
 # Dev mode configuration
 dev_mode:
@@ -45,11 +47,11 @@ dev_mode:
       - .DS_Store
       - .gitignore
       - .gitkeep
-      - "*_test.go"
+      - '*_test.go'
     watched_extension:
-      - "*.go"
-      - "*.js" # Watch for changes to JS/TS files included using the //wails:include directive.
-      - "*.ts" # The frontend directory will be excluded entirely by the setting above.
+      - '*.go'
+      - '*.js' # Watch for changes to JS/TS files included using the //wails:include directive.
+      - '*.ts' # The frontend directory will be excluded entirely by the setting above.
     git_ignore: true
   executes:
     - cmd: wails3 build DEV=true

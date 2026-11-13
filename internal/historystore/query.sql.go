@@ -19,8 +19,16 @@ func (q *Queries) ClearHistory(ctx context.Context) error {
 }
 
 const countHistory = `-- name: CountHistory :one
-SELECT COUNT(*) FROM history
-WHERE (?1 = '' OR text LIKE '%' || ?1 || '%' OR result LIKE '%' || ?1 || '%')
+SELECT
+  COUNT(*)
+FROM
+  history
+WHERE
+  (
+    ?1 = ''
+    OR text LIKE '%' || ?1 || '%'
+    OR result LIKE '%' || ?1 || '%'
+  )
 `
 
 func (q *Queries) CountHistory(ctx context.Context, dollar_1 interface{}) (int64, error) {
@@ -31,7 +39,9 @@ func (q *Queries) CountHistory(ctx context.Context, dollar_1 interface{}) (int64
 }
 
 const deleteHistory = `-- name: DeleteHistory :exec
-DELETE FROM history WHERE id = ?
+DELETE FROM history
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteHistory(ctx context.Context, id int64) error {
@@ -40,9 +50,18 @@ func (q *Queries) DeleteHistory(ctx context.Context, id int64) error {
 }
 
 const findDuplicate = `-- name: FindDuplicate :one
-SELECT id FROM history
-WHERE text = ? AND engine_id = ? AND from_lang = ? AND to_lang = ? AND from_ocr = ?
-LIMIT 1
+SELECT
+  id
+FROM
+  history
+WHERE
+  text = ?
+  AND engine_id = ?
+  AND from_lang = ?
+  AND to_lang = ?
+  AND from_ocr = ?
+LIMIT
+  1
 `
 
 type FindDuplicateParams struct {
@@ -67,8 +86,18 @@ func (q *Queries) FindDuplicate(ctx context.Context, arg FindDuplicateParams) (i
 }
 
 const insertHistory = `-- name: InsertHistory :execlastid
-INSERT INTO history (text, result, from_lang, to_lang, engine_id, from_ocr, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO
+  history (
+    text,
+    result,
+    from_lang,
+    to_lang,
+    engine_id,
+    from_ocr,
+    created_at
+  )
+VALUES
+  (?, ?, ?, ?, ?, ?, ?)
 `
 
 type InsertHistoryParams struct {
@@ -98,11 +127,29 @@ func (q *Queries) InsertHistory(ctx context.Context, arg InsertHistoryParams) (i
 }
 
 const queryHistory = `-- name: QueryHistory :many
-SELECT id, text, result, from_lang, to_lang, engine_id, from_ocr, created_at
-FROM history
-WHERE (?1 = '' OR text LIKE '%' || ?1 || '%' OR result LIKE '%' || ?1 || '%')
-ORDER BY created_at DESC
-LIMIT ?2 OFFSET ?3
+SELECT
+  id,
+  text,
+  result,
+  from_lang,
+  to_lang,
+  engine_id,
+  from_ocr,
+  created_at
+FROM
+  history
+WHERE
+  (
+    ?1 = ''
+    OR text LIKE '%' || ?1 || '%'
+    OR result LIKE '%' || ?1 || '%'
+  )
+ORDER BY
+  created_at DESC
+LIMIT
+  ?2
+OFFSET
+  ?3
 `
 
 type QueryHistoryParams struct {

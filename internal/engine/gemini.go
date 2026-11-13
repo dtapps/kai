@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -27,7 +28,7 @@ type geminiTranslator struct {
 func NewGemini(cfg *EngineConfig) (*geminiTranslator, error) {
 	ex := parseLLMExtra(cfg.Extra)
 	if cfg.HTTPClient == nil {
-		return nil, fmt.Errorf(i18n.T("err.gemini_uninitialized"))
+		return nil, errors.New(i18n.T("err.gemini_uninitialized"))
 	}
 	// 克隆为带引擎级超时的独立实例（超时同步到 HTTP 层），避免直接改共享全局
 	// client 的 Timeout 相互影响。
@@ -64,7 +65,7 @@ func (e *geminiTranslator) Name() string { return "gemini" }
 
 func (e *geminiTranslator) translate(ctx context.Context, text, from, to string) (string, error) {
 	if e.model == "" {
-		return "", fmt.Errorf(i18n.T("err.gemini_model_required"))
+		return "", errors.New(i18n.T("err.gemini_model_required"))
 	}
 	// 引擎级请求超时（默认 30s，可由 Extra.timeout_sec 配置）。
 	if e.timeout > 0 {
@@ -91,7 +92,7 @@ func (e *geminiTranslator) translate(ctx context.Context, text, from, to string)
 	}
 	result := resp.Text()
 	if strings.TrimSpace(result) == "" {
-		return "", fmt.Errorf(i18n.T("err.gemini_empty"))
+		return "", errors.New(i18n.T("err.gemini_empty"))
 	}
 	return result, nil
 }

@@ -25,7 +25,7 @@ tasks:
       - node_modules
     preconditions:
       - sh: npm version
-        msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
+        msg: 'Looks like npm isn''t installed. Npm is part of the Node installer: https://nodejs.org/en/download/'
     cmds:
       - npm install
 
@@ -39,7 +39,7 @@ tasks:
       - node_modules
     preconditions:
       - sh: bun --version
-        msg: "bun not found"
+        msg: 'bun not found'
     cmds:
       - bun install
 
@@ -52,7 +52,7 @@ tasks:
       - node_modules
     preconditions:
       - sh: pnpm --version
-        msg: "pnpm not found"
+        msg: 'pnpm not found'
     cmds:
       - pnpm install
 
@@ -65,7 +65,7 @@ tasks:
       - test -d node_modules || test -f .pnp.cjs
     preconditions:
       - sh: yarn --version
-        msg: "yarn not found"
+        msg: 'yarn not found'
     cmds:
       - yarn install
 
@@ -80,7 +80,7 @@ tasks:
     run: once
     dir: frontend
     sources:
-      - "**/*"
+      - '**/*'
       - exclude: node_modules/**/*
     generates:
       - dist/**/*
@@ -104,37 +104,37 @@ tasks:
     cmds:
       - task: frontend:run:{{.PACKAGE_MANAGER}}
         vars:
-          SCRIPT: "{{.SCRIPT}}"
+          SCRIPT: '{{.SCRIPT}}'
     vars:
-      SCRIPT: "{{.SCRIPT}}"
+      SCRIPT: '{{.SCRIPT}}'
 
   frontend:run:npm:
     dir: frontend
     cmds:
       - npm run {{.SCRIPT}} -q
     vars:
-      SCRIPT: "{{.SCRIPT}}"
+      SCRIPT: '{{.SCRIPT}}'
 
   frontend:run:yarn:
     dir: frontend
     cmds:
       - yarn {{.SCRIPT}}
     vars:
-      SCRIPT: "{{.SCRIPT}}"
+      SCRIPT: '{{.SCRIPT}}'
 
   frontend:run:pnpm:
     dir: frontend
     cmds:
       - pnpm run {{.SCRIPT}}
     vars:
-      SCRIPT: "{{.SCRIPT}}"
+      SCRIPT: '{{.SCRIPT}}'
 
   frontend:run:bun:
     dir: frontend
     cmds:
       - bun run {{.SCRIPT}}
     vars:
-      SCRIPT: "{{.SCRIPT}}"
+      SCRIPT: '{{.SCRIPT}}'
 
   frontend:vendor:puppertino:
     summary: Fetches Puppertino CSS into frontend/public for consistent mobile styling
@@ -171,18 +171,16 @@ tasks:
           sed -E -i'' 's/class=\"btn\"/class=\"p-btn p-prim-col\"/g' "$INDEX_HTML" || true
         fi
 
-
-
   generate:bindings:
     summary: Generates bindings for the frontend
     run: once
     deps:
       - task: go:mod:tidy
     sources:
-      - "**/*.[jt]s"
+      - '**/*.[jt]s'
       - exclude: frontend/**/*
-      - frontend/bindings/**/*  # Rerun when switching between dev/production mode causes changes in output
-      - "**/*.go"
+      - frontend/bindings/**/* # Rerun when switching between dev/production mode causes changes in output
+      - '**/*.go'
       - go.mod
       - go.sum
     generates:
@@ -191,17 +189,19 @@ tasks:
       - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i
 
   generate:icons:
-    summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
+    summary: Generates Windows `.ico` and Mac `.icns` from an image; on macOS, `-iconcomposerinput appicon.icon -macassetdir
+      darwin` also produces `Assets.car` from a `.icon` file (skipped on other platforms).
     run: once
     dir: build
     sources:
-      - "appicon.png"
-      - "appicon.icon"
+      - 'appicon.png'
+      - 'appicon.icon'
     generates:
-      - "darwin/icons.icns"
-      - "windows/icon.ico"
+      - 'darwin/icons.icns'
+      - 'windows/icon.ico'
     cmds:
-      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput appicon.icon -macassetdir darwin
+      - wails3 generate icons -input appicon.png -macfilename darwin/icons.icns -windowsfilename windows/icon.ico -iconcomposerinput
+        appicon.icon -macassetdir darwin
 
   dev:frontend:
     summary: Runs the frontend in development mode
@@ -258,20 +258,24 @@ tasks:
             ref: .OBFUSCATED
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
-        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
+        msg: 'garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+).
+          See https://github.com/burrowers/garble/releases for version/toolchain compatibility.'
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
     vars:
       POSTHOG_TOKEN: '{{.POSTHOG_TOKEN}}'
       POSTHOG_PROJECT_ID: '{{.POSTHOG_PROJECT_ID}}'
-      BUILD_FLAGS: '-tags server{{if eq .DEV "true"}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -buildvcs=false -gcflags=all="-l"{{else}},production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}}"{{end}}'
+      BUILD_FLAGS: '-tags server{{if eq .DEV "true"}}{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}}
+        -buildvcs=false -gcflags=all="-l"{{else}},production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}}
+        -trimpath -buildvcs=false -ldflags="-w -s{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if
+        .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}}"{{end}}'
 
   run:server:
     summary: Builds and runs a development server (DEV=true)
     deps:
       - task: build:server
         vars:
-          DEV: "true"
+          DEV: 'true'
     cmds:
       - '"./{{.BIN_DIR}}/{{.APP_NAME}}-server{{exeExt}}"'
 
@@ -292,22 +296,19 @@ tasks:
       # build the Docker image compiles, not the default-tag build.
       - task: build:frontend
         vars:
-          BUILD_FLAGS: "-tags server,production"
+          BUILD_FLAGS: '-tags server,production'
     cmds:
       - >-
-        docker build
-        --build-arg CGO_ENABLED={{.CGO_ENABLED | default "0"}}
-        --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:alpine"}}
-        --build-arg RUNTIME_IMAGE={{.RUNTIME_IMAGE | default "gcr.io/distroless/static-debian12"}}
-        -t {{.TAG | default (printf "%s:latest" .APP_NAME)}}
-        -f build/docker/Dockerfile.server .
+        docker build --build-arg CGO_ENABLED={{.CGO_ENABLED | default "0"}} --build-arg GO_IMAGE={{.GO_IMAGE | default "golang:alpine"}}
+        --build-arg RUNTIME_IMAGE={{.RUNTIME_IMAGE | default "gcr.io/distroless/static-debian12"}} -t {{.TAG | default (printf
+        "%s:latest" .APP_NAME)}} -f build/docker/Dockerfile.server .
     vars:
-      TAG: "{{.TAG}}"
+      TAG: '{{.TAG}}'
     preconditions:
       - sh: docker info > /dev/null 2>&1
-        msg: "Docker is required. Please install Docker first."
+        msg: 'Docker is required. Please install Docker first.'
       - sh: test -f build/docker/Dockerfile.server
-        msg: "Dockerfile.server not found. Run 'wails3 update build-assets' to generate it."
+        msg: 'Dockerfile.server not found. Run ''wails3 update build-assets'' to generate it.'
 
   run:docker:
     summary: Builds and runs the Docker image
@@ -325,8 +326,8 @@ tasks:
     cmds:
       - docker run --rm -p {{.PORT | default "8080"}}:8080 {{.TAG | default (printf "%s:latest" .APP_NAME)}}
     vars:
-      TAG: "{{.TAG}}"
-      PORT: "{{.PORT}}"
+      TAG: '{{.TAG}}'
+      PORT: '{{.PORT}}'
 
   setup:docker:
     summary: Builds Docker image for cross-compilation (~800MB download)
@@ -337,4 +338,4 @@ tasks:
       - docker build -t wails-cross -f build/docker/Dockerfile.cross build/docker/
     preconditions:
       - sh: docker info > /dev/null 2>&1
-        msg: "Docker is required. Please install Docker first."
+        msg: 'Docker is required. Please install Docker first.'

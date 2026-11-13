@@ -81,14 +81,15 @@ export const zh = {
     httpLogRetentionUnit: '天',
     updater: '更新',
     updaterPrerelease: '检查预发布版本',
-    updaterPrereleaseHint: '开启后会把预发布（RC / nightly）版本纳入更新检测；关闭则只检测正式版。',
+    updaterPrereleaseHint:
+      '开启后同时检测预发布版（-rc / -beta / -alpha / -nightly），并取其中最近发布的一个；关闭则只检测正式版。',
     updaterCheckInterval: '自动检查更新',
     updaterCheckIntervalHint:
-      '后台按间隔检查更新，0 表示关闭（仍可从托盘手动检查）。由系统定时器执行，修改后需重启应用生效。',
+      '后台每隔 N 小时静默检查一次，发现新版本自动下载并安装；0 表示关闭自动检查（仍可从托盘手动检查）。该值在应用启动时读取，修改后需重启生效。',
     updaterCheckIntervalUnit: '小时',
     updaterAutoRestart: '更新完自动重启',
     updaterAutoRestartHint:
-      '更新下载安装完成后自动重启应用以完成更新；关闭后会发送通知，可在托盘菜单中手动重启安装。',
+      '更新安装完成后自动重启应用以完成更新；关闭时改为弹出通知，可在托盘菜单「重启并安装更新」手动完成。',
     engines: '引擎',
     enginesTitle: '翻译引擎',
     engineList: '引擎列表',

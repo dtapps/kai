@@ -10,7 +10,9 @@ import (
 )
 
 const deleteEngineByID = `-- name: DeleteEngineByID :exec
-DELETE FROM engines WHERE id = ?
+DELETE FROM engines
+WHERE
+  id = ?
 `
 
 func (q *Queries) DeleteEngineByID(ctx context.Context, id int64) error {
@@ -19,7 +21,20 @@ func (q *Queries) DeleteEngineByID(ctx context.Context, id int64) error {
 }
 
 const getEngineByID = `-- name: GetEngineByID :one
-SELECT id, engine, enabled, api_key, secret, extra, endpoint FROM engines WHERE id = ? LIMIT 1
+SELECT
+  id,
+  engine,
+  enabled,
+  api_key,
+  secret,
+  extra,
+  endpoint
+FROM
+  engines
+WHERE
+  id = ?
+LIMIT
+  1
 `
 
 func (q *Queries) GetEngineByID(ctx context.Context, id int64) (Engine, error) {
@@ -38,7 +53,20 @@ func (q *Queries) GetEngineByID(ctx context.Context, id int64) (Engine, error) {
 }
 
 const getEngineByName = `-- name: GetEngineByName :one
-SELECT id, engine, enabled, api_key, secret, extra, endpoint FROM engines WHERE engine = ? LIMIT 1
+SELECT
+  id,
+  engine,
+  enabled,
+  api_key,
+  secret,
+  extra,
+  endpoint
+FROM
+  engines
+WHERE
+  engine = ?
+LIMIT
+  1
 `
 
 func (q *Queries) GetEngineByName(ctx context.Context, engine string) (Engine, error) {
@@ -57,9 +85,12 @@ func (q *Queries) GetEngineByName(ctx context.Context, engine string) (Engine, e
 }
 
 const insertEngine = `-- name: InsertEngine :one
-INSERT INTO engines (engine, enabled, api_key, secret, extra, endpoint)
-VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id
+INSERT INTO
+  engines (engine, enabled, api_key, secret, extra, endpoint)
+VALUES
+  (?, ?, ?, ?, ?, ?)
+RETURNING
+  id
 `
 
 type InsertEngineParams struct {
@@ -86,7 +117,18 @@ func (q *Queries) InsertEngine(ctx context.Context, arg InsertEngineParams) (int
 }
 
 const loadEngines = `-- name: LoadEngines :many
-SELECT id, engine, enabled, api_key, secret, extra, endpoint FROM engines ORDER BY id
+SELECT
+  id,
+  engine,
+  enabled,
+  api_key,
+  secret,
+  extra,
+  endpoint
+FROM
+  engines
+ORDER BY
+  id
 `
 
 func (q *Queries) LoadEngines(ctx context.Context) ([]Engine, error) {
@@ -121,7 +163,11 @@ func (q *Queries) LoadEngines(ctx context.Context) ([]Engine, error) {
 }
 
 const renameEngineByName = `-- name: RenameEngineByName :exec
-UPDATE engines SET engine = ? WHERE engine = ?
+UPDATE engines
+SET
+  engine = ?
+WHERE
+  engine = ?
 `
 
 type RenameEngineByNameParams struct {
@@ -135,14 +181,16 @@ func (q *Queries) RenameEngineByName(ctx context.Context, arg RenameEngineByName
 }
 
 const updateEngineByID = `-- name: UpdateEngineByID :exec
-UPDATE engines SET
-    engine   = ?,
-    enabled  = ?,
-    api_key  = ?,
-    secret   = ?,
-    extra    = ?,
-    endpoint = ?
-WHERE id = ?
+UPDATE engines
+SET
+  engine = ?,
+  enabled = ?,
+  api_key = ?,
+  secret = ?,
+  extra = ?,
+  endpoint = ?
+WHERE
+  id = ?
 `
 
 type UpdateEngineByIDParams struct {
@@ -169,7 +217,11 @@ func (q *Queries) UpdateEngineByID(ctx context.Context, arg UpdateEngineByIDPara
 }
 
 const updateEngineEnabled = `-- name: UpdateEngineEnabled :exec
-UPDATE engines SET enabled = ? WHERE id = ?
+UPDATE engines
+SET
+  enabled = ?
+WHERE
+  id = ?
 `
 
 type UpdateEngineEnabledParams struct {

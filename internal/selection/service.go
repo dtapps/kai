@@ -5,7 +5,7 @@
 package selection
 
 import (
-	"fmt"
+	"errors"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 
@@ -40,7 +40,7 @@ func (s *Service) WriteToClipboard(text string) error {
 		return nil
 	}
 	if !s.app.Clipboard.SetText(text) {
-		return fmt.Errorf(i18n.T("err.selection_write_clipboard"))
+		return errors.New(i18n.T("err.selection_write_clipboard"))
 	}
 	return nil
 }

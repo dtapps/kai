@@ -10,6 +10,19 @@ include:
   - .cnb/workflows/sca.yml
 
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
+#
+# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+#   1.2.3                    -> 正式版，Release 不勾选 prerelease
+#   v1.2.3                   -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
+#   1.2.3-rc.1               -> 预发布（rc 渠道）
+#   1.2.3-beta.1             -> 预发布（beta 渠道）
+#   1.2.3-alpha.1            -> 预发布（alpha 渠道）
+#   1.2.3-nightly.20260101   -> 预发布（nightly 渠道）
+#   nightly                  -> 定时任务的默认值（手动填也可）：不是版本号，自动推导成
+#                               <最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>，
+#                               例如最近正式版 v0.2.7 → tag v0.2.8-nightly.20261114。
+#                               每天一个 tag，只保留最近 3 个 nightly Release。
+#
 # 本流水线是 GitHub Release 的镜像：产物和正文都来自 GitHub，这里只做搬运。
 # 是否预发布由版本号后缀决定（v1.2.3-rc.1 / -beta.1 / -alpha.1 / -nightly.20260101 为预发布），不接受手工勾选；
 # 正文格式见 scripts/ci/render-release-body.sh，与 GitHub 侧共用一份实现。
@@ -210,6 +223,112 @@ include:
 
     - name: 输出 Release 附件
       script: echo $FILES
+
+    # 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）。
+    # 只在本次是 nightly 时执行：正式版 / rc / beta / alpha 发布不动夜间构建历史。
+    # 列表接口 GET /-/releases?page=&page_size= 返回数组（tag_name / published_at / prerelease），
+    # 服务端排序不保证，这里按 published_at 本地倒序后再决定删哪几个。
+    # 清理是旁路：任何一步失败都只打警告（curl 用 -sS，网络错误会打到 stderr），
+    # 并显式 exit 0 —— 不能让清理把一次成功的发布拖成失败。
+    - name: 清理过期 nightly Release（保留最近 3 个）
+      shell: true
+      script: |
+        # 故意不开 set -e：清理里任何一步失败都只告警
+        TAG="${INTERIOR_VERSION}"
+        case "$TAG" in
+          *-nightly.*) ;;
+          *) echo "非 nightly 发布，跳过清理"; exit 0 ;;
+        esac
+
+        API="${CNB_API_ENDPOINT%/}"
+        REPO="$CNB_REPO_SLUG"
+        KEEP=3
+        LIST=/tmp/cnb_releases.json
+        : > /tmp/cnb_nightlies.tsv
+
+        PAGE=1
+        while [ "$PAGE" -le 20 ]; do
+          HTTP=$(curl -sS -o "$LIST" -w "%{http_code}" \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases?page=$PAGE&page_size=100") || HTTP="000"
+          if [ "$HTTP" = "000" ]; then
+            echo "⚠ 查询 Release 列表失败（网络错误），跳过清理"
+            break
+          fi
+          if [ "$HTTP" != "200" ]; then
+            echo "⚠ 查询 Release 列表失败 HTTP=$HTTP，跳过清理"
+            break
+          fi
+          if ! jq -e 'type == "array"' "$LIST" >/dev/null 2>&1; then
+            echo "⚠ Release 列表不是数组（响应：$(head -c 200 "$LIST")），跳过清理"
+            break
+          fi
+          CNT=$(jq 'length' "$LIST" 2>/dev/null) || CNT=""
+          if [ -z "$CNT" ]; then
+            echo "⚠ 解析 Release 列表失败，跳过清理"
+            break
+          fi
+          [ "$CNT" = "0" ] && break
+          jq -r '.[] | select(.tag_name | test("-nightly\\.")) | [.tag_name, (.published_at // "")] | @tsv' \
+            "$LIST" >> /tmp/cnb_nightlies.tsv 2>/dev/null
+          [ "$CNT" -lt 100 ] && break
+          PAGE=$((PAGE + 1))
+        done
+
+        # 按发布时间倒序，第 KEEP+1 个及之后的是过期项（先按 tag 去重，防止分页参数失效重复计数）
+        STALE=$(sort -u -k1,1 /tmp/cnb_nightlies.tsv 2>/dev/null | sort -k2,2r | cut -f1 | tail -n "+$((KEEP + 1))")
+        if [ -z "$STALE" ]; then
+          echo "nightly 不足 ${KEEP} 个，无需清理"
+          exit 0
+        fi
+
+        echo "$STALE" | while IFS= read -r OLD; do
+          [ -n "$OLD" ] || continue
+          echo "删除旧 nightly Release: ${OLD}"
+
+          # 先按 tag 查 id（列表里的 id 字段不保证存在），再删 Release
+          HTTP=$(curl -sS -o /tmp/cnb_rel.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases/tags/$OLD") || HTTP="000"
+          case "$HTTP" in
+            200)
+              ID=$(jq -r '.id // .release_id // empty' /tmp/cnb_rel.json 2>/dev/null) || ID=""
+              if [ -z "$ID" ]; then
+                echo "  ⚠ 拿不到 release id，跳过"
+                continue
+              fi
+              DEL=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+                -H "Authorization: Bearer $CNB_TOKEN" \
+                -H "Accept: application/vnd.cnb.api+json" \
+                "$API/$REPO/-/releases/$ID") || DEL="000"
+              case "$DEL" in
+                200|204) echo "  ✓ Release 已删除" ;;
+                000) echo "  ⚠ 删除 Release 失败（网络错误）" ;;
+                *) echo "  ⚠ 删除 Release 失败 HTTP=$DEL" ;;
+              esac
+              ;;
+            404) echo "  - Release 不存在（跳过）" ;;
+            000) echo "  ⚠ 查询 Release 失败（网络错误）" ;;
+            *) echo "  ⚠ 查询 Release 失败 HTTP=$HTTP" ;;
+          esac
+
+          # DeleteRelease 不会自动删 Tag，需单独删；失败不阻断（后续重建会在同名 tag 上覆盖）
+          TAG_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/tags/$OLD") || TAG_HTTP="000"
+          case "$TAG_HTTP" in
+            200|204) echo "  ✓ Tag 已删除" ;;
+            404) echo "  - Tag 不存在（跳过）" ;;
+            000) echo "  ⚠ 删除 Tag 失败（网络错误）" ;;
+            *) echo "  ⚠ 删除 Tag 失败 HTTP=$TAG_HTTP" ;;
+          esac
+        done
+
+        # 显式成功：上面任何告警都不影响本次流水线结果
+        exit 0
 
 master:
   # 手动触发：通过页面自定义按钮执行（按钮定义见 .cnb/web_trigger.yml）

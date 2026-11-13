@@ -1,22 +1,4 @@
 {
-  "name": "kai-frontend",
-  "private": true,
-  "version": "0.0.0",
-  "type": "module",
-  "license": "MIT",
-  "packageManager": "pnpm@12.18.0",
-  "scripts": {
-    "dev": "vite",
-    "build:dev": "vite build --minify false --mode development",
-    "build": "vite build --mode production",
-    "preview": "vite preview",
-    "check": "svelte-check --tsconfig ./tsconfig.json",
-    "tsc": "tsc --noEmit",
-    "test": "vitest run",
-    "test:coverage": "vitest run --coverage",
-    "format": "prettier --write \"src/**/*.{ts,svelte,vue,html,json,css}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\""
-  },
   "dependencies": {
     "@wailsio/runtime": "3.1.0"
   },
@@ -24,11 +6,12 @@
     "@codecov/vite-plugin": "^2.0.1",
     "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/vite": "^4.3.5",
-    "@tsconfig/svelte": "^5.0.8",
+    "@tsconfig/svelte": "^5.0.9",
     "@types/node": "^26.6.6",
     "@typescript/native": "npm:typescript@^7.0.2",
     "@vitest/coverage-v8": "^5.1.0",
-    "prettier": "^3.9.10",
+    "knip": "^6.45.1",
+    "prettier": "^3.10.1",
     "prettier-plugin-svelte": "^4.1.1",
     "svelte": "^5.57.3",
     "svelte-check": "^4.7.8",
@@ -37,5 +20,26 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.8",
     "vitest": "^5.1.0"
-  }
+  },
+  "license": "MIT",
+  "name": "kai-frontend",
+  "packageManager": "pnpm@12.18.0",
+  "private": true,
+  "scripts": {
+    "build": "vite build --mode production",
+    "build:dev": "vite build --minify false --mode development",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "deps:clean": "knip --fix",
+    "dev": "vite",
+    "format": "prettier --write \"src/**/*.{ts,svelte,vue,html,json,css}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\"",
+    "lint": "prettier --check \"src/**/*.{ts,svelte,vue,html,json,css}\"",
+    "lint:unused": "knip",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "tsc": "tsc --noEmit"
+  },
+  "type": "module",
+  "version": "0.0.0"
 }

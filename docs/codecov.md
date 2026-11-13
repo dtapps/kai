@@ -4,11 +4,11 @@
 
 ## 1. 总览：三个支柱 + 职责分离
 
-| 支柱                     | 内容            | 本仓库实现                                                                                                      | Codecov 里看什么                      |
-|--------------------------|-----------------|-----------------------------------------------------------------------------------------------------------------|---------------------------------------|
-| 覆盖率 Coverage          | 代码行覆盖率    | `codecov/codecov-action@v7` 上传 Go `coverage.out` 与前端 `lcov.info`                                           | Coverage 面板、PR 评论、patch 状态    |
-| 打包体积 Bundle Analysis | 前端 chunk 体积 | `@codecov/vite-plugin`（构建时上传）                                                                            | Bundle 面板（体积趋势 / 回归）        |
-| 测试结果 Test Analytics  | 单测运行结果    | Go：`gotestsum --junitfile`；Svelte：Vitest `json` → 脚本转 JUnit；合并由 `codecov/test-results-action@v1` 上传 | Tests 面板（时长 / flaky / 失败分析） |
+| 支柱                     | 内容            | 本仓库实现                                                                                                                               | Codecov 里看什么                      |
+|--------------------------|-----------------|------------------------------------------------------------------------------------------------------------------------------------------|---------------------------------------|
+| 覆盖率 Coverage          | 代码行覆盖率    | `codecov/codecov-action@v7` 上传 Go `coverage.out` 与前端 `lcov.info`                                                                    | Coverage 面板、PR 评论、patch 状态    |
+| 打包体积 Bundle Analysis | 前端 chunk 体积 | `@codecov/vite-plugin`（构建时上传）                                                                                                     | Bundle 面板（体积趋势 / 回归）        |
+| 测试结果 Test Analytics  | 单测运行结果    | Go：`gotestsum --junitfile`；Svelte：Vitest `json` → 脚本转 JUnit；合并由 `codecov/codecov-action@v7`（`report_type: test_results`）上传 | Tests 面板（时长 / flaky / 失败分析） |
 
 > **职责分离（重要）**：CNB 流水线（`testing:coverage`）预留**红线门禁**（`lines` / `diffLines`），GitHub Actions 只负责**把数据上报到 Codecov** 做可视化（PR 评论、徽章、patch 状态）。因此 `.github/codecov.yml` 里的 `status` 全部设为 `informational`，不在 GitHub 侧重复阻塞 PR。
 >
@@ -66,7 +66,7 @@
 
 ### 3.3 测试结果（Test Analytics）
 
-Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上传到同一个 `codecov/test-results-action@v1`（`files` 已合并两份报告：`frontend/test-report.xml,./go-test-report.xml`）：
+Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上传到同一个 `codecov/codecov-action@v7`（`report_type: test_results`，`files` 已合并两份报告：`frontend/test-report.xml,./go-test-report.xml`）。
 
 - **Go**：`go test` 不原生产 JUnit，用 `gotestsum` 包裹（参数原样透传，`coverage.out` 照常产出），额外生成 `go-test-report.xml`：
 
@@ -91,7 +91,7 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
      - 兜底探测**必须用 `statSync().isFile()`，不能用 `existsSync()`**：`frontend/src` 这类同名目录会被 `existsSync` 命中，写出一个指向目录的 `classname`。
      - 也别指望 `codecov.yml` 的 `fixes:` 兜底：它属于覆盖率侧路径修补，官方未声明对 Test Analytics 生效；即便生效也只能写死某一个 CI 的前缀，换 runner（容器 ↔ 裸 runner）就失效。
      - 对比：`gotestsum`（Go）的 `classname` 是包导入路径（`cnb.cool/dtapp/kai/internal/...`），天然相对、跨环境一致，无需处理。
-  3. 上传步骤用 `codecov/test-results-action@v1` 合并上传 `frontend/test-report.xml,./go-test-report.xml`。
+  3. 上传步骤用 `codecov/codecov-action@v7` + `report_type: test_results` 合并上传 `frontend/test-report.xml,./go-test-report.xml`（原 `codecov/test-results-action` 已于 2026-08-11 归档弃用，官方迁移方式即此）。
 - 最终 Codecov 的 **Tests** 面板同时包含 Go 与 Svelte 的测试结果。
 
 ### 3.4 组件（Components）
@@ -133,7 +133,7 @@ Go 与 Svelte 都不原生产出 JUnit，分别用不同方式转换后合并上
 
 - **Go 测试 `ld` 报错 `cannot find -lwebkitgtk-6.0` 等**：容器镜像不对或未拉到；确认 `container.image` 指向 `ghcr.io/dtapps/golang/wails3:latest`。
 - **Bundle 面板空白**：检查「构建前端」步骤是否真的上传成功；插件与 Vite 8 不兼容时该步骤会 `continue-on-error` 失败但不阻断。
-- **Tests 面板空白**：检查 `test-results.json` / `go-test-report.xml` 是否生成、`vitest-json-to-junit.mjs` 是否产出 `test-report.xml`、`codecov/test-results-action` 是否拿到 token。
+- **Tests 面板空白**：检查 `test-results.json` / `go-test-report.xml` 是否生成、`vitest-json-to-junit.mjs` 是否产出 `test-report.xml`、上传步骤是否带了 `report_type: test_results` 且拿到 token。
 - **Tests 面板里用例名带 `/__w/...`、`/home/runner/work/...` 等绝对路径，同一条用例出现成两条记录**：`classname` 没归一化。自查： `grep -o 'classname="[^"]*"' frontend/test-report.xml | sort -u | head` —— 出现以 `/`（或 `C:\`）开头即是，应修生成脚本（见 3.3），不要在 `codecov.yml` 里打补丁。
   - 两种前缀来自**两种执行形态**（容器 job `/__w/<repo>/<repo>` vs 裸 runner `/home/runner/work/<repo>/<repo>`），不是两次不同的 bug。
   - 历史数据不会迁移：已上传的绝对路径记录保留到 Codecov 60 天保留期满才自然淘汰。**UI 上还能看到旧记录 ≠ 修复没生效**，要看最新一次 run。

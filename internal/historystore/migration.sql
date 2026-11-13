@@ -5,6 +5,6 @@
 -- "duplicate column" 错误。运行时 (store.go 的 Open) 会忽略
 -- 该错误以保证幂等——二次启动 / 已迁移过的库直接跳过，不会报错。
 -- 将来新增列时，在此追加一行 ALTER TABLE 即可，无需改动 Go 代码。
-
 -- 兼容旧版本：history 表最初创建时无 engine_id 列，需补列以写入引擎来源。
-ALTER TABLE history ADD COLUMN engine_id INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE history
+ADD COLUMN engine_id INTEGER NOT NULL DEFAULT 0;

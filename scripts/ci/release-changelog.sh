@@ -51,6 +51,15 @@ case "${version}" in
   *-nightly*) channel='nightly' ;;
 esac
 
+# 固定滚动 tag（nightly）：每次发布都指向同一个 tag，无法当基准，
+# 直接和上一个正式版对比（= 这一轮 nightly 累积的全部改动）。
+# 它不带连字符，走不到上面的 *-nightly* 分支，按正式版处理恰好符合这个语义。
+rolling=0
+case "${version}" in
+  v*) ;;
+  *) rolling=1 ;;
+esac
+
 # ── 收集候选 tag ────────────────────────────────────────────────────────────
 # 只认合法的版本 tag：vX.Y.Z 或 vX.Y.Z-rc.N / -beta.N / -alpha.N / -nightly.YYYYMMDD。
 # 不合规的 tag 一律不进候选集 —— 否则一个随手建的 v1.0.44.rc1 之类就会变成
@@ -101,10 +110,18 @@ EOF
 
 base=''
 if [ -n "${same_channel}" ]; then
-  base="$(pick_latest "$(older_than_version "${same_channel}")")"
+  if [ "${rolling}" -eq 1 ]; then
+    # 固定滚动 tag 没有「比自己旧」的概念，直接取同渠道（这里是正式版）最新的。
+    # 注意不能套 older_than_version：`nightly` 不是版本号，和 v1.0.3 一起
+    # sort -V 会被判成「比当前版本新」，过滤后候选集全空，反而报错。
+    base="$(pick_latest "${same_channel}")"
+  else
+    base="$(pick_latest "$(older_than_version "${same_channel}")")"
+  fi
 fi
 
-# 同渠道没有更早的 tag（首次发这个渠道）→ 回退到上一个正式版
+# 同渠道没有更早的 tag（首次发这个渠道）→ 回退到上一个正式版。
+# 滚动 tag 的 channel 是 stable，没有正式版可比时直接走报错路径。
 if [ -z "${base}" ]; then
   stable_tags=''
   for t in ${all_tags}; do

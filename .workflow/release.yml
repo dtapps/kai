@@ -3,7 +3,8 @@
 # 实现拆成两个脚本（都在 scripts/ci/，可本地单独跑）：
 #   1) gitee-release-download.js —— 按跳过规则下载产物到 assets/，写出清单 gitee-release.json
 #      （清单里含 tag / 预发布 / 正文 HTML / 待上传文件列表）
-#   2) gitee-release-publish.js  —— 读清单，建 Release 并逐个上传附件
+#   2) gitee-release-publish.js  —— 读清单，建 Release 并逐个上传附件；
+#      发布成功后清理过期 nightly（保留最近 3 个，与 GitHub 同口径）
 #
 # 为什么不用 release@gitee 插件：
 #   - assertFiles 是静态清单，做不到「某个文件超 100MB 就跳过它」；

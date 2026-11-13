@@ -1,4 +1,5 @@
-# GitLab 侧只做一件事：把 GitHub Release 同步成 GitLab Release。
+# GitLab 侧只做一件事：把 GitHub Release 同步成 GitLab Release，
+# 并在发布 nightly 时清理本平台过期的夜间构建（保留最近 3 个，与 GitHub 同口径）。
 #
 # 曾经这里还有一整套覆盖率采集（`go-coverage` / `node-coverage`，外加为它们自建 CI 镜像的
 # `check-image` / `build-image` / `merge-image`），2026-10-24 整段删除。原因：
@@ -191,3 +192,83 @@ release:
 
       echo ""
       echo "完成：${CI_PROJECT_URL}/-/releases/${TAG}"
+
+      # ---- 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）----
+      # 只有本平台发布的是 nightly 时才清理：正式版 / rc / beta / alpha 发布不动夜间构建历史。
+      # 判据只看 tag 名里的 -nightly.：GitLab Release 没有 prerelease 字段，标签名是唯一可靠信号。
+      # 清理是旁路：整段包在子 shell 里、以 `|| echo` 收尾，任何一步失败都只打警告（curl 用 -sS，
+      # 网络错误会打到 stderr），绝不让一次成功的发布变红。
+      # 附件本体在 Generic Package Registry，删 Release 不会带走，所以还要按 version 删 Package，
+      # 否则 Release 列表短了、存储照样只增不减。
+      if printf '%s' "$TAG" | grep -q -- '-nightly\.'; then
+        (
+          set +eu
+          KEEP=3
+          : > /tmp/nightlies.tsv
+          PAGE=1
+          while [ "$PAGE" -le 20 ]; do
+            if ! LIST_CODE=$(curl -sS "${AUTH[@]}" \
+                "${API}/releases?per_page=100&page=${PAGE}" \
+                -o /tmp/rel_page.json -w "%{http_code}"); then
+              echo "⚠ 查询 Release 列表失败（网络错误），跳过清理"
+              break
+            fi
+            if [ "$LIST_CODE" != "200" ]; then
+              echo "⚠ 查询 Release 列表失败 HTTP=${LIST_CODE}，跳过清理"
+              break
+            fi
+            CNT=$(jq 'length' /tmp/rel_page.json 2>/dev/null || echo 0)
+            # 认证失败时返回的是对象不是数组，长度 1 会误判成「有数据」
+            if ! jq -e 'type == "array"' /tmp/rel_page.json >/dev/null 2>&1; then
+              echo "⚠ Release 列表不是数组（响应：$(head -c 200 /tmp/rel_page.json)），跳过清理"
+              break
+            fi
+            [ "$CNT" = "0" ] && break
+            jq -r '.[] | select(.tag_name | test("-nightly\\.")) | [.tag_name, (.released_at // .created_at // "")] | @tsv' \
+              /tmp/rel_page.json >> /tmp/nightlies.tsv 2>/dev/null
+            [ "$CNT" -lt 100 ] && break
+            PAGE=$((PAGE + 1))
+          done
+
+          # 按发布时间倒序取第 KEEP+1 个之后的（服务端本就按 released_at 倒序，这里再排一次更稳；
+          # 先按 tag 去重：分页参数若被忽略会重复返回同一页，重复项会把保留边界算错）
+          STALE=$(sort -u -k1,1 /tmp/nightlies.tsv 2>/dev/null | sort -k2,2r | cut -f1 | tail -n "+$((KEEP + 1))")
+          if [ -z "$STALE" ]; then
+            echo "nightly 不足 ${KEEP} 个，无需清理"
+            exit 0
+          fi
+
+          echo "$STALE" | while IFS= read -r OLD; do
+            [ -n "$OLD" ] || continue
+            echo "删除旧 nightly Release: ${OLD}"
+            # 只删 Release / Package，不删 git tag：本仓库是 GitHub 的 pull mirror，
+            # 本地删掉的 tag 下次同步又会被拉回来，留着 tag 不影响 Release 列表整洁。
+            DEL=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE "${AUTH[@]}" "${API}/releases/${OLD}") || DEL="000"
+            case "$DEL" in
+              200|204) echo "  ✓ Release 已删除" ;;
+              404) echo "  - Release 不存在（跳过）" ;;
+              000) echo "  ⚠ 删除 Release 失败（网络错误）" ;;
+              *) echo "  ⚠ 删除 Release 失败 HTTP=${DEL}" ;;
+            esac
+
+            # 用 package_version 精确过滤：正式版也在这里建过同名 package，
+            # 项目里 package 总数迟早超过一页，翻页找会漏
+            PKG_ID=$(curl -sS "${AUTH[@]}" \
+              "${API}/packages?package_type=generic&package_name=kai&package_version=${OLD}&per_page=100" \
+              | jq -r --arg v "$OLD" 'if type == "array" then .[] else empty end
+                | select(.version == $v) | .id' 2>/dev/null | head -n 1)
+            if [ -z "$PKG_ID" ] || [ "$PKG_ID" = "null" ]; then
+              echo "  - 未找到对应 Package，跳过"
+              continue
+            fi
+            PKG_DEL=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE "${AUTH[@]}" "${API}/packages/${PKG_ID}") || PKG_DEL="000"
+            case "$PKG_DEL" in
+              200|202|204) echo "  ✓ Package ${PKG_ID} 已删除" ;;
+              # CI_JOB_TOKEN 对 Packages API 的删除权限因实例配置而异；403 时提示改用 PAT
+              401|403) echo "  ⚠ 无权限删除 Package ${PKG_ID}（HTTP=${PKG_DEL}）：配 GL_RELEASE_TOKEN 后重跑可清理" ;;
+              000) echo "  ⚠ 删除 Package ${PKG_ID} 失败（网络错误）" ;;
+              *) echo "  ⚠ 删除 Package ${PKG_ID} 失败 HTTP=${PKG_DEL}" ;;
+            esac
+          done
+        ) || echo "⚠ nightly 清理异常（已忽略，不影响发布）"
+      fi

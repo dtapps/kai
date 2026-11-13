@@ -18,6 +18,9 @@ type ConfigWrapper struct {
 	settingsSvc *settings.Service
 	app         *application.App
 	hotkeyMgr   *hotkey.Manager
+	// updaterChanged 更新相关开关（预发布/自动更新/自动重启）变化后的回调，
+	// 用于让托盘菜单等外部 UI 同步（托盘复选框状态、重启入口等）。
+	updaterChanged func()
 }
 
 // NewConfigWrapper 构造配置 Wrapper。app 与 hotkeyMgr 允许在启动编排后注入。
@@ -28,6 +31,11 @@ func NewConfigWrapper(st *settings.Service, app *application.App, hm *hotkey.Man
 // SetApp 在 app 就绪后注入。
 func (w *ConfigWrapper) SetApp(app *application.App) {
 	w.app = app
+}
+
+// SetUpdaterChangedHook 注册「更新开关变化」回调（托盘注册后由 main 注入）。
+func (w *ConfigWrapper) SetUpdaterChangedHook(fn func()) {
+	w.updaterChanged = fn
 }
 
 // Theme 返回用户配置的主题（auto/light/dark，未配置回退 auto）。
@@ -84,6 +92,7 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	langChanged := cur.Language != cfg.Language
 	themeChanged := cur.Theme != cfg.Theme
 	httpLogRetentionChanged := cur.HttpLog.RetentionDays != cfg.HttpLog.RetentionDays
+	updaterChanged := cur.Updater != cfg.Updater
 	cur.Language = cfg.Language
 	cur.Theme = cfg.Theme
 	cur.DefaultTo = cfg.DefaultTo
@@ -94,6 +103,9 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	cur.AutoClipboard = cfg.AutoClipboard
 	cur.CopyKeySnapshot = cfg.CopyKeySnapshot
 	cur.AnalyticsEnabled = cfg.AnalyticsEnabled
+	// 更新器开关：预发布通道 / 自动更新 / 更新完自动重启。
+	// 预发布每次检测时实时读取，自动更新由后台调度循环每轮读取，均无需重启即生效。
+	cur.Updater = cfg.Updater
 	// 前端只维护保留天数；http_log.enabled 仍由 settings.json 控制，避免误关日志。
 	cur.HttpLog.RetentionDays = cfg.HttpLog.RetentionDays
 	if err := w.settingsSvc.Save(); err != nil {
@@ -106,6 +118,15 @@ func (w *ConfigWrapper) SaveConfig(cfg *settings.Settings) error {
 	// 热键配置同步后直接重注册，保证保存即生效
 	if w.hotkeyMgr != nil {
 		w.hotkeyMgr.Register()
+	}
+	// 更新开关变化：让托盘菜单等外部 UI 同步（托盘复选框状态随设置中心变化）。
+	if updaterChanged && w.updaterChanged != nil {
+		w.updaterChanged()
+	}
+	// 定时检查间隔改为 0：立即停掉框架已启动的周期轮询（框架不支持运行时重新启动，
+	// 从 0 改回正数需重启应用生效，设置页已有提示）。
+	if updaterChanged && cur.Updater.CheckIntervalHours <= 0 && w.app != nil {
+		go w.app.Updater.StopPeriodicCheck()
 	}
 	if langChanged {
 		i18n.SetLocale(cur.Language)

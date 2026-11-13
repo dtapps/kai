@@ -258,15 +258,29 @@ export interface TTSConfig {
 }
 
 /**
- * UpdaterConfig 自动更新相关配置（仅 Prerelease / Source 这类用户可决策项；
- * token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
+ * UpdaterConfig 自动更新相关配置（仅 Prerelease / CheckIntervalHours / AutoRestart / Source
+ * 这类用户可决策项；token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
  */
 export interface UpdaterConfig {
     /**
      * Prerelease 是否允许检测预发布版（pre-release）更新。
      * 开启后：检查更新时会把 GitHub 仓库的 pre-release 版本也纳入候选。
+     * 该值在每次检测时实时读取，切换开关后无需重启应用即刻生效。
      */
     "prerelease": boolean;
+
+    /**
+     * CheckIntervalHours 自动检查更新的间隔（小时）。0 表示关闭自动检查。
+     * 直接映射到 updater.Config.CheckInterval（0 时 Init 不启动周期轮询）；
+     * 由于框架只在 Init 时读取该值，修改后需重启应用生效（改为 0 会立即停掉轮询）。
+     */
+    "check_interval_hours": number;
+
+    /**
+     * AutoRestart 更新下载安装完成后是否自动重启应用以应用更新。
+     * 关闭时更新包会停留在「已就绪」状态，用户可经托盘菜单「重启并安装更新」手动生效。
+     */
+    "auto_restart": boolean;
 
     /**
      * Source 指定更新检测源：空 / "github" / "cnb"。

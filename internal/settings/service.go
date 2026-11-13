@@ -146,12 +146,20 @@ type ProxyConfig struct {
 	Password string `json:"password" mapstructure:"password"`
 }
 
-// UpdaterConfig 自动更新相关配置（仅 Prerelease / Source 这类用户可决策项；
-// token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
+// UpdaterConfig 自动更新相关配置（仅 Prerelease / CheckIntervalHours / AutoRestart / Source
+// 这类用户可决策项；token / provider / 资源匹配规则由 main.go 代码固定，不在此配置）。
 type UpdaterConfig struct {
 	// Prerelease 是否允许检测预发布版（pre-release）更新。
 	// 开启后：检查更新时会把 GitHub 仓库的 pre-release 版本也纳入候选。
+	// 该值在每次检测时实时读取，切换开关后无需重启应用即刻生效。
 	Prerelease bool `json:"prerelease" mapstructure:"prerelease"`
+	// CheckIntervalHours 自动检查更新的间隔（小时）。0 表示关闭自动检查。
+	// 直接映射到 updater.Config.CheckInterval（0 时 Init 不启动周期轮询）；
+	// 由于框架只在 Init 时读取该值，修改后需重启应用生效（改为 0 会立即停掉轮询）。
+	CheckIntervalHours int `json:"check_interval_hours" mapstructure:"check_interval_hours"`
+	// AutoRestart 更新下载安装完成后是否自动重启应用以应用更新。
+	// 关闭时更新包会停留在「已就绪」状态，用户可经托盘菜单「重启并安装更新」手动生效。
+	AutoRestart bool `json:"auto_restart" mapstructure:"auto_restart"`
 	// Source 指定更新检测源：空 / "github" / "cnb"。
 	//   - 空（默认）：沿用当前逻辑，按界面语言自动选源（英文走 GitHub，中文走 CNB）。
 	//   - "github"：强制只走官方 GitHub（含 SHA256SUMS 校验）。
@@ -188,7 +196,8 @@ func DefaultSettings() *Settings {
 		HttpLog: HttpLogConfig{Enabled: true, RetentionDays: 7},
 		Log:     LogConfig{Level: "info", RetentionDays: 30, Compress: true},
 		Proxy:   ProxyConfig{Enabled: false, Protocol: "http", Port: 8080},
-		Updater: UpdaterConfig{Prerelease: true},
+		// 预发布通道默认开启；默认每 6 小时自动检查一次更新（0 表示关闭）。
+		Updater: UpdaterConfig{Prerelease: true, CheckIntervalHours: 6, AutoRestart: true},
 		// 匿名统计默认关闭（隐私优先，opt-in）；用户可在设置页主动开启。
 		// dev 构建与未配置 key 时即便开启也不会实际上报。
 		AnalyticsEnabled: false,

@@ -29,25 +29,25 @@
 
 ### 2.1 字段表
 
-| JSON key              | 类型 / 默认值                                          | 含义                                           | 设置页 UI    |
-|-----------------------|--------------------------------------------------------|------------------------------------------------|--------------|
-| `language`            | string `auto`                                          | 界面语言模式：`auto` / `zh-CN` / `en-US`       | 有           |
-| `theme`               | string `auto`                                          | 主题：`auto` / `light` / `dark`                | 有           |
-| `default_to`          | string `zh`                                            | 翻译默认目标语言                               | 翻译窗口     |
-| `default_from`        | string `auto`                                          | 翻译默认源语言（`auto` 自动检测）              | 翻译窗口     |
-| `hotkeys.input`       | `{key:"Alt+A", enabled:true}`                          | 唤起输入翻译窗口的注册键                       | 有           |
-| `hotkeys.screenshot`  | `{key:"Alt+S", enabled:false}`                         | 截图翻译注册键（仅 macOS 可用）                | 有           |
-| `execkeys.copy`       | `{key:"Cmd+C"/"Ctrl+C", enabled:true, fallback:false}` | 执行键：程序模拟按下它完成复制                 | 有           |
-| `auto_clipboard`      | bool `false`                                           | 按输入翻译键时直接读剪贴板，不模拟复制         | 输入窗口     |
-| `copy_key_snapshot`   | object / `null`                                        | 开启自动剪贴板时快照的复制键状态，关闭时恢复   | 无（内部）   |
-| `tts`                 | `{engine:"system", speed:1.0}`                         | 语音合成配置；当前没有使用方与 UI              | 无           |
+| JSON key              | 类型 / 默认值                                          | 含义                                           | 设置页 UI        |
+|-----------------------|--------------------------------------------------------|------------------------------------------------|------------------|
+| `language`            | string `auto`                                          | 界面语言模式：`auto` / `zh-CN` / `en-US`       | 有               |
+| `theme`               | string `auto`                                          | 主题：`auto` / `light` / `dark`                | 有               |
+| `default_to`          | string `zh`                                            | 翻译默认目标语言                               | 翻译窗口         |
+| `default_from`        | string `auto`                                          | 翻译默认源语言（`auto` 自动检测）              | 翻译窗口         |
+| `hotkeys.input`       | `{key:"Alt+A", enabled:true}`                          | 唤起输入翻译窗口的注册键                       | 有               |
+| `hotkeys.screenshot`  | `{key:"Alt+S", enabled:false}`                         | 截图翻译注册键（仅 macOS 可用）                | 有               |
+| `execkeys.copy`       | `{key:"Cmd+C"/"Ctrl+C", enabled:true, fallback:false}` | 执行键：程序模拟按下它完成复制                 | 有               |
+| `auto_clipboard`      | bool `false`                                           | 按输入翻译键时直接读剪贴板，不模拟复制         | 输入窗口         |
+| `copy_key_snapshot`   | object / `null`                                        | 开启自动剪贴板时快照的复制键状态，关闭时恢复   | 无（内部）       |
+| `tts`                 | `{engine:"system", speed:1.0}`                         | 语音合成配置；当前没有使用方与 UI              | 无               |
 | `http_log`            | `{enabled:true, retention_days:7}`                     | HTTP 请求日志开关与保留天数                    | 保留天数在通用页 |
-| `log`                 | `{level:"info", retention_days:30, compress:true}`     | 主日志等级、保留天数、归档压缩                 | 无           |
-| `proxy`               | `{enabled:false, protocol:"http", port:8080, ...}`     | HTTP/HTTPS/SOCKS5 代理                         | 无           |
-| `updater`             | `{prerelease:true, source:""}`                         | 预发布通道；更新源 `""`（自动）/`github`/`cnb` | 预发布在托盘 |
-| `analytics_enabled`   | bool `false`                                           | 匿名统计开关（opt-in）                         | 有           |
-| `analytics_installed` | bool `false`                                           | 是否已发过 `app_installed`（内部标记）         | 无           |
-| `dns_configs`         | array `[]`                                             | 自定义 DNS：`[{enabled, servers:["1.1.1.1"]}]` | 无           |
+| `log`                 | `{level:"info", retention_days:30, compress:true}`     | 主日志等级、保留天数、归档压缩                 | 无               |
+| `proxy`               | `{enabled:false, protocol:"http", port:8080, ...}`     | HTTP/HTTPS/SOCKS5 代理                         | 无               |
+| `updater`             | `{prerelease:true, source:""}`                         | 预发布通道；更新源 `""`（自动）/`github`/`cnb` | 预发布在托盘     |
+| `analytics_enabled`   | bool `false`                                           | 匿名统计开关（opt-in）                         | 有               |
+| `analytics_installed` | bool `false`                                           | 是否已发过 `app_installed`（内部标记）         | 无               |
+| `dns_configs`         | array `[]`                                             | 自定义 DNS：`[{enabled, servers:["1.1.1.1"]}]` | 无               |
 
 字段定义：`Settings`、`HotkeyEntry`、`ExecKeyEntry`、`TTSConfig`、`HttpLogConfig`、`LogConfig`、`ProxyConfig`、`UpdaterConfig`、`DNSConfig`，均在 `internal/settings/service.go`。
 

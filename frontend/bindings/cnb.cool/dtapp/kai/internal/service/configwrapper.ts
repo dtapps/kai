@@ -75,6 +75,13 @@ export function SetTheme(theme: string): $CancellablePromise<void> {
 }
 
 /**
+ * SetUpdaterChangedHook 注册「更新开关变化」回调（托盘注册后由 main 注入）。
+ */
+export function SetUpdaterChangedHook(fn: any): $CancellablePromise<void> {
+    return $Call.ByID(4292830098, fn);
+}
+
+/**
  * SystemLanguages 返回 macOS 系统翻译（Translation.framework）已安装的语言包列表。
  * 仅 darwin 可用；非 darwin 平台见 apple_langs_other.go。
  */

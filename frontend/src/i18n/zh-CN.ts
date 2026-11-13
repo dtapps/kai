@@ -77,9 +77,18 @@ export const zh = {
     analyticsHint:
       '发送匿名使用数据（翻译次数、功能使用等），帮助我们改进产品。数据不含任何个人信息，可随时关闭。',
     httpLogRetention: '请求日志清理',
-    httpLogRetentionHint:
-      '定期删除 httplog.db 中超过保留天数的 HTTP 请求日志；设为 0 表示不清理。',
+    httpLogRetentionHint: '定期删除 httplog.db 中超过保留天数的 HTTP 请求日志；设为 0 表示不清理。',
     httpLogRetentionUnit: '天',
+    updater: '更新',
+    updaterPrerelease: '检查预发布版本',
+    updaterPrereleaseHint: '开启后会把预发布（RC / nightly）版本纳入更新检测；关闭则只检测正式版。',
+    updaterCheckInterval: '自动检查更新',
+    updaterCheckIntervalHint:
+      '后台按间隔检查更新，0 表示关闭（仍可从托盘手动检查）。由系统定时器执行，修改后需重启应用生效。',
+    updaterCheckIntervalUnit: '小时',
+    updaterAutoRestart: '更新完自动重启',
+    updaterAutoRestartHint:
+      '更新下载安装完成后自动重启应用以完成更新；关闭后会发送通知，可在托盘菜单中手动重启安装。',
     engines: '引擎',
     enginesTitle: '翻译引擎',
     engineList: '引擎列表',
@@ -322,6 +331,7 @@ export const zh = {
     generalSaveLangFailed: '[通用] 保存语言设置失败',
     generalSaveAnalyticsFailed: '[通用] 保存匿名统计开关失败',
     generalSaveHttpLogRetentionFailed: '[通用] 保存请求日志清理设置失败',
+    generalSaveUpdaterFailed: '[通用] 保存更新设置失败',
     shortcutCheckAccessibilityFailed: '[快捷键] 检测辅助功能授权失败',
     shortcutOpenAccessibilityFailed: '[快捷键] 打开辅助功能设置失败',
     shortcutCheckScreenRecordingFailed: '[快捷键] 检测屏幕录制授权失败',

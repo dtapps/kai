@@ -50,7 +50,9 @@ type mirrorProvider struct {
 	client        *http.Client
 
 	// prerelease 控制是否提供 nightly 预发布更新（对应设置项 Prerelease）。
-	prerelease bool
+	// 以闭包形式持有：每次检测时实时读取设置，用户在设置中心/托盘切换后立即生效，
+	// 无需重启应用（provider 在启动时只构建一次）。
+	prerelease func() bool
 	// repo / baseURL / githubToken 用于直接按 tag 拉取 nightly Release，
 	// 绕过 github provider 内置的 semver「IsNewer」门槛（nightly 非合法 semver）。
 	repo        string
@@ -83,8 +85,14 @@ type mirrorProvider struct {
 // cnbToken 为 CNB 只读 Token（ldflags 注入），预留给检测层走 CNB 鉴权 API（CNB 匿名 API 返回 401）。
 // installedGitCommit 为本机已安装二进制的 Git 提交（ldflags 注入），nightly 优先用它对比
 // 远端 SHA256SUMS 的 git_commit，相等即同一份代码直接跳过（避免每日重打同 commit 频繁提示）。
-func newMirrorProvider(cfg github.Config, checkClient, downloadClient *http.Client, installedBuildTime string, installedGitCommit string, cnbToken string) (*mirrorProvider, error) {
+// prerelease 为预发布通道开关的实时读取函数（读 settings.json 的 updater.prerelease），
+// 每次检测时求值，使设置切换无需重启应用。
+func newMirrorProvider(cfg github.Config, checkClient, downloadClient *http.Client, installedBuildTime string, installedGitCommit string, cnbToken string, prerelease func() bool) (*mirrorProvider, error) {
 	cfg.HTTPClient = checkClient
+	// 内置 github provider 固定按「只看稳定版」构建：预发布检测完全由本包的 checkNightly
+	// 负责（带 build_time / git_commit 对比）。若把 Prerelease 透给 github provider，
+	// 稳定版分支也会把预发布当作候选，出现两套互斥的预发布语义且无法运行时切换。
+	cfg.Prerelease = false
 	gh, err := github.New(cfg)
 	if err != nil {
 		return nil, err
@@ -108,7 +116,7 @@ func newMirrorProvider(cfg github.Config, checkClient, downloadClient *http.Clie
 		Provider:           gh,
 		checkProvider:      ghNoChecksum,
 		client:             downloadClient,
-		prerelease:         cfg.Prerelease,
+		prerelease:         prerelease,
 		repo:               cfg.Repository,
 		baseURL:            base,
 		githubToken:        cfg.Token,
@@ -122,13 +130,22 @@ func newMirrorProvider(cfg github.Config, checkClient, downloadClient *http.Clie
 // Name 实现 updater.Provider。
 func (m *mirrorProvider) Name() string { return "github-mirror" }
 
+// preReleaseEnabled 实时判断是否启用预发布通道（读设置项 updater.prerelease）。
+// 未注入读取函数时按关闭处理，避免 nil 调用。
+func (m *mirrorProvider) preReleaseEnabled() bool {
+	if m.prerelease == nil {
+		return false
+	}
+	return m.prerelease()
+}
+
 // Check 版本检测按语言选择源，与下载/校验策略一致：
 //   - 英文用户：直接使用官方 GitHub（含 SHA256SUMS 校验，原始行为）。
 //   - 中文用户：用 checkProvider 检测版本（不抓校验），再从 CNB 拉 SHA256SUMS 并填充 Verification。
 //
 // nightly 预发布检测见 checkNightly（同样按语言选源）。
 func (m *mirrorProvider) Check(ctx context.Context, req updater.CheckRequest) (*updater.Release, error) {
-	if m.prerelease {
+	if m.preReleaseEnabled() {
 		// 优先提供 nightly 预发布；失败或无 nightly 时回退稳定版逻辑。
 		if rel, err := m.checkNightly(ctx, req); err != nil {
 			slog.Warn(i18n.T("log.updater_nightly_failed", "Error", err))

@@ -83,6 +83,17 @@ export const en: Dict = {
     httpLogRetentionHint:
       'Periodically delete HTTP request logs in httplog.db older than the retention period; set to 0 to disable cleanup.',
     httpLogRetentionUnit: 'days',
+    updater: 'Updates',
+    updaterPrerelease: 'Include pre-releases',
+    updaterPrereleaseHint:
+      'Also offer pre-release (RC / nightly) builds; turn off to only track stable releases.',
+    updaterCheckInterval: 'Automatic update checks',
+    updaterCheckIntervalHint:
+      'Check for updates in the background at this interval; 0 disables it (you can still check manually from the tray). The scheduler reads it at startup, so restart the app to apply changes.',
+    updaterCheckIntervalUnit: 'hours',
+    updaterAutoRestart: 'Restart after update',
+    updaterAutoRestartHint:
+      'Restart the app automatically once the update is installed; when off you get a notification and can restart from the tray menu.',
     engines: 'Engines',
     enginesTitle: 'Translation Engines',
     engineList: 'Engine list',
@@ -332,6 +343,7 @@ export const en: Dict = {
     generalSaveLangFailed: '[general] Failed to save language settings',
     generalSaveAnalyticsFailed: '[general] Failed to save anonymous analytics toggle',
     generalSaveHttpLogRetentionFailed: '[general] Failed to save request log cleanup setting',
+    generalSaveUpdaterFailed: '[general] Failed to save update settings',
     shortcutCheckAccessibilityFailed: '[shortcut] Failed to check Accessibility permission',
     shortcutOpenAccessibilityFailed: '[shortcut] Failed to open Accessibility settings',
     shortcutCheckScreenRecordingFailed: '[shortcut] Failed to check Screen Recording permission',

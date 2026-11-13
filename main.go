@@ -5,7 +5,6 @@ import (
 	"embed"
 	"log"
 	"log/slog"
-	"math/rand"
 	"os"
 	"path/filepath"
 	"runtime/debug"
@@ -441,6 +440,10 @@ func main() {
 		screenshotWindow.Hide()
 	})
 	registerTray(app, hm, configSvc, settingsService)
+	// 设置中心保存更新开关后重建托盘菜单，保证托盘复选框与设置页显示一致。
+	configSvc.SetUpdaterChangedHook(func() {
+		rebuildTrayMenu(app, hm, configSvc, settingsService)
+	})
 
 	// 语言变更后，用最新语言重建托盘菜单文案（托盘为原生，只能后端重建）。
 	// 优先用事件 payload 携带的语言（mode 可能含 auto，由 i18n 解析为具体语言），
@@ -472,7 +475,6 @@ func main() {
 	gh, err := newMirrorProvider(github.Config{
 		Repository:    "dtapps/kai",
 		Token:         buildinfo.GithubToken,
-		Prerelease:    settingsService.Get().Updater.Prerelease,
 		ChecksumAsset: "SHA256SUMS",
 		// 自定义资源匹配：仅匹配「升级专用文件」（文件名以 updater- 开头）。
 		// 打包/安装文件只用于首次安装，不用于自更新；升级文件统一压缩
@@ -513,12 +515,17 @@ func main() {
 			slog.Debug(i18n.T("log.updater_matcher_none"))
 			return -1
 		},
-	}, updaterCheckClient, updaterDownloadClient, buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken)
+	}, updaterCheckClient, updaterDownloadClient, buildinfo.BuildTime, buildinfo.GitCommit, buildinfo.CnbToken,
+		// 预发布通道开关实时读取设置：设置中心/托盘切换后下一次检测即生效，无需重启。
+		func() bool { return settingsService.Get().Updater.Prerelease })
 	if err != nil {
 		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else if err := app.Updater.Init(updater.Config{
 		CurrentVersion: buildinfo.Version,
 		Providers:      []updater.Provider{gh},
+		// 定时自动检查更新：交给 updater 框架的 periodicCheckLoop。
+		// 0 表示关闭（Config.CheckInterval == 0 时 Init 不启动轮询）。
+		CheckInterval: updaterCheckInterval(settingsService.Get().Updater.CheckIntervalHours),
 		// 使用框架内置更新窗口（默认模板），只覆盖标题与尺寸等 chrome。
 		Window: &updater.BuiltinWindow{
 			Options: updater.WindowOptions{
@@ -528,9 +535,23 @@ func main() {
 	}); err != nil {
 		slog.Error(i18n.T("log.updater_init_failed"), "error", err)
 	} else {
-		// 更新就绪：自动重启以安装更新（用于验证自更新链路；不需要自动重启时删掉 Restart 调用即可）。
+		// 更新就绪（已下载、校验完成，等待替换二进制）。
+		// 是否自动重启由设置项 updater.auto_restart 决定：
+		//   - 开启：稍等日志落盘后走 updater 的 helper 替换流程并退出进程；
+		//   - 关闭：保留「已就绪」状态，发桌面通知，并在托盘菜单提供手动重启入口。
 		app.Event.On(updater.EventUpdateReady, func(e *application.CustomEvent) {
 			slog.Info(i18n.T("log.updater_ready"))
+			// 重建托盘菜单，使「重启并安装更新」入口随 ready 状态出现。
+			rebuildTrayMenu(app, hm, configSvc, settingsService)
+			if !settingsService.Get().Updater.AutoRestart {
+				slog.Info(i18n.T("log.updater_auto_restart_disabled"))
+				notifySvc.Notify(notifications.NotificationOptions{
+					ID:       "kai-update-ready",
+					Title:    i18n.T("notification.update_ready_title"),
+					Subtitle: i18n.T("notification.update_ready_subtitle"),
+				})
+				return
+			}
 			go func() {
 				// 稍等片刻让日志与界面落盘，再走 updater 的 helper 替换流程。
 				time.Sleep(500 * time.Millisecond)
@@ -543,10 +564,6 @@ func main() {
 		app.Event.On(updater.EventWindowReady, func(e *application.CustomEvent) {
 			slog.Debug(i18n.T("log.updater_window_ready"))
 		})
-		// 启动时静默检查（dev 构建跳过，避免噪音）。
-		if !buildinfo.IsDev() {
-			checkUpdateOnStart(app, notifySvc)
-		}
 	}
 
 	// 前端匿名统计事件上报：前端 UI 事件（设置页打开、开关切换）经此事件转交 Go 统一上报，
@@ -592,6 +609,15 @@ func main() {
 	if err := app.Run(); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// updaterCheckInterval 把设置项 updater.check_interval_hours（小时）换算为
+// updater.Config.CheckInterval；<= 0 返回 0，表示关闭框架的周期检查。
+func updaterCheckInterval(hours int) time.Duration {
+	if hours <= 0 {
+		return 0
+	}
+	return time.Duration(hours) * time.Hour
 }
 
 // 包级窗口/tray 引用，便于语言变更时重建菜单
@@ -697,6 +723,17 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 			}
 		}()
 	})
+	// 更新已下载待安装（updater ready）：提供手动重启入口。仅在「更新完自动重启」
+	// 关闭时会出现，避免自动重启流程与手动点击竞争。
+	if app.Updater.State() == updater.StateReady {
+		trayMenu.Add(i18n.T("menu.restart_install_update")).OnClick(func(ctx *application.Context) {
+			go func() {
+				if err := app.Updater.Restart(context.Background()); err != nil {
+					slog.Error(i18n.T("log.updater_restart_failed"), "error", err)
+				}
+			}()
+		})
+	}
 	// 预发布版更新通道开关：紧贴「检查更新」，切换后写回设置并持久化。
 	// 初始勾选状态读当前配置；点击由 Wails 自动翻转 checked，回调里读新值落盘。
 	trayMenu.AddCheckbox(i18n.T("menu.prerelease"), ss.Get().Updater.Prerelease).OnClick(func(ctx *application.Context) {
@@ -714,44 +751,12 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 	tray.SetTooltip(i18n.T("menu.tooltip"))
 }
 
-// rebuildTrayMenu 语言/快捷键启用状态变更时重建托盘菜单（动态显示菜单项）
+// rebuildTrayMenu 语言/快捷键启用状态/更新状态变更时重建托盘菜单（动态显示菜单项）
 func rebuildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.ConfigWrapper, ss *settings.Service) {
-	if translateWindow == nil || settingsWindow == nil {
+	if tray == nil || translateWindow == nil || settingsWindow == nil {
 		return
 	}
 	buildTrayMenu(app, hm, configSvc, ss)
-}
-
-// checkUpdateOnStart 启动后异步检查更新，有更新时发通知（对齐 certflow）。
-func checkUpdateOnStart(app *application.App, notifySvc *service.NotificationService) {
-	go func() {
-		// 兜底：同点击检查更新，避免 Updater 原生层 panic 拖死主进程。
-		defer func() {
-			if r := recover(); r != nil {
-				slog.Error(i18n.T("log.check_update_panic"), "panic", r)
-			}
-		}()
-		// 生成 1 到 3 分钟之间的随机延迟，对齐 certflow（math/rand 足够）。
-		minDuration := 1 * time.Minute
-		maxDuration := 3 * time.Minute
-		randomDuration := minDuration + time.Duration(rand.Intn(int(maxDuration-minDuration)))
-		time.Sleep(randomDuration)
-		rel, err := app.Updater.Check(context.Background())
-		if err != nil {
-			slog.Warn(i18n.T("log.check_update_failed"), "error", err)
-			return
-		}
-		if rel == nil {
-			return // 没有更新
-		}
-		// 发送原生桌面通知（Wails notifications service，不经前端转发）。
-		// 授权检查与降级逻辑统一收敛到 service.NotificationService，调用处只关心发什么。
-		notifySvc.Notify(notifications.NotificationOptions{
-			ID:       "kai-update-available",
-			Title:    i18n.T("notification.update_available_title"),
-			Subtitle: i18n.T("notification.update_available_subtitle", "version", rel.Version),
-		})
-	}()
 }
 
 // selectTrayIcon 根据系统暗色状态选择托盘图标。使用 Wails3 Environment API

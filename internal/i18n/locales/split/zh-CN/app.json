@@ -3,6 +3,8 @@
   "app.name_version": "Kai {{.Version}}",
   "notification.update_available_subtitle": "发现新版本 {{.version}}，点击菜单「检查更新」安装",
   "notification.update_available_title": "Kai 有更新可用",
+  "notification.update_ready_subtitle": "重启应用即可完成更新（托盘菜单「重启并安装更新」）",
+  "notification.update_ready_title": "Kai 更新已就绪",
   "updater.title": "检查更新",
   "window.screenshot_title": "Kai 截图翻译",
   "window.selection_title": "Kai 划词",

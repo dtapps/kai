@@ -60,6 +60,9 @@ func TestDefaultSettings(t *testing.T) {
 	if !d.Updater.Prerelease {
 		t.Fatal("Updater.Prerelease 应默认开启")
 	}
+	if d.Updater.CheckIntervalHours != 6 || !d.Updater.AutoRestart {
+		t.Fatalf("Updater.CheckIntervalHours 应默认 6 小时、AutoRestart 应默认开启: %+v", d.Updater)
+	}
 	// 隐私优先：匿名统计必须默认关闭。
 	if d.AnalyticsEnabled {
 		t.Fatal("AnalyticsEnabled 必须默认 false（opt-in）")

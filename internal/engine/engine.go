@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"errors"
 	"net/http"
 	"runtime"
 	"time"
@@ -90,9 +90,9 @@ type EngineConfig struct {
 
 // 引擎层公共错误（唯一来源，settings/service 复用，避免 engine 反向 import settings 造成循环依赖）
 var (
-	ErrAPIKey   = fmt.Errorf(i18n.T("err.no_apikey"))
-	ErrNoEngine = fmt.Errorf(i18n.T("err.no_engine"))
-	ErrNoOCR    = fmt.Errorf(i18n.T("err.no_ocr"))
+	ErrAPIKey   = errors.New(i18n.T("err.no_apikey"))
+	ErrNoEngine = errors.New(i18n.T("err.no_engine"))
+	ErrNoOCR    = errors.New(i18n.T("err.no_ocr"))
 )
 
 // defaultEngineNames 默认内置、开箱即用的引擎（其余需用户在设置页「添加」启用）。

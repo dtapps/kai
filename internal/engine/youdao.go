@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -123,7 +124,7 @@ func (y *youdaoTranslator) Translate(ctx context.Context, req model.TranslateReq
 		return nil, fmt.Errorf(i18n.T("err.youdao_api_error"), yr.ErrorCode, yr.ErrorCode)
 	}
 	if len(yr.Translation) == 0 {
-		return nil, fmt.Errorf(i18n.T("err.youdao_empty_result"))
+		return nil, errors.New(i18n.T("err.youdao_empty_result"))
 	}
 	src := yr.L
 	if src == "" {

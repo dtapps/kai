@@ -1,8 +1,8 @@
 version: '3'
 
 vars:
-  APP_NAME: "Kai"
-  BIN_DIR: "bin"
+  APP_NAME: 'Kai'
+  BIN_DIR: 'bin'
   PACKAGE_MANAGER: '{{.PACKAGE_MANAGER | default "pnpm"}}'
   VITE_PORT: '{{.WAILS_VITE_PORT | default 9245}}'
   # Target OS for build/package/run. Defaults to the host OS, and is overridden
@@ -20,17 +20,17 @@ tasks:
   build:
     summary: Builds the application
     cmds:
-      - task: "{{.GOOS}}:build"
+      - task: '{{.GOOS}}:build'
 
   package:
     summary: Packages a production build of the application
     cmds:
-      - task: "{{.GOOS}}:package"
+      - task: '{{.GOOS}}:package'
 
   run:
     summary: Runs the application
     cmds:
-      - task: "{{.GOOS}}:run"
+      - task: '{{.GOOS}}:run'
 
   dev:
     summary: Runs the application in development mode

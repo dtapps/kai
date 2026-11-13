@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -70,25 +71,25 @@ func (s *appleTranslator) SupportsAutoSource() bool { return true }
 func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	text := strings.TrimSpace(req.Text)
 	if text == "" {
-		return nil, fmt.Errorf(i18n.T("err.empty_text"))
+		return nil, errors.New(i18n.T("err.empty_text"))
 	}
 	sl := normalizeLang(string(req.From))
 	tl := normalizeLang(string(req.To))
 	// sl == "" 表示自动检测源语言，交由 Swift 处理；非空则必须显式指定。
 	if tl == "auto" || tl == "" {
-		return nil, fmt.Errorf(i18n.T("err.apple_need_target"))
+		return nil, errors.New(i18n.T("err.apple_need_target"))
 	}
 
 	slog.Debug(i18n.T("log.apple_translate_invoke"), "from", sl, "to", tl, "text_len", len(text))
 
 	outBuf := make([]byte, 1<<16) // 64KB 输出缓冲，足以容纳长文本译文 + JSON 包装
 	if !swiftbridge.Available() {
-		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
+		return nil, errors.New(i18n.T("err.swiftbridge_unavailable"))
 	}
 	n := swiftbridge.KaiTranslate(sl, tl, text, unsafe.Pointer(&outBuf[0]), int32(len(outBuf))) //nolint:gosec // 与 Swift 交互所必需，缓冲区由 Go 侧分配
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_translate_buffer"), "from", sl, "to", tl, "text_len", len(text))
-		return nil, fmt.Errorf(i18n.T("err.apple_translate_buffer"))
+		return nil, errors.New(i18n.T("err.apple_translate_buffer"))
 	}
 
 	// 裁剪 Swift 写入时可能附带的一个结尾 \0（C 字符串习惯），避免 JSON 解析报 \x00 错误。
@@ -125,7 +126,7 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 	}
 	if tr.Result == "" {
 		slog.Error(i18n.T("err.apple_translate_empty"), "from", sl, "to", tl)
-		return nil, fmt.Errorf(i18n.T("err.apple_translate_empty"))
+		return nil, errors.New(i18n.T("err.apple_translate_empty"))
 	}
 	slog.Debug(i18n.T("log.apple_translate_done"), "from", sl, "to", tl, "detected_from", tr.From, "result_len", len(tr.Result))
 	return &model.TranslateResult{
@@ -142,13 +143,13 @@ func (s *appleTranslator) Translate(ctx context.Context, req model.TranslateRequ
 func AvailableLanguages() ([]string, error) {
 	slog.Debug(i18n.T("log.apple_query_langs"))
 	if !swiftbridge.Available() {
-		return nil, fmt.Errorf(i18n.T("err.swiftbridge_unavailable"))
+		return nil, errors.New(i18n.T("err.swiftbridge_unavailable"))
 	}
 	outBuf := make([]byte, 1<<16)
 	n := swiftbridge.KaiAvailableLanguages(unsafe.Pointer(&outBuf[0]), int32(len(outBuf))) //nolint:gosec // 与 Swift 交互所必需，缓冲区由 Go 侧分配
 	if n < 0 {
 		slog.Error(i18n.T("err.apple_lang_buffer"))
-		return nil, fmt.Errorf(i18n.T("err.apple_lang_buffer"))
+		return nil, errors.New(i18n.T("err.apple_lang_buffer"))
 	}
 	// 裁剪 Swift 写入时可能附带的一个结尾 \0（C 字符串习惯），避免 JSON 解析报 \x00 错误。
 	payload := bytes.TrimRight(outBuf[:n], "\x00")

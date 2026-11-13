@@ -12,6 +12,11 @@
 #   v1.2.3-alpha.1              -> TAG=v1.2.3-alpha.1         PRERELEASE=true   预发布（alpha 渠道）
 #   v1.2.3-nightly.20260101     -> TAG=v1.2.3-nightly.20260101 PRERELEASE=true  预发布（nightly 渠道）
 #
+# `nightly` 不是 tag：定时任务（及手动输入）由 workflow 先推导成
+# `<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（如 0.2.8-nightly.20261114），
+# 再交给本脚本归一化。这样每天一个 tag，既能保留最近若干个夜间构建，
+# 又能保证版本号可比较（比最近正式版新、小于该补丁版的正式版）。
+#
 # 只用版本号后缀判定，不接受「是不是预发布」这种布尔输入：布尔输入会和版本号打架。
 #
 # 用法（被 source）：
@@ -71,6 +76,16 @@ resolve_version() {
     printf '错误: 版本号不能为空。示例: v1.2.3 / v1.2.3-rc.1 / v1.2.3-beta.1 / v1.2.3-alpha.1 / v1.2.3-nightly.20260101\n' >&2
     return 1
   fi
+
+  # `nightly` 不再是可发布的 tag（会拼出 vnightly 这种非法版本号）。
+  # 定时任务与手动输入的 `nightly` 由 workflow 先推导成
+  # `<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`，再交给本脚本。
+  case "${input}" in
+    nightly | NIGHTLY)
+      printf '错误: `nightly` 不是版本号，请填具体版本号（如 0.2.8-nightly.20260101）；定时任务会自动推导\n' >&2
+      return 1
+      ;;
+  esac
 
   # 字符白名单：版本号最终会变成 git tag、Docker tag 和 JSON 字段值。
   # 含引号/反斜杠/换行的输入既不是合法版本号，拼进 JSON 时还会破坏结构（甚至注入字段），
@@ -191,8 +206,9 @@ check_pkg 'v1.2' '1.2.0' '1.2'
 
 # 非法输入必须被拒绝，不能漏到 git tag / Docker tag / JSON 里：
 # 空版本号历史上会打出 :v 这种非法标签；引号/分号会破坏 optionsFrom 的 JSON 结构。
+# `nightly` 已改为由 workflow 推导成带日期的版本 tag，这里必须拒绝（否则会拼出 vnightly）。
 # 注意不要把 "v1.2.3 beta" 当非法输入：空白会先被去掉（粘贴常带空格），结果 v1.2.3beta 合法
-for bad_input in '' 'v1.2.3"x' 'v1.2.3;rm -rf /' 'v1.2.3@1' 'v1/2/3'; do
+for bad_input in '' 'v1.2.3"x' 'v1.2.3;rm -rf /' 'v1.2.3@1' 'v1/2/3' 'nightly' 'NIGHTLY'; do
   if resolve_version "${bad_input}" 2>/dev/null; then
     printf '  ✗ %-20s 应当报错，实际通过（TAG=%s）\n' "${bad_input:-<空>}" "${TAG}"
     failures=$((failures + 1))

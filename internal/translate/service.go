@@ -6,6 +6,7 @@ package translate
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -225,7 +226,7 @@ func (s *Service) TranslateMulti(req model.TranslateRequest) (*model.TranslateMu
 // Ocr 图片 OCR：直接对传入的图片数据执行 OCR（图片已由调用方截好/选好）。
 func (s *Service) Ocr(req model.OcrRequest) (*model.OcrResult, error) {
 	if len(req.ImageData) == 0 {
-		return nil, fmt.Errorf(i18n.T("err.ocr_empty_image"))
+		return nil, errors.New(i18n.T("err.ocr_empty_image"))
 	}
 	ocr, ok := s.registry.GetOcr(req.Engine)
 	if !ok {
@@ -288,7 +289,7 @@ func (s *Service) ScreenshotTranslate(session string) (*model.ScreenshotResult, 
 	ocrName := s.registry.DefaultOCREngineName()
 	if ocrName == "" {
 		slog.Error(i18n.T("log.screenshot_no_ocr_engine"))
-		return nil, fmt.Errorf(i18n.T("err.no_ocr"))
+		return nil, errors.New(i18n.T("err.no_ocr"))
 	}
 	slog.Debug(i18n.T("log.screenshot_ocr_start"), slog.String("ocr_engine", ocrName))
 	ocrRes, err := s.TriggerOcr(ocrName, img)
@@ -311,7 +312,7 @@ func (s *Service) ScreenshotTranslate(session string) (*model.ScreenshotResult, 
 	slog.Debug(i18n.T("log.screenshot_ocr_done"), slog.Int("text_len", len(text)))
 	if text == "" {
 		slog.Warn(i18n.T("log.screenshot_ocr_empty"))
-		return nil, fmt.Errorf(i18n.T("err.ocr_no_text"))
+		return nil, errors.New(i18n.T("err.ocr_no_text"))
 	}
 	// 按 session 缓存本次 OCR 原文与截图，供改语言后 ScreenshotRetranslate 复用（隔离不同入口）。
 	s.screenshotCacheMu.Lock()
@@ -373,7 +374,7 @@ func (s *Service) ScreenshotRetranslate(session string, from, to model.Language)
 	cache, ok := s.screenshotCache[session]
 	s.screenshotCacheMu.RUnlock()
 	if !ok || cache.text == "" || cache.imageURL == "" {
-		return fmt.Errorf(i18n.T("err.screenshot_no_cache"))
+		return errors.New(i18n.T("err.screenshot_no_cache"))
 	}
 	req := model.TranslateRequest{Text: cache.text, From: from, To: to}
 	slog.Debug(i18n.T("log.screenshot_retranslate_start"),

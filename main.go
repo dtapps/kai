@@ -73,6 +73,18 @@ func formatBuildTime(raw string) string {
 	return t.Local().Format("2006-01-02 15:04:05")
 }
 
+// displayVersion 返回界面展示用的版本号：CI 注入的纯数字版本（如 1.2.3）加上
+// v 前缀，与发布 tag（v1.2.3）及更新窗口的显示口径对齐；非数字版本（如本地
+// dev 构建的 "dev"）原样返回，避免出现 "Kai vdev"。
+// 注意：仅用于展示；updater.CurrentVersion / 日志 / 统计上报仍用原始值。
+func displayVersion() string {
+	v := buildinfo.Version
+	if v == "" || v[0] < '0' || v[0] > '9' {
+		return v
+	}
+	return "v" + v
+}
+
 // resolveIsDark 把 settings 里的主题（可能含 auto）解析为「是否深色」。
 // auto 用系统真实外观（IsDarkMode）决定；非 auto 按取值判断。
 func resolveIsDark(theme string, app *application.App) bool {
@@ -663,8 +675,8 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 	// lang 取空串，由 i18n.T 回退到 SetLocale 设置的全局语言（含 auto 解析），
 	// 确保语言广播后即时重建菜单用最新语言，不依赖配置落盘时序。
 	trayMenu := app.Menu.New()
-	// 第一项：应用名称 + 当前版本号，禁用状态（不可点击）
-	trayMenu.Add(i18n.T("app.name_version", "Version", buildinfo.Version)).SetEnabled(false)
+	// 第一项：应用名称 + 当前版本号（带 v 前缀，见 displayVersion），禁用状态（不可点击）
+	trayMenu.Add(i18n.T("app.name_version", "Version", displayVersion())).SetEnabled(false)
 	// 分隔符隔开
 	trayMenu.AddSeparator()
 	// 根据快捷键启用状态动态添加菜单项：输入翻译 / 截图翻译。
@@ -723,8 +735,17 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 			}
 		}()
 	})
-	// 更新已下载待安装（updater ready）：提供手动重启入口。仅在「更新完自动重启」
-	// 关闭时会出现，避免自动重启流程与手动点击竞争。
+	// 预发布版更新通道开关：紧贴「检查更新」，切换后写回设置并持久化。
+	// 初始勾选状态读当前配置；点击由 Wails 自动翻转 checked，回调里读新值落盘。
+	trayMenu.AddCheckbox(i18n.T("menu.prerelease"), ss.Get().Updater.Prerelease).OnClick(func(ctx *application.Context) {
+		ss.Get().Updater.Prerelease = ctx.IsChecked()
+		if err := ss.Save(); err != nil {
+			slog.Error(i18n.T("log.save_prerelease_failed"), slog.String("error", err.Error()))
+		}
+	})
+	// 更新已下载待安装（updater ready）：提供手动重启入口，紧贴「退出」上方。
+	// 动态项：仅当 updater 处于 ready 状态时才加入菜单；首次就绪时由
+	// updater.EventUpdateReady 的监听触发 rebuildTrayMenu，把该项显示出来。
 	if app.Updater.State() == updater.StateReady {
 		trayMenu.Add(i18n.T("menu.restart_install_update")).OnClick(func(ctx *application.Context) {
 			go func() {
@@ -734,14 +755,6 @@ func buildTrayMenu(app *application.App, hm *hotkey.Manager, configSvc *service.
 			}()
 		})
 	}
-	// 预发布版更新通道开关：紧贴「检查更新」，切换后写回设置并持久化。
-	// 初始勾选状态读当前配置；点击由 Wails 自动翻转 checked，回调里读新值落盘。
-	trayMenu.AddCheckbox(i18n.T("menu.prerelease"), ss.Get().Updater.Prerelease).OnClick(func(ctx *application.Context) {
-		ss.Get().Updater.Prerelease = ctx.IsChecked()
-		if err := ss.Save(); err != nil {
-			slog.Error(i18n.T("log.save_prerelease_failed"), slog.String("error", err.Error()))
-		}
-	})
 	// 分隔符隔开
 	trayMenu.AddSeparator()
 	trayMenu.Add(i18n.T("menu.quit")).OnClick(func(ctx *application.Context) {

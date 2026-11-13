@@ -39,7 +39,7 @@ tasks:
     # 若此处启用缓存，Task 可能判断 dylib 较新而跳过，导致加载到未更新的旧 dylib。
     preconditions:
       - sh: command -v swiftc >/dev/null 2>&1
-        msg: "swiftc is required to build the swift bridge. Install Xcode command line tools."
+        msg: 'swiftc is required to build the swift bridge. Install Xcode command line tools.'
     cmds:
       - bash ./build.sh
 
@@ -61,7 +61,8 @@ tasks:
       - task: common:generate:icons
     preconditions:
       - sh: '{{if eq .OBFUSCATED "true"}}command -v garble >/dev/null 2>&1{{else}}true{{end}}'
-        msg: "garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+). See https://github.com/burrowers/garble/releases for version/toolchain compatibility."
+        msg: 'garble is required for obfuscated builds. Install it with: go install mvdan.cc/garble@v0.16.0 (requires Go 1.24+).
+          See https://github.com/burrowers/garble/releases for version/toolchain compatibility.'
     cmds:
       - '{{if eq .OBFUSCATED "true"}}garble {{.GARBLE_ARGS}} build{{else}}go build{{end}} {{.BUILD_FLAGS}} -o "{{.OUTPUT}}"'
     vars:
@@ -73,16 +74,27 @@ tasks:
       CNB_TOKEN: '{{.CNB_TOKEN}}'
       POSTHOG_TOKEN: '{{.POSTHOG_TOKEN}}'
       POSTHOG_PROJECT_ID: '{{.POSTHOG_PROJECT_ID}}'
-      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cnb.cool/dtapp/kai/internal/buildinfo.Dev=true{{if .VERSION}} -X cnb.cool/dtapp/kai/internal/buildinfo.Version={{.VERSION}}{{end}}{{if .BUILD_TIME}} -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime={{.BUILD_TIME}}{{end}}{{if .GIT_COMMIT}} -X cnb.cool/dtapp/kai/internal/buildinfo.GitCommit={{.GIT_COMMIT}}{{end}}{{if .GITHUB_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.GithubToken={{.GITHUB_TOKEN}}{{end}}{{if .CNB_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.CnbToken={{.CNB_TOKEN}}{{end}}{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}}"{{else}}-tags production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath -buildvcs=false -ldflags="-w -s -X cnb.cool/dtapp/kai/internal/buildinfo.Version={{.VERSION}} -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime={{.BUILD_TIME}} -X cnb.cool/dtapp/kai/internal/buildinfo.GitCommit={{.GIT_COMMIT}} -X cnb.cool/dtapp/kai/internal/buildinfo.GithubToken={{.GITHUB_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.CnbToken={{.CNB_TOKEN}}{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}} -X cnb.cool/dtapp/kai/internal/buildinfo.Dev=false"{{end}}'
+      BUILD_FLAGS: '{{if eq .DEV "true"}}{{if or .EXTRA_TAGS (eq .OBFUSCATED "true")}}-tags {{if eq .OBFUSCATED "true"}}wails_obfuscated{{if
+        .EXTRA_TAGS}},{{end}}{{end}}{{.EXTRA_TAGS}} {{end}}-buildvcs=false -gcflags=all="-l" -ldflags="-X cnb.cool/dtapp/kai/internal/buildinfo.Dev=true{{if
+        .VERSION}} -X cnb.cool/dtapp/kai/internal/buildinfo.Version={{.VERSION}}{{end}}{{if .BUILD_TIME}} -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime={{.BUILD_TIME}}{{end}}{{if
+        .GIT_COMMIT}} -X cnb.cool/dtapp/kai/internal/buildinfo.GitCommit={{.GIT_COMMIT}}{{end}}{{if .GITHUB_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.GithubToken={{.GITHUB_TOKEN}}{{end}}{{if
+        .CNB_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.CnbToken={{.CNB_TOKEN}}{{end}}{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if
+        .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}}"{{else}}-tags
+        production{{if eq .OBFUSCATED "true"}},wails_obfuscated{{end}}{{if .EXTRA_TAGS}},{{.EXTRA_TAGS}}{{end}} -trimpath
+        -buildvcs=false -ldflags="-w -s -X cnb.cool/dtapp/kai/internal/buildinfo.Version={{.VERSION}} -X cnb.cool/dtapp/kai/internal/buildinfo.BuildTime={{.BUILD_TIME}}
+        -X cnb.cool/dtapp/kai/internal/buildinfo.GitCommit={{.GIT_COMMIT}} -X cnb.cool/dtapp/kai/internal/buildinfo.GithubToken={{.GITHUB_TOKEN}}
+        -X cnb.cool/dtapp/kai/internal/buildinfo.CnbToken={{.CNB_TOKEN}}{{if .POSTHOG_TOKEN}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogToken={{.POSTHOG_TOKEN}}{{end}}{{if
+        .POSTHOG_PROJECT_ID}} -X cnb.cool/dtapp/kai/internal/buildinfo.PosthogProjectID={{.POSTHOG_PROJECT_ID}}{{end}} -X
+        cnb.cool/dtapp/kai/internal/buildinfo.Dev=false"{{end}}'
       DEFAULT_OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}'
       OUTPUT: '{{ .OUTPUT | default .DEFAULT_OUTPUT }}'
     env:
       GOOS: darwin
       CGO_ENABLED: 1
       GOARCH: '{{.ARCH | default ARCH}}'
-      CGO_CFLAGS: "-mmacosx-version-min=12.0"
-      CGO_LDFLAGS: "-mmacosx-version-min=12.0"
-      MACOSX_DEPLOYMENT_TARGET: "12.0"
+      CGO_CFLAGS: '-mmacosx-version-min=12.0'
+      CGO_LDFLAGS: '-mmacosx-version-min=12.0'
+      MACOSX_DEPLOYMENT_TARGET: '12.0'
 
   build:docker:
     summary: Cross-compiles for macOS using Docker (for Linux/Windows hosts)
@@ -95,13 +107,15 @@ tasks:
       - task: common:generate:icons
     preconditions:
       - sh: docker info > /dev/null 2>&1
-        msg: "Docker is required for cross-compilation. Please install Docker."
+        msg: 'Docker is required for cross-compilation. Please install Docker.'
       - sh: docker image inspect {{.CROSS_IMAGE}} > /dev/null 2>&1
         msg: |
           Docker image '{{.CROSS_IMAGE}}' not found.
           Build it first: wails3 task setup:docker
     cmds:
-      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.DOCKER_MOUNTS}} -e APP_NAME="{{.APP_NAME}}" {{if .EXTRA_TAGS}}-e EXTRA_TAGS="{{.EXTRA_TAGS}}"{{end}} {{if eq .OBFUSCATED "true"}}-e OBFUSCATED=true{{end}} {{if .GARBLE_ARGS}}-e GARBLE_ARGS="{{.GARBLE_ARGS}}"{{end}} {{.CROSS_IMAGE}} darwin {{.DOCKER_ARCH}}
+      - docker run --rm -v "{{.ROOT_DIR}}:/app" {{.DOCKER_MOUNTS}} -e APP_NAME="{{.APP_NAME}}" {{if .EXTRA_TAGS}}-e EXTRA_TAGS="{{.EXTRA_TAGS}}"{{end}}
+        {{if eq .OBFUSCATED "true"}}-e OBFUSCATED=true{{end}} {{if .GARBLE_ARGS}}-e GARBLE_ARGS="{{.GARBLE_ARGS}}"{{end}}
+        {{.CROSS_IMAGE}} darwin {{.DOCKER_ARCH}}
       - cmd: docker run --rm -v "{{.ROOT_DIR}}:/app" alpine chown -R $(id -u):$(id -g) /app/bin
         platforms: [linux, darwin]
       - mkdir -p {{.BIN_DIR}}
@@ -121,11 +135,11 @@ tasks:
       - task: build
         vars:
           ARCH: amd64
-          OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-amd64"
+          OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}-amd64'
       - task: build
         vars:
           ARCH: arm64
-          OUTPUT: "{{.BIN_DIR}}/{{.APP_NAME}}-arm64"
+          OUTPUT: '{{.BIN_DIR}}/{{.APP_NAME}}-arm64'
     cmds:
       - task: '{{if eq OS "darwin"}}build:universal:lipo:native{{else}}build:universal:lipo:go{{end}}'
 
@@ -169,12 +183,8 @@ tasks:
     platforms: [darwin]
     cmds:
       - >-
-        wails3 tool package --format dmg --name "{{.APP_NAME}}" --out "{{.BIN_DIR}}"
-        --background "{{.DMG_BACKGROUND}}"
-        --volume-icon "{{.DMG_VOLUME_ICON}}"
-        --file-icon "{{.DMG_FILE_ICON}}"
-        --window-width "{{.DMG_WINDOW_WIDTH}}"
-        --window-height "{{.DMG_WINDOW_HEIGHT}}"
+        wails3 tool package --format dmg --name "{{.APP_NAME}}" --out "{{.BIN_DIR}}" --background "{{.DMG_BACKGROUND}}" --volume-icon
+        "{{.DMG_VOLUME_ICON}}" --file-icon "{{.DMG_FILE_ICON}}" --window-width "{{.DMG_WINDOW_WIDTH}}" --window-height "{{.DMG_WINDOW_HEIGHT}}"
         {{if .DMG_FILES}}--files "{{.DMG_FILES}}"{{end}}
     vars:
       DMG_BACKGROUND: '{{.DMG_BACKGROUND | default "build/darwin/dmg-background.png"}}'
@@ -183,7 +193,6 @@ tasks:
       DMG_WINDOW_WIDTH: '{{.DMG_WINDOW_WIDTH | default "540"}}'
       DMG_WINDOW_HEIGHT: '{{.DMG_WINDOW_HEIGHT | default "380"}}'
       DMG_FILES: '{{.DMG_FILES | default ""}}'
-
 
   create:app:bundle:
     summary: Creates an `.app` bundle

@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -54,7 +55,7 @@ func (e *anthropicTranslator) Name() string { return "anthropic" }
 
 func (e *anthropicTranslator) translate(ctx context.Context, text, from, to string) (string, error) {
 	if e.model == "" {
-		return "", fmt.Errorf(i18n.T("err.anthropic_model_required"))
+		return "", errors.New(i18n.T("err.anthropic_model_required"))
 	}
 	// 引擎级请求超时（默认 30s，可由 Extra.timeout_sec 配置）。
 	if e.timeout > 0 {
@@ -104,7 +105,7 @@ func (e *anthropicTranslator) Translate(ctx context.Context, req model.Translate
 		return nil, err
 	}
 	if result == "" {
-		return nil, fmt.Errorf(i18n.T("err.anthropic_empty"))
+		return nil, errors.New(i18n.T("err.anthropic_empty"))
 	}
 	return &model.TranslateResult{
 		Engine: "anthropic",

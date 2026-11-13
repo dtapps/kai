@@ -7,12 +7,16 @@
 ## 1. 版本规则
 
 - 版本形如 `vMAJOR.MINOR.PATCH`，当前是 `v0.2.x`（最新 tag `v0.2.7`）。
-- 版本号目前**手动**在 Release 工作流里输入，没有从 commit 自动推导。
+- 版本号在 Release 工作流里输入：手动触发（`workflow_dispatch`）人工填写；定时触发（每天 UTC 00:00）自动生成 nightly 版本（见下）。
 - 输入 `0.2.8` 与 `v0.2.8` 等价，统一归一成 tag `v0.2.8`（归一化与格式校验见 `scripts/ci/resolve-prerelease.sh`）。
 - 只允许字母、数字和 `. _ + -`；引号、分号、`@`、`/` 会被拒绝，避免拼出非法 tag 或破坏 Release 配置。
 - `buildinfo.Version` 由同一版本号经 `-ldflags` 注入，**不带** `v`；`v` 只属于 tag，不属于二进制版本串。
 - 预发布**不接受勾选**，只看版本号后缀，四个渠道：`-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `v0.2.8-nightly.20260101`）；其余是正式版。
-- 不再有每日 Nightly。
+- **每日 Nightly（按日期版本化的预发布）**：schedule 触发等价于手动填 `nightly`；`prepare` 先把 `nightly` 推导成版本号再走普通发布流程：`<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（最近正式版 `v0.2.7` → tag `v0.2.8-nightly.20261114`）。每天一个 tag，**只保留最近 3 个 nightly Release**（更早的连 tag 一起删，见 release job 的清理步骤）。
+  - 版本基准 = **最近一个正式版 tag + 1 个补丁**（`0.2.7` → `0.2.8`），三个字段共用它：`VERSION_BASE`=`0.2.8`（NSIS/plist）、`VERSION_PKG`=`0.2.8~nightly.20261114`（deb/rpm/arch）、`buildinfo.Version`=`0.2.8-nightly.20261114`。不能沿用正式版号（`0.2.7-nightly.*` 在 semver 里低于 `0.2.7`，客户端会反复提示降级），也不能用裸 `nightly`（非法 semver，脚本会直接拒绝）。客户端仍按 SHA256SUMS 里的 `# build_time=` / `# git_commit=` 注释行判断 nightly 是否真的更新。
+  - 同一天重跑/补发会先 `gh release delete v<版本> --cleanup-tag` 删同名 Release 再重建（夜间构建 tag 允许覆盖）：避免旧附件堆积，并刷新 `published_at`（客户端 mirror_updater.go 按「预发布 Release 中 published_at 最新」挑选）。
+  - 更新内容：与上一个 nightly tag 对比（`release-changelog.sh` 的 nightly 渠道），首次发该渠道时回退到上一个正式版。
+  - 仓库 60 天无活动时 GitHub 会自动禁用 scheduled workflow，需去 Actions 页手动恢复。
 
 ### 1.1 打包版本派生
 
@@ -177,7 +181,7 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 ## 7. 回滚与补发
 
 1. GitHub：`gh release delete v<version> --yes --cleanup-tag`，或页面上删除 Release 与 tag。
-2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`校验版本号与 tag` 步骤发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。
+2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`校验版本号与 tag` 步骤发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。夜间构建（`*-nightly.*`）例外：同名 tag 允许覆盖，工作流会自己删掉同名 Release + tag 再重建。
 3. 镜像平台：CNB 幂等重建（删旧 Release/Tag 再上传，tag 唯一性由 GitHub 侧保证）；GitLab 会删旧 Release 但保留 tag；Gitee 按页面删除后重跑同步。
 4. 只想补发某个镜像：单独重跑对应 job 或手动触发其工作流；不要重新构建 GitHub Release，除非产物本身要换。
 

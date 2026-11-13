@@ -29,4 +29,3 @@ export function isLinux(): boolean {
 }
 
 // 保留 System 引用以防 tree-shaking 移除（同时便于需要 Environment() 异步信息时使用）。
-export { System };

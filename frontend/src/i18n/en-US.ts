@@ -86,14 +86,14 @@ export const en: Dict = {
     updater: 'Updates',
     updaterPrerelease: 'Include pre-releases',
     updaterPrereleaseHint:
-      'Also offer pre-release (RC / nightly) builds; turn off to only track stable releases.',
+      'Also check pre-release builds (-rc / -beta / -alpha / -nightly) and offer the most recently published one; turn off to only track stable releases.',
     updaterCheckInterval: 'Automatic update checks',
     updaterCheckIntervalHint:
-      'Check for updates in the background at this interval; 0 disables it (you can still check manually from the tray). The scheduler reads it at startup, so restart the app to apply changes.',
+      'Silently check in the background every N hours and install new versions automatically; 0 disables automatic checks (manual checks from the tray still work). Read at app startup, so restart to apply changes.',
     updaterCheckIntervalUnit: 'hours',
     updaterAutoRestart: 'Restart after update',
     updaterAutoRestartHint:
-      'Restart the app automatically once the update is installed; when off you get a notification and can restart from the tray menu.',
+      'Restart the app automatically once the update is installed; when off, a notification is shown and you can finish from the tray menu (Restart & Install Update).',
     engines: 'Engines',
     enginesTitle: 'Translation Engines',
     engineList: 'Engine list',

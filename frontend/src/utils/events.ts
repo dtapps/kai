@@ -20,13 +20,13 @@ export const EventScreenshotRetranslate = 'kai:screenshot:retranslate';
 /** 截图翻译窗口（含热键/菜单/重新截图按钮，全部投到 ScreenshotWindow） */
 export const ScreenshotSessionScreenshot = 'screenshot';
 /** 输入翻译页内的截图 OCR（预留，与截图翻译窗口隔离） */
-export const ScreenshotSessionInput = 'input';
+const ScreenshotSessionInput = 'input';
 
 // EventThemeChanged 主题变更广播，payload: ThemeChangedPayload
 export const EventThemeChanged = 'kai:theme:changed';
 
 // EventHotkeysChanged 快捷键重注册完成后广播，payload: string[]
-export const EventHotkeysChanged = 'kai:hotkeys:changed';
+const EventHotkeysChanged = 'kai:hotkeys:changed';
 
 // EventInputFill 选区回填主窗口输入框，payload: string（选中文本）
 export const EventInputFill = 'kai:input:fill';

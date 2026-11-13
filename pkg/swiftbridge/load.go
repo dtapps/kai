@@ -22,6 +22,7 @@
 package swiftbridge
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 	"os"
@@ -109,7 +110,7 @@ func Init(dylibPath string) error {
 			return
 		}
 		if lastErr != nil {
-			loadErr = fmt.Errorf(i18n.T("err.swiftbridge_purego_dlopen", "path", strings.Join(candidates, ", "), "detail", lastErr.Error()))
+			loadErr = errors.New(i18n.T("err.swiftbridge_purego_dlopen", "path", strings.Join(candidates, ", "), "detail", lastErr.Error()))
 			slog.Warn(i18n.T("log.swiftbridge_unavailable"), "candidates", strings.Join(candidates, ", "))
 		}
 	})
@@ -137,7 +138,7 @@ func writeEmbeddedDylib() (string, error) {
 func registerAll(h uintptr) {
 	register := func(fptr any, name string) {
 		if err := registerSafe(fptr, h, name); err != nil {
-			loadErr = fmt.Errorf(i18n.T("err.swiftbridge_purego_register", "name", name, "detail", err.Error()))
+			loadErr = errors.New(i18n.T("err.swiftbridge_purego_register", "name", name, "detail", err.Error()))
 		}
 	}
 	register(&KaiOCR, "kai_ocr")
@@ -165,7 +166,7 @@ func Available() bool {
 func registerSafe(fptr any, h uintptr, name string) (err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf(i18n.T("err.swiftbridge_purego_panic", "detail", fmt.Sprintf("%v", r)))
+			err = errors.New(i18n.T("err.swiftbridge_purego_panic", "detail", fmt.Sprintf("%v", r)))
 		}
 	}()
 	purego.RegisterLibFunc(fptr, h, name)

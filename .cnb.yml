@@ -10,6 +10,19 @@ include:
   - .cnb/workflows/sca.yml
 
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
+#
+# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+#   1.2.3                    -> 正式版，Release 不勾选 prerelease
+#   v1.2.3                   -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
+#   1.2.3-rc.1               -> 预发布（rc 渠道）
+#   1.2.3-beta.1             -> 预发布（beta 渠道）
+#   1.2.3-alpha.1            -> 预发布（alpha 渠道）
+#   1.2.3-nightly.20260101   -> 预发布（nightly 渠道）
+#   nightly                  -> 定时任务的默认值（手动填也可）：不是版本号，自动推导成
+#                               <最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>，
+#                               例如最近正式版 v0.2.7 → tag v0.2.8-nightly.20261114。
+#                               每天一个 tag，只保留最近 3 个 nightly Release。
+#
 # 本流水线是 GitHub Release 的镜像：产物和正文都来自 GitHub，这里只做搬运。
 # 是否预发布由版本号后缀决定（v1.2.3-rc.1 / -beta.1 / -alpha.1 / -nightly.20260101 为预发布），不接受手工勾选；
 # 正文格式见 scripts/ci/render-release-body.sh，与 GitHub 侧共用一份实现。

@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -51,7 +52,7 @@ func (g *googleTranslator) Name() string { return "google" }
 // Translate 调用 Google 公开端点完成翻译。
 func (g *googleTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	if req.Text == "" {
-		return nil, fmt.Errorf(i18n.T("err.empty_text"))
+		return nil, errors.New(i18n.T("err.empty_text"))
 	}
 	sl := googleLang(string(req.From))
 	tl := googleLang(string(req.To))
@@ -89,7 +90,7 @@ func (g *googleTranslator) Translate(ctx context.Context, req model.TranslateReq
 	}
 
 	if gresp.Translated == "" {
-		return nil, fmt.Errorf(i18n.T("err.google_empty_result"))
+		return nil, errors.New(i18n.T("err.google_empty_result"))
 	}
 
 	return &model.TranslateResult{

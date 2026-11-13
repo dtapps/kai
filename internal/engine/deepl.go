@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -74,7 +75,7 @@ type deeplResponse struct {
 
 func (d *deeplTranslator) Translate(ctx context.Context, req model.TranslateRequest) (*model.TranslateResult, error) {
 	if d.apiKey == "" {
-		return nil, fmt.Errorf(i18n.T("err.deepl_missing_apikey"))
+		return nil, errors.New(i18n.T("err.deepl_missing_apikey"))
 	}
 	form := url.Values{}
 	form.Set("text", req.Text)

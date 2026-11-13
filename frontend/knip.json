@@ -1,0 +1,27 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "entry": [
+    "src/windows/*/main.ts",
+    "src/components/TitleBar.svelte",
+    "src/**/*.test.ts",
+    "scripts/*.mjs"
+  ],
+  "ignore": [],
+  "ignoreDependencies": [
+    "tslib"
+  ],
+  "include": [
+    "files",
+    "dependencies",
+    "devDependencies",
+    "exports",
+    "types",
+    "unresolved",
+    "duplicates"
+  ],
+  "project": [
+    "src/**/*.{ts,svelte,css}",
+    "scripts/**/*.mjs",
+    "*.{ts,js}"
+  ]
+}

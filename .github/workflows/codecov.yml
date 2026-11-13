@@ -9,7 +9,6 @@
 # https://github.com/actions/setup-go
 # https://github.com/pnpm/action-setup
 # https://github.com/actions/setup-node
-# https://github.com/codecov/test-results-action
 name: Codecov
 
 on:
@@ -32,7 +31,7 @@ concurrency:
 
 jobs:
   coverage:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     # 直接用公开镜像 ghcr.io/dtapps/golang/wails3:latest（含 Go/Node/pnpm + GTK/WebKit
     # + wails3/sqlc/golangci-lint/gotestsum 等全部工具链），免去每次重装系统库与 go install。
     # 公开镜像可匿名拉取，无需本仓库自带的 ci-image.yml / Dockerfile 预构建。
@@ -139,8 +138,13 @@ jobs:
         run: node scripts/vitest-json-to-junit.mjs
 
       - name: 上传测试结果到 Codecov
-        uses: codecov/test-results-action@v1
+        # 注意：原 codecov/test-results-action 已于 2026-08-11 归档并弃用，
+        # 官方要求改用 codecov/codecov-action + report_type: test_results。
+        # 键名必须是下划线 report_type（action.yml 里的 input 名），写成 report-type 会被静默忽略、
+        # 退回默认值 coverage，导致测试结果被当作覆盖率上传。
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+          report_type: test_results
           files: ./frontend/test-report.xml,./go-test-report.xml
           fail_ci_if_error: false

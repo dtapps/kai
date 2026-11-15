@@ -70,8 +70,9 @@ YAML_TARGETS=(
   ".cnb"
   ".gitcode"
   ".github"
-  "build"
+  ".gitlab"
   ".workflow"
+  "build"
   ".cnb.yml"
   ".gitlab-ci.yml"
   ".golangci.yml"
@@ -130,7 +131,10 @@ SHELL_TARGETS=(
 # Dockerfile：扫描目录、文件名匹配、dockerfmt 参数
 DOCKER_DIRS=(
   ".cnb"
+  ".gitcode"
   ".github"
+  ".gitlab"
+  ".workflow"
 )
 DOCKER_GLOB="Dockerfile*"
 DOCKERFMT_ARGS=(-w)

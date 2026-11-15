@@ -1019,12 +1019,12 @@ jobs:
             echo "✓ 已请求 Gitee 执行发布流水线（异步执行，进度看 Gitee 流水线页面）"
           fi
 
-  # Release 发布成功后触发 GitLab 的 release job（.gitlab-ci.yml，只在 CI_PIPELINE_SOURCE == "trigger"
-  # 时跑：下载 GitHub 资产 → 传 Generic Package → 建 GitLab Release）。
+  # Release 发布成功后触发 GitLab 的 release job（.gitlab/workflows/release.yml，由 .gitlab-ci.yml
+  # include；只在 CI_PIPELINE_SOURCE == "trigger" 时跑：下载 GitHub 资产 → 传 Generic Package → 建 GitLab Release）。
   # 用项目级 trigger token，只触发流水线、不绑用户。
   # 令牌：GitLab 项目 → Settings → CI/CD → Pipeline trigger tokens → Add new token（形如 glptt-xxx），
   # 创建后填到 GitHub 仓库 secret SYNC_GITLAB_TRIGGER_TOKEN。
-  # 只传 VERSION：.gitlab-ci.yml 的 rules 只看 CI_PIPELINE_SOURCE 与 VERSION，
+  # 只传 VERSION：该 job 的 rules 只看 CI_PIPELINE_SOURCE 与 VERSION，
   # 预发布由版本号后缀判定，不再传 PRERELEASE。
   sync-gitlab:
     needs: [release, prepare]

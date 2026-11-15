@@ -157,7 +157,7 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 | Gitea  | 无 Release 同步，只作代码镜像                                    | —                                            | —        |
 
 - CNB 侧 `.cnb.yml` 的 `api_trigger_release` 会下载 GitHub 产物、删除同名 Release/Tag、重建 Release 并上传附件；是否预发布同样由版本号后缀推导（`pre_release` 传了也不采信）。
-- GitLab 侧 `.gitlab-ci.yml` 的 `release` job 把附件传到 Generic Package Registry，再建 Release 与直链。
+- GitLab 侧 `.gitlab/workflows/release.yml` 的 `release` job 把附件传到 Generic Package Registry，再建 Release 与直链。
 - Gitee 侧 `.workflow/release.yml` 由 Webhook 拉起，跑 `scripts/ci/` 下的两个脚本： `gitee-release-download.js`（按跳过规则下载并写清单 `gitee-release.json`）+ `gitee-release-publish.js`（调 Gitee OpenAPI 建 Release、逐个上传附件）。 需要在 Gitee 流水线加全局参数 **`KAI_GITEE_TOKEN`**（个人令牌，repo 读写）——名字不能以 `GITEE_` 开头，那是平台保留前缀。
 - 所有同步 job 都“尽力而为”：失败只打 `::warning::`，不回滚 GitHub Release。
 

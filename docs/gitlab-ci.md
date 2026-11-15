@@ -2,7 +2,7 @@
 
 本仓库在多个平台有代码镜像（GitHub / CNB / GitLab / Gitee / Gitea / GitCode），但**发布只覆盖 GitHub、CNB、GitLab、Gitee 四个平台**；Gitea / GitCode 不发布 Release。**GitLab 侧现在只做一件事：把 GitHub Release 同步成 GitLab Release。** 覆盖率采集已于 2026-10-24 整体删除。
 
-- 入口：`.gitlab-ci.yml`（只有 `release` 一个 job）
+- 入口：`.gitlab-ci.yml`（全局配置：`stages` / `default` / `include`）+ `.gitlab/workflows/release.yml`（唯一的 `release` job，含 nightly 清理）
 - 触发：GitHub Release 工作流的 `sync-gitlab` job 自动触发，或在 GitLab 手动运行流水线
 - 产物：GitLab Release + 上传到 Generic Package Registry 的附件
 - 历史覆盖率方案（五个 job / 自建 CI 镜像 / Cobertura）见本文 §6，仅作回溯

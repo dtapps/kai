@@ -6,14 +6,14 @@
 
 ## 1. 平台分工
 
-| 平台    | 角色                                                    | 入口                             |
-|---------|---------------------------------------------------------|----------------------------------|
-| GitHub  | 主开发 CI（push/PR 检查、覆盖率上报、发布）             | `.github/workflows/`             |
-| CNB     | 硬门禁与安全扫描（格式/检查/覆盖率/SCA/AI 评审/知识库） | `.cnb.yml` + `.cnb/workflows/`   |
-| GitLab  | 只做发布同步，不跑测试                                  | `.gitlab-ci.yml`                 |
-| Gitee   | 只做发布同步（Gitee Go）                                | `.workflow/release.yml`          |
-| GitCode | 工作流保留，当前不发布                                  | `.gitcode/workflows/release.yml` |
-| Gitea   | 仅代码镜像，无 CI/Release                               | —                                |
+| 平台    | 角色                                                    | 入口                                    |
+|---------|---------------------------------------------------------|-----------------------------------------|
+| GitHub  | 主开发 CI（push/PR 检查、覆盖率上报、发布）             | `.github/workflows/`                    |
+| CNB     | 硬门禁与安全扫描（格式/检查/覆盖率/SCA/AI 评审/知识库） | `.cnb.yml` + `.cnb/workflows/`          |
+| GitLab  | 只做发布同步（含 nightly 清理），不跑测试               | `.gitlab-ci.yml` + `.gitlab/workflows/` |
+| Gitee   | 只做发布同步（Gitee Go）                                | `.workflow/release.yml`                 |
+| GitCode | 工作流保留，当前不发布                                  | `.gitcode/workflows/release.yml`        |
+| Gitea   | 仅代码镜像，无 CI/Release                               | —                                       |
 
 ## 2. GitHub Actions（4 个）
 
@@ -118,15 +118,15 @@ cd frontend && pnpm test:coverage
 
 ## 7. 新增 / 修改流水线时要改哪些文件
 
-| 改动                 | 必须同步                                                                                                                                           |
-|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
-| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                              |
-| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                                     |
-| 新增 CI 工具         | 到外部统一镜像仓库改（GitHub `ghcr.io/dtapps/golang/wails3`、CNB `docker.cnb.cool/dtapp/golang/wails3`），本仓库不维护 Dockerfile；改完同步本文 §2 |
-| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                             |
-| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.gitlab-ci.yml`、`.workflow/release.yml`、`.gitcode/workflows/release.yml`、`release.md`             |
-| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                                  |
-| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                                          |
+| 改动                 | 必须同步                                                                                                                                                                 |
+|----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                                                    |
+| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                                                           |
+| 新增 CI 工具         | 到外部统一镜像仓库改（GitHub `ghcr.io/dtapps/golang/wails3`、CNB `docker.cnb.cool/dtapp/golang/wails3`），本仓库不维护 Dockerfile；改完同步本文 §2                       |
+| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                                                   |
+| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.gitlab-ci.yml` + `.gitlab/workflows/release.yml`、`.workflow/release.yml`、`.gitcode/workflows/release.yml`、`release.md` |
+| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                                                        |
+| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                                                                |
 
 ## 8. 专题文档
 

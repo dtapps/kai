@@ -15,7 +15,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/openai/openai-go/v3 v3.98.0
-	github.com/posthog/posthog-go v1.42.4
+	github.com/posthog/posthog-go v1.43.0
 	github.com/spf13/viper v1.21.0
 	github.com/wailsapp/wails/v3 v3.1.0
 	go.dtapp.net/library/contrib/http_log v1.0.13

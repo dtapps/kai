@@ -36,8 +36,9 @@
         - name: 创建 frontend/dist 占位（供 //go:embed 解析）
           script: mkdir -p frontend/dist && touch frontend/dist/index.html
 
-        # - name: 格式化和修复（Go + Vue + TypeScript）
+        # - name: 格式化/修复项目
         #   script: make format
 
-        - name: 检查和测试（Go + Vue + TypeScript）
-          script: make check
+        - name: 检查/测试项目
+          # CI=true：流水线里「过时依赖」只提示不阻塞（make check STRICT_CHECKS=0）
+          script: CI=true make check

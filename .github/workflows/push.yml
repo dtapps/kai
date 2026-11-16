@@ -123,14 +123,16 @@ jobs:
       - name: 创建 frontend/dist 占位（供 //go:embed 解析）
         run: mkdir -p frontend/dist && touch frontend/dist/index.html
 
-      # - name: 格式化和修复（Go + Vue + TypeScript）
+      # - name: 格式化/修复项目
       #   env:
       #     GOPATH: ${{ env.GO_PATH_DIR }}
       #     GOBIN: ${{ env.GO_BIN_DIR }}
       #   run: make format
 
-      - name: 检查和测试（Go + Vue + TypeScript）
+      - name: 检查/测试项目
         env:
           GOPATH: ${{ env.GO_PATH_DIR }}
           GOBIN: ${{ env.GO_BIN_DIR }}
+          # 显式声明：流水线里「过时依赖」只提示不阻塞（make check STRICT_CHECKS=0）
+          CI: 'true'
         run: make check

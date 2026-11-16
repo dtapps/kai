@@ -17,12 +17,12 @@
 
 ## 2. GitHub Actions（4 个）
 
-| Workflow    | 文件            | 触发                   | 关键内容                                                                          |
-|-------------|-----------------|------------------------|-----------------------------------------------------------------------------------|
-| PushRequest | `push.yml`      | push / PR 所有分支     | 统一镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make check`    |
-| Codecov     | `codecov.yml`   | push / PR              | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                            |
-| Coveralls   | `coveralls.yml` | push / PR              | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                               |
-| Release     | `release.yml`   | 仅 `workflow_dispatch` | 4 个构建组合 → GitHub Release → CNB/Gitee/GitLab 同步（GitCode 保留未启用）→ 通知 |
+| Workflow    | 文件            | 触发                   | 关键内容                                                                                                |
+|-------------|-----------------|------------------------|---------------------------------------------------------------------------------------------------------|
+| PushRequest | `push.yml`      | push / PR 所有分支     | 统一镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make check`                          |
+| Codecov     | `codecov.yml`   | push / PR              | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                                                  |
+| Coveralls   | `coveralls.yml` | push / PR              | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                                                     |
+| Release     | `release.yml`   | 仅 `workflow_dispatch` | 4 个构建组合 → GitHub Release → CNB/Gitee/GitLab/GitCode 同步 → 通知（含各平台 Release 链接与同步状态） |
 
 共同点：
 
@@ -100,7 +100,7 @@ cd frontend && pnpm test:coverage
 | `SYNC_CNB_TOKEN`                              | 触发 CNB 同步构建（仅 trigger 权限）         | 跳过 CNB 同步        |
 | `SYNC_GITEE_WEBHOOK_URL` / `SYNC_GITEE_TOKEN` | 触发 Gitee Go 流水线                         | 跳过 Gitee 同步      |
 | `SYNC_GITLAB_TRIGGER_TOKEN`                   | 触发 GitLab 流水线                           | 跳过 GitLab 同步     |
-| `SYNC_GITCODE_TOKEN`                          | 保留，当前不参与发布                         | 忽略                 |
+| `SYNC_GITCODE_TOKEN`                          | 触发 GitCode 流水线                          | 跳过 GitCode 同步    |
 | `SERVERCHAN_SENDKEY`                          | 发布完成通知                                 | 跳过通知             |
 | `CODECOV_TOKEN`                               | 上传 Codecov                                 | 上传失败/跳过        |
 | `COVERALLS_REPO_TOKEN`                        | 上传 Coveralls                               | 上传跳过             |

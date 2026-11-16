@@ -28,110 +28,16 @@
 
 set -eu
 
-# 产物命名（本项目）：Kai-<版本>-<os>-<arch>[-install].<ext>
-#   例：Kai-0.2.8-darwin-arm64.zip / Kai-0.2.8-windows-amd64-install.exe
+# 下载表格的附件解析与说明文案统一由 scripts/ci/describe-artifact.sh 提供（跨仓库通用），
+# source 进来后直接用它的 parse_artifact_name / describe_artifact 渲染表格行，
+# 本文件不再内嵌重复实现，避免两处文案跑偏。
+# 先 parse_artifact_name <文件名> 写 PLAT / ARCH 等全局变量，再无参 describe_artifact 取文案。
+# 用 $0 定位脚本目录，保证从任意 cwd 调用都能找到同目录的 describe-artifact.sh。
+_ci_dir="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
+# shellcheck source=scripts/ci/describe-artifact.sh
+. "${_ci_dir}/describe-artifact.sh"
+
 # 自动更新专用包带 updater- 前缀（updater-Kai-...），不参与下载表格，由调用方决定是否发布。
-#
-# 解析结果写入三个全局变量 PLAT / ARCH / EXT（外加 INSTALLER 标记）。
-# 平台段从右往左找：文件名里有版本号，不能按「第一段是名字、第二段是 os」的位置法解析，
-# 否则 Kai-0.2.8-darwin-arm64 会解析出 os=0.2.8。
-parse_artifact_name() {
-  fname="$1"
-  PLAT='其它'
-  ARCH='-'
-  EXT=''
-  INSTALLER=0
-  rest=''
-
-  case "${fname}" in
-    *.pkg.tar.zst)
-      EXT='.pkg.tar.zst'
-      stem="${fname%.pkg.tar.zst}"
-      ;;
-    *.tar.gz)
-      EXT='.tar.gz'
-      stem="${fname%.tar.gz}"
-      ;;
-    *.AppImage)
-      EXT='.AppImage'
-      stem="${fname%.AppImage}"
-      ;;
-    *.exe)
-      EXT='.exe'
-      stem="${fname%.exe}"
-      ;;
-    *.zip)
-      EXT='.zip'
-      stem="${fname%.zip}"
-      ;;
-    *.dmg)
-      EXT='.dmg'
-      stem="${fname%.dmg}"
-      ;;
-    *.deb)
-      EXT='.deb'
-      stem="${fname%.deb}"
-      ;;
-    *.rpm)
-      EXT='.rpm'
-      stem="${fname%.rpm}"
-      ;;
-    *) return 0 ;;
-  esac
-
-  # 取「最后一个」平台段之后的部分作为 arch：版本段里不会出现 darwin/windows/linux
-  case "${stem}" in
-    *-darwin-*)
-      PLAT='macOS'
-      rest="${stem##*-darwin-}"
-      ;;
-    *-windows-*)
-      PLAT='Windows'
-      rest="${stem##*-windows-}"
-      ;;
-    *-linux-*)
-      PLAT='Linux'
-      rest="${stem##*-linux-}"
-      ;;
-    *) return 0 ;;
-  esac
-
-  case "${rest}" in
-    *-install | *-installer) INSTALLER=1 ;;
-  esac
-
-  ARCH="${rest%%-*}"
-  case "${ARCH}" in
-    amd64) ARCH='x86_64' ;;
-    arm64) ARCH='ARM64' ;;
-    '') ARCH='-' ;;
-  esac
-}
-
-# 说明列：一句话说清这是哪个平台的什么包、怎么用。
-# 依赖 parse_artifact_name 设置的全局变量 PLAT / EXT / INSTALLER，把说明写到 stdout，
-# 调用处用命令替换接住（避免往 Release 正文里直接插入一行）。
-describe_artifact() {
-  case "${PLAT}:${EXT}" in
-    macOS:.zip) printf '%s' 'macOS 应用包（zip，解压得到 Kai.app）' ;;
-    macOS:.dmg) printf '%s' 'macOS 磁盘映像（dmg，拖入「应用程序」）' ;;
-    macOS:.tar.gz) printf '%s' 'macOS 通用包（tar.gz，解压即用）' ;;
-    Windows:.exe)
-      if [ "${INSTALLER}" -eq 1 ]; then
-        printf '%s' 'Windows 安装程序（exe，双击安装）'
-      else
-        printf '%s' 'Windows 可执行程序（exe）'
-      fi
-      ;;
-    Windows:.zip) printf '%s' 'Windows 免安装包（zip，解压运行）' ;;
-    Linux:.AppImage) printf '%s' 'AppImage 便携版（chmod +x 后直接运行）' ;;
-    Linux:.deb) printf '%s' 'Debian/Ubuntu 安装包（dpkg -i）' ;;
-    Linux:.rpm) printf '%s' 'Fedora/RHEL 安装包（rpm -i）' ;;
-    Linux:.pkg.tar.zst) printf '%s' 'Arch Linux 安装包（pacman -U）' ;;
-    Linux:.tar.gz) printf '%s' 'Linux 通用包（tar.gz，解压即用）' ;;
-    *) printf '附件（%s），解压即用' "${EXT}" ;;
-  esac
-}
 
 # 是否属于「可下载产物」。以下三类不算：
 #   - SHA256SUMS：校验文件本身，单独在「校验」节说明

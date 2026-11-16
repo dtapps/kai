@@ -6,11 +6,15 @@
 
 <div align="center">
 
-[![Latest Release](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![Downloads](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![Stars](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![Forks](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![License](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Windows-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![Build](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) [![Codecov](https://img.shields.io/codecov/c/github/dtapps/kai?style=flat-square&logo=codecov&label=codecov)](https://codecov.io/gh/dtapps/kai) [![Coveralls](https://img.shields.io/coverallsCoverage/github/dtapps/kai?style=flat-square&logo=coveralls&label=coveralls)](https://coveralls.io/github/dtapps/kai?branch=master) ![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+[![CNB 版本](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Star 数](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Fork 数](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB 构建](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) [![CNB 覆盖率](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage)](https://cnb.cool/dtapp/kai/-/insights/unit-test) [![CNB PR 覆盖率](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage-pr)](https://cnb.cool/dtapp/kai/-/insights/unit-test) ![CNB 下载请求数](https://img.shields.io/endpoint?label=CNB%20下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
 
-[![CNB Release](https://cnb.cool/dtapp/kai/-/badge/release)](https://cnb.cool/dtapp/kai/-/badge/release.link) [![CNB Stars](https://cnb.cool/dtapp/kai/-/badge/star)](https://cnb.cool/dtapp/kai) [![CNB Forks](https://cnb.cool/dtapp/kai/-/badge/fork)](https://cnb.cool/dtapp/kai) [![CNB Build](https://cnb.cool/dtapp/kai/-/badge/git/latest/ci/status/push)](https://cnb.cool/dtapp/kai) [![CNB Coverage](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage?branch=master)](https://cnb.cool/dtapp/kai) [![CNB Coverage PR](https://cnb.cool/dtapp/kai/-/badge/git/latest/testing/unit/coverage-pr?branch=master)](https://cnb.cool/dtapp/kai) ![下载请求数](https://img.shields.io/endpoint?label=下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.net%2Fshields.json%3Fplatform%3Dcnb.cool%26repository%3D%2Fdtapp%2Fkai)
+[![CNB 漏洞](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest.link) [![CNB 漏洞差异](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest.link) [![CNB 许可证](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest)](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest.link) [![CNB 许可证差异](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest)](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest.link) [![CNB SBOM](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest.link) [![CNB SBOM 差异](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest.link)
 
-[![CNB Vulnerability Full](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/full/latest.link?branch=master) [![CNB Vulnerability Diff](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/vulnerability/diff/latest.link?branch=master) [![CNB License Full](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/license/full/latest.link?branch=master) [![CNB License Diff](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/license/diff/latest.link?branch=master) [![CNB SBOM Full](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/full/latest.link?branch=master) [![CNB SBOM Diff](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest?branch=master)](https://cnb.cool/dtapp/kai/-/badge/security/sbom/diff/latest.link?branch=master)
+[![CNB 访问](https://commit.cool/badge/visit/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 发布频率](https://commit.cool/badge/release/frequency/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 距离上次发布](https://commit.cool/badge/release/last/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 发布总数](https://commit.cool/badge/releases/dtapp/kai)](https://cnb.cool/dtapp/kai/-/releases) [![CNB 仓库年龄](https://commit.cool/badge/age/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 主要语言](https://commit.cool/badge/language/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 仓库许可证](https://commit.cool/badge/license/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB 存储用量](https://commit.cool/badge/usage/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB Git 存储](https://commit.cool/badge/usage/git/dtapp/kai)](https://cnb.cool/dtapp/kai) [![CNB LFS 存储](https://commit.cool/badge/usage/lfs/dtapp/kai)](https://cnb.cool/dtapp/kai)
+
+[![GitHub 版本](https://img.shields.io/github/v/release/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/releases) [![GitHub 下载量](https://img.shields.io/github/downloads/dtapps/kai/total?style=flat-square)](https://github.com/dtapps/kai/releases) [![GitHub Star 数](https://img.shields.io/github/stars/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/stargazers) [![GitHub Fork 数](https://img.shields.io/github/forks/dtapps/kai?style=flat-square)](https://github.com/dtapps/kai/network/members) [![GitHub 许可证](https://img.shields.io/github/license/dtapps/kai?style=flat-square)](LICENSE) [![GitHub 支持平台](https://img.shields.io/badge/platform-macOS%20%7C%20Windows%20%7C%20Linux-007EC6?style=flat-square)](https://github.com/dtapps/kai) [![GitHub 构建](https://img.shields.io/github/actions/workflow/status/dtapps/kai/push.yml?style=flat-square)](https://github.com/dtapps/kai/actions/workflows/push.yml) [![Codecov](https://img.shields.io/codecov/c/github/dtapps/kai?style=flat-square&label=Codecov&logo=codecov)](https://codecov.io/gh/dtapps/kai) [![Coveralls](https://img.shields.io/coveralls/github/dtapps/kai?style=flat-square&label=Coveralls&logo=coveralls)](https://coveralls.io/github/dtapps/kai) ![GitHub 下载请求数](https://img.shields.io/endpoint?label=GitHub%20下载请求数&url=https%3A%2F%2Fdl-stats.dtapp.top%2Fshields.json%3Fplatform%3Dgithub.com%26repository%3D%2Fdtapps%2Fkai)
+
+[![GitHub 访问](https://visitor-badge.laobi.icu/badge?page_id=github/dtapps/kai)](https://github.com/dtapps/kai) [![GitHub 距离上次发布](https://img.shields.io/github/release-date/dtapps/kai)](https://github.com/dtapps/kai) [![GitHub 仓库年龄](https://img.shields.io/github/created-at/dtapps/kai)](https://github.com/dtapps/kai) [![GitHub 主要语言](https://img.shields.io/github/languages/top/dtapps/kai)](https://github.com/dtapps/kai) [![GitHub 存储用量](https://img.shields.io/github/repo-size/dtapps/kai)](https://github.com/dtapps/kai)
 
 </div>
 
@@ -88,7 +92,7 @@
 
 ## 6. 许可证
 
-详见仓库 `LICENSE` 文件。
+见 [LICENSE](LICENSE) 文件。
 
 ## 7. 已知问题
 
@@ -103,3 +107,27 @@
 </a>
 
 设计灵感参考 [Bob](https://github.com/ripperhe/Bob) 与 [Easydict](https://github.com/tisfeng/Easydict)。
+
+## Star 走势
+
+<details>
+<summary><b>点击展开查看图表</b></summary>
+
+**CNB**
+
+[![CNB Star 走势](https://commit.cool/stars/dtapp/kai)](https://cnb.cool/dtapp/kai)
+
+**GitHub**
+
+[![Star 走势](https://api.star-history.com/chart?repos=dtapps/kai&type=date&legend=top-left)](https://www.star-history.com/?repos=dtapps%2Fkai&type=date&legend=top-left)
+
+</details>
+
+## 下载量统计图
+
+<details>
+<summary><b>点击展开查看图表</b></summary>
+
+[![下载量统计图](https://release-monitor.com/chart/dtapps/kai.svg?stable=5)](https://release-monitor.com/#/dtapps/kai)
+
+</details>

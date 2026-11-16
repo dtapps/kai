@@ -1,0 +1,405 @@
+# 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
+#
+# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+#   1.2.3                    -> 正式版，Release 不勾选 prerelease
+#   v1.2.3                   -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
+#   1.2.3-rc.1               -> 预发布（rc 渠道）
+#   1.2.3-beta.1             -> 预发布（beta 渠道）
+#   1.2.3-alpha.1            -> 预发布（alpha 渠道）
+#   1.2.3-nightly.20260101   -> 预发布（nightly 渠道）
+#   nightly                  -> 定时任务的默认值（手动填也可）：不是版本号，自动推导成
+#                               <最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>，
+#                               例如最近正式版 v0.2.7 → tag v0.2.8-nightly.20261114。
+#                               每天一个 tag，GitHub 上只保留最近 3 个 nightly Release。
+#                               （各镜像平台同口径，同样只保留最近 3 个。）
+#
+# 本流水线是 GitHub Release 的镜像：产物和正文都来自 GitHub，这里只做搬运。
+# 版本号由上游传入（api_trigger_release 的 env 字段 / web_trigger 的表单），
+# 归一化与预发布判定仍走同一份 scripts/ci/resolve-prerelease.sh。
+# 是否预发布由版本号后缀决定（v1.2.3-rc.1 / -beta.1 / -alpha.1 / -nightly.20260101 为预发布），不接受手工勾选；
+# 正文格式见 scripts/ci/render-release-body.sh，与 GitHub 侧共用一份实现。
+# KAI_GITHUB_TOKEN 去 envs 里配置环境变量
+.trigger_release: &trigger_release
+  runner:
+    tags: cnb:arch:amd64
+  imports: https://cnb.cool/dtapp/envs/-/blob/main/github.yml # 导入外部环境变量/配置
+  stages:
+    # 先把工作区检出到**本次发布的那个提交**，而不是默认分支的最新代码。
+    #
+    # 为什么这一步必须有：后面的「删除同名 tag 再重建」里，git:release 是拿**当前检出的提交**
+    # 建 tag 的。检出点停在 master 最新代码的话，CNB 上的 tag 就会指向别的提交
+    # （发版后 master 一动就漂移）。检出到目标提交后，重建的 tag 天然就指对了，
+    # 不需要在 git:release 上做任何额外参数。
+    #
+    # CNB 没有原生的 clone ref/commit 配置（只有 git.enable / submodules / lfs），
+    # 指定检出点只能在脚本里自己 git checkout。
+    # commit 由上游 GitHub Actions 的 sync-cnb 随 version 一起传（api_trigger_release 的 env 字段）；
+    # 页面手动触发时没有这个参数 → 保持默认检出。
+    # 检出失败（镜像仓库可能还没同步到这个提交）只告警：保持默认检出继续发布，不阻断。
+    - name: 检出本次发布的提交
+      shell: true
+      script: |
+        COMMIT="${commit:-}"
+        if ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-f]{40}$'; then
+          echo "未传入 commit（或格式不对），保持默认检出：$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+          exit 0
+        fi
+        echo "检出本次发布的提交: ${COMMIT}"
+        # 先按 sha 取；部分 Git 服务不允许 fetch 未被引用的对象，失败则拉默认分支再从历史里找。
+        if git fetch --depth=1 origin "$COMMIT" 2>/dev/null && git checkout --detach FETCH_HEAD 2>/dev/null; then
+          echo "✓ 已检出 ${COMMIT}"
+        elif git fetch origin master && git checkout --detach "$COMMIT"; then
+          echo "✓ 已检出 ${COMMIT}（经默认分支历史）"
+        else
+          echo "⚠ 检出 ${COMMIT} 失败（镜像仓库可能还没同步到这个提交），保持默认检出继续发布"
+        fi
+
+    - name: 处理版本号与选项
+      script: |
+        # 版本号由外部通过环境变量 version 传入（api_trigger_release 的 env 字段 / web_trigger 的表单）。
+        # 归一化（补 v 前缀）/ 格式校验 / 预发布判定与 GitHub 流水线同口径：
+        # 都 source scripts/ci/resolve-prerelease.sh，只看版本号后缀 -rc / -beta / -alpha / -nightly。
+        # 不接受 pre_release 人工勾选：布尔输入会和版本号打架（曾出现 rc 版本被标成正式版）。
+        . scripts/ci/resolve-prerelease.sh
+        resolve_version "$version" || exit 1
+        echo "$PRE_NOTE"
+
+        # 兼容旧调用方仍在传的 pre_release：只做提示，判定一律以版本号后缀为准
+        if [ -n "${pre_release:-}" ] && [ "${pre_release}" != "${PRERELEASE}" ]; then
+          echo "提示：传入的 pre_release=${pre_release} 与版本号推导结果 ${PRERELEASE} 不一致，以后者为准"
+        fi
+
+        # commit 可选：上游 GitHub Actions 的 sync-cnb 随 version 一起传（api_trigger_release 的 env 字段）。
+        # 它的用途是**核对打包产物**：产物里（预发布版的 GIT_COMMIT 附件、二进制里的 buildinfo.GitCommit）
+        # 带着打包时的 commit，同步时一并传过来，下载产物后就能比对二者是否一致。
+        # 它**不参与** tag / Release 的指向决策（那由镜像同步的 tag 决定）。
+        # 只接受 40 位十六进制 sha，其余按未传处理。
+        COMMIT="${commit:-}"
+        if ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-f]{40}$'; then
+          COMMIT=""
+        fi
+        echo "本次发布的 commit（用于核对打包产物）: ${COMMIT:-（未传入）}"
+
+        echo "##[set-output interior_version=$TAG]"
+        echo "##[set-output pre_release=$PRERELEASE]"
+        echo "##[set-output interior_commit=$COMMIT]"
+      exports:
+        interior_version: INTERIOR_VERSION
+        pre_release: PRE_RELEASE
+        interior_commit: INTERIOR_COMMIT
+
+    # 生成 Release 选项文件（preRelease 由版本号后缀推导），供下方 git:release 的 optionsFrom 引用
+    - name: 生成 Release 选项文件
+      script: |
+        title="Kai ${INTERIOR_VERSION}"
+        if [ "${PRE_RELEASE}" = "true" ]; then
+          title="Kai ${INTERIOR_VERSION} (预发布)"
+        fi
+        cat > release_options.yml << EOF
+        tag: ${INTERIOR_VERSION}
+        title: "${title}"
+        descriptionFromFile: release_body.md
+        preRelease: ${PRE_RELEASE}
+        overlying: false
+        EOF
+
+    - name: 从 GitHub Release 下载构建产物
+      script: |
+        TAG="${INTERIOR_VERSION}"
+        GITHUB_API="https://api.github.com/repos/dtapps/kai"
+        DOWNLOAD_DIR="dist"
+        mkdir -p "${DOWNLOAD_DIR}"
+
+        # 带重试的 curl（最多 3 次，间隔 5 秒）
+        curl_retry() {
+          local max=3 i=1
+          while [ $i -le $max ]; do
+            if output=$("$@" 2>&1); then
+              echo "$output"
+              return 0
+            fi
+            echo "  ⚠ 第 ${i}/${max} 次失败，5 秒后重试..."
+            sleep 5
+            i=$((i + 1))
+          done
+          echo "  ✗ 重试 ${max} 次后仍然失败"
+          echo "$output"
+          return 1
+        }
+
+        HTTP_CODE=$(curl_retry curl -s -o /dev/null -w "%{http_code}" \
+          -H "Authorization: token ${KAI_GITHUB_TOKEN}" \
+          "${GITHUB_API}/releases/tags/${TAG}")
+
+        if [ "$HTTP_CODE" != "200" ]; then
+          echo "错误：GitHub 上未找到 ${TAG} 的 Release（HTTP ${HTTP_CODE}）"
+          exit 1
+        fi
+        echo "✓ 找到 GitHub Release: ${TAG}"
+
+        RELEASE_INFO=$(curl_retry curl -s \
+          -H "Authorization: token ${KAI_GITHUB_TOKEN}" \
+          "${GITHUB_API}/releases/tags/${TAG}")
+        ASSET_COUNT=$(echo "$RELEASE_INFO" | jq '.assets | length')
+        echo "共 ${ASSET_COUNT} 个附件"
+
+        # 保存 Release 信息，供后续替换下载链接生成发布内容使用
+        echo "$RELEASE_INFO" > release_info.json
+
+        if [ "$ASSET_COUNT" = "0" ]; then
+          echo "错误：Release 没有附件，请先在 GitHub Actions 完成构建"
+          exit 1
+        fi
+
+        for i in $(seq 0 $((ASSET_COUNT - 1))); do
+          ASSET_NAME=$(echo "$RELEASE_INFO" | jq -r ".assets[$i].name")
+          ASSET_URL=$(echo "$RELEASE_INFO" | jq -r ".assets[$i].browser_download_url")
+          echo "下载 ${ASSET_NAME}..."
+          curl_retry curl -sL \
+            -H "Authorization: token ${KAI_GITHUB_TOKEN}" \
+            -o "${DOWNLOAD_DIR}/${ASSET_NAME}" "${ASSET_URL}"
+          echo "  ✓ 完成"
+        done
+
+        echo ""
+        echo "下载完成："
+        ls -lh "${DOWNLOAD_DIR}/"
+
+        # ---- 校验打包产物：产物里的 commit 与本次传入的 commit 是否一致 ----
+        # 预发布版本的产物里带 GIT_COMMIT 文件（打包时写进去的短 sha），
+        # 它必须与本次发布的 commit 对得上，否则搬过去的就不是这次提交构建的产物。
+        # 正式版不带这个附件（GIT_COMMIT 仅预发布附带），跳过校验。
+        if [ -f "${DOWNLOAD_DIR}/GIT_COMMIT" ]; then
+          SHORT="$(tr -d '[:space:]' < "${DOWNLOAD_DIR}/GIT_COMMIT")"
+          case "${INTERIOR_COMMIT:-}" in
+            "${SHORT}"*)
+              echo "✓ 产物 GIT_COMMIT（${SHORT}）与本次 commit 一致" ;;
+            "")
+              echo "⚠ 产物带 GIT_COMMIT（${SHORT}），但本次未传入 commit，无法比对" ;;
+            *)
+              echo "⚠ 产物 GIT_COMMIT（${SHORT}）与本次 commit（${INTERIOR_COMMIT}）不一致：搬过去的产物不是这次提交构建的" ;;
+          esac
+        else
+          echo "产物不带 GIT_COMMIT 附件（仅预发布附带），跳过 commit 校验"
+        fi
+
+    # 生成发布内容（直接复用 GitHub Release 正文，下载链接替换为 CNB）
+    - name: 生成发布内容
+      script: |
+        # 复用 GitHub Release 的完整正文（含其原有下载表格），
+        # 把所有指向该仓库的 GitHub 链接（下载/标签/仓库页）统一替换为 CNB，
+        # 避免单独生成表格导致与 GitHub 不同步。CNB 仓库路径为 dtapp/kai
+        # 且带 /-/ 前缀，故替换仓库根而非仅下载前缀，避免漏掉如
+        # 「如需稳定版本，请使用 正式发布」这类指向 releases 发布页的链接。
+        GH_BASE="https://github.com/dtapps/kai"
+        CNB_BASE="${CNB_REPO_URL_HTTPS%/}/-"
+        RELEASE_INFO=$(cat release_info.json)
+        echo "$RELEASE_INFO" | jq -r '.body // ""' \
+          | sed "s#${GH_BASE}#${CNB_BASE}#g" \
+          > release_body.md
+
+        cat release_body.md
+
+    # 删除已存在的 Release 与 Tag，再重建，避免旧附件堆积。
+    # 这是「镜像」而非「发布」：tag 的唯一性由 GitHub 侧（release.yml 的「校验版本号与 tag」）保证，
+    # 这里做幂等重建只是为了让 CNB 的附件与 GitHub 保持一致，重跑不会产生重复资产。
+    # 两步均调用 CNB Open API，CNB_TOKEN 需 repo-release:rw 权限，
+    # CNB_API_ENDPOINT 由流水线自动注入。注意：DeleteTag 不会自动删 Release，
+    # DeleteRelease 也不会自动删 Tag，所以两个对象必须分别删除。
+    - name: 删除已存在的 Release 与 Tag
+      shell: true
+      script: |
+        set -e
+        API="${CNB_API_ENDPOINT%/}"
+        REPO="$CNB_REPO_SLUG"
+        TAG="${INTERIOR_VERSION}"
+
+        # ---- 第 1 步：删除 Release（发行版） ----
+        # 查询：GET /-/releases/tags/{tag}  → 200 存在 / 404 不存在
+        echo "查询是否已存在 release (tag=$TAG) ..."
+        HTTP=$(curl -s -o /tmp/nr.json -w "%{http_code}" \
+          -H "Authorization: Bearer $CNB_TOKEN" \
+          -H "Accept: application/vnd.cnb.api+json" \
+          "$API/$REPO/-/releases/tags/$TAG")
+        if [ "$HTTP" = "200" ]; then
+          ID=$(jq -r '.id // .release_id // empty' /tmp/nr.json)
+          echo "release 已存在 (id=$ID)，删除后重新发布"
+          # 删除：DELETE /-/releases/{id}  → 成功返回 204/200
+          DEL=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases/$ID")
+          if [ "$DEL" = "204" ] || [ "$DEL" = "200" ]; then
+            echo "已删除旧 release"
+          else
+            echo "删除 release 失败 HTTP=$DEL"; exit 1
+          fi
+        elif [ "$HTTP" = "404" ]; then
+          echo "release 不存在，直接发布"
+        else
+          echo "查询 release 失败 HTTP=$HTTP"; cat /tmp/nr.json; exit 1
+        fi
+
+        # ---- 第 2 步：删除 Git Tag（标签） ----
+        # 删除：DELETE /-/tags/{repo}/{tag}  → 204 成功 / 404 不存在
+        # 该接口仅删 tag，不删关联 Release，故需在第 1 步之外单独删除。
+        # 删掉是为了下面 git:release 能重建（幂等重跑、附件不堆积）；重建出的 tag 指向
+        # 当前检出的提交 —— 流水线开头已检出到本次发布的那个提交，所以指向是对的。
+        echo "删除同名 tag (tag=$TAG) ..."
+        TAG_HTTP=$(curl -s -o /dev/null -w "%{http_code}" \
+          -X DELETE \
+          -H "Authorization: Bearer $CNB_TOKEN" \
+          -H "Accept: application/vnd.cnb.api+json" \
+          "$API/$REPO/-/tags/$TAG")
+        if [ "$TAG_HTTP" = "204" ] || [ "$TAG_HTTP" = "200" ]; then
+          echo "已删除旧 tag"
+        elif [ "$TAG_HTTP" = "404" ]; then
+          echo "tag 不存在，跳过"
+        else
+          # 删 tag 失败不阻断发布（后续 git:release 会在已有 tag 上重建）
+          echo "删除 tag 失败 HTTP=$TAG_HTTP（继续发布）"
+        fi
+
+        # ---- 第 2 步（结束）----
+        # 这里**不**给 git:release 传 commit / targetCommitish（官方 options 里没这两个字段）。
+        # 让 CNB 上的 tag 指向正确提交，靠的是**检出**：流水线开头已把工作区检出到本次发布的
+        # 那个提交，所以这里重建出来的 tag 自然就指对了 —— 不需要用 POST /-/tags 手工建 tag，
+        # 更不会覆盖镜像同步过来的 tag。
+        # commit 另外还用于核对打包产物（GIT_COMMIT 附件），见上面的下载 stage。
+
+    # https://docs.cnb.cool/zh/build/internal-steps.html#git-release
+    - name: 创建 Release
+      type: git:release
+      optionsFrom: release_options.yml
+
+    # https://docs.cnb.cool/zh/plugin/public/cnbcool/attachments.html
+    - name: 上传 Release 附件
+      image: cnbcool/attachments:latest
+      settings:
+        type: UPLOAD
+        tag: ${INTERIOR_VERSION}
+        attachments:
+          - 'dist/*'
+      exports:
+        FILES: FILES
+
+    - name: 输出 Release 附件
+      script: echo $FILES
+
+    # 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）。
+    # 只在本次是 nightly 时执行：正式版 / rc / beta / alpha 发布不动夜间构建历史。
+    # 列表接口 GET /-/releases?page=&page_size= 返回数组（tag_name / published_at / prerelease），
+    # 服务端排序不保证，这里按 published_at 本地倒序后再决定删哪几个。
+    # 清理是旁路：任何一步失败都只打警告（curl 用 -sS，网络错误会打到 stderr），
+    # 并显式 exit 0 —— 不能让清理把一次成功的发布拖成失败。
+    - name: 清理过期 nightly Release（保留最近 3 个）
+      shell: true
+      script: |
+        # 故意不开 set -e：清理里任何一步失败都只告警
+        TAG="${INTERIOR_VERSION}"
+        case "$TAG" in
+          *-nightly.*) ;;
+          *) echo "非 nightly 发布，跳过清理"; exit 0 ;;
+        esac
+
+        API="${CNB_API_ENDPOINT%/}"
+        REPO="$CNB_REPO_SLUG"
+        KEEP=3
+        LIST=/tmp/cnb_releases.json
+        : > /tmp/cnb_nightlies.tsv
+
+        PAGE=1
+        while [ "$PAGE" -le 20 ]; do
+          HTTP=$(curl -sS -o "$LIST" -w "%{http_code}" \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases?page=$PAGE&page_size=100") || HTTP="000"
+          if [ "$HTTP" = "000" ]; then
+            echo "⚠ 查询 Release 列表失败（网络错误），跳过清理"
+            break
+          fi
+          if [ "$HTTP" != "200" ]; then
+            echo "⚠ 查询 Release 列表失败 HTTP=$HTTP，跳过清理"
+            break
+          fi
+          if ! jq -e 'type == "array"' "$LIST" >/dev/null 2>&1; then
+            echo "⚠ Release 列表不是数组（响应：$(head -c 200 "$LIST")），跳过清理"
+            break
+          fi
+          CNT=$(jq 'length' "$LIST" 2>/dev/null) || CNT=""
+          if [ -z "$CNT" ]; then
+            echo "⚠ 解析 Release 列表失败，跳过清理"
+            break
+          fi
+          [ "$CNT" = "0" ] && break
+          jq -r '.[] | select(.tag_name | test("-nightly\\.")) | [.tag_name, (.published_at // "")] | @tsv' \
+            "$LIST" >> /tmp/cnb_nightlies.tsv 2>/dev/null
+          [ "$CNT" -lt 100 ] && break
+          PAGE=$((PAGE + 1))
+        done
+
+        # 按发布时间倒序，第 KEEP+1 个及之后的是过期项（先按 tag 去重，防止分页参数失效重复计数）
+        STALE=$(sort -u -k1,1 /tmp/cnb_nightlies.tsv 2>/dev/null | sort -k2,2r | cut -f1 | tail -n "+$((KEEP + 1))")
+        if [ -z "$STALE" ]; then
+          echo "nightly 不足 ${KEEP} 个，无需清理"
+          exit 0
+        fi
+
+        echo "$STALE" | while IFS= read -r OLD; do
+          [ -n "$OLD" ] || continue
+          echo "删除旧 nightly Release: ${OLD}"
+
+          # 先按 tag 查 id（列表里的 id 字段不保证存在），再删 Release
+          HTTP=$(curl -sS -o /tmp/cnb_rel.json -w "%{http_code}" \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/releases/tags/$OLD") || HTTP="000"
+          case "$HTTP" in
+            200)
+              ID=$(jq -r '.id // .release_id // empty' /tmp/cnb_rel.json 2>/dev/null) || ID=""
+              if [ -z "$ID" ]; then
+                echo "  ⚠ 拿不到 release id，跳过"
+                continue
+              fi
+              DEL=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+                -H "Authorization: Bearer $CNB_TOKEN" \
+                -H "Accept: application/vnd.cnb.api+json" \
+                "$API/$REPO/-/releases/$ID") || DEL="000"
+              case "$DEL" in
+                200|204) echo "  ✓ Release 已删除" ;;
+                000) echo "  ⚠ 删除 Release 失败（网络错误）" ;;
+                *) echo "  ⚠ 删除 Release 失败 HTTP=$DEL" ;;
+              esac
+              ;;
+            404) echo "  - Release 不存在（跳过）" ;;
+            000) echo "  ⚠ 查询 Release 失败（网络错误）" ;;
+            *) echo "  ⚠ 查询 Release 失败 HTTP=$HTTP" ;;
+          esac
+
+          # DeleteRelease 不会自动删 Tag，需单独删；失败不阻断（后续重建会在同名 tag 上覆盖）
+          TAG_HTTP=$(curl -sS -o /dev/null -w "%{http_code}" -X DELETE \
+            -H "Authorization: Bearer $CNB_TOKEN" \
+            -H "Accept: application/vnd.cnb.api+json" \
+            "$API/$REPO/-/tags/$OLD") || TAG_HTTP="000"
+          case "$TAG_HTTP" in
+            200|204) echo "  ✓ Tag 已删除" ;;
+            404) echo "  - Tag 不存在（跳过）" ;;
+            000) echo "  ⚠ 删除 Tag 失败（网络错误）" ;;
+            *) echo "  ⚠ 删除 Tag 失败 HTTP=$TAG_HTTP" ;;
+          esac
+        done
+
+        # 显式成功：上面任何告警都不影响本次流水线结果
+        exit 0
+
+master:
+  # 手动触发：通过页面自定义按钮执行（按钮定义见 .cnb/web_trigger.yml）
+  # 只需填版本号；是否预发布由版本号后缀决定（v1.2.3-rc.1 / v1.2.3-nightly.20260101 → 预发布），没有开关
+  web_trigger_release:
+    - *trigger_release
+
+  # API 触发：由 GitHub Actions 发布 Release 后调用 CNB Open API 触发（event=api_trigger_release）
+  # 只需通过 env 传入 version 变量（如 {"version":"v1.2.3"}），发布到 CNB
+  # 不需要 pre_release：判定与 GitHub 同口径，只看版本号后缀（传了也只会打一行提示）
+  api_trigger_release:
+    - *trigger_release

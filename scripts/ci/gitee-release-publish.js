@@ -131,14 +131,31 @@ async function main() {
   }
 
   // ── 建 Release ──
+  // target_commitish 用清单里的值：有 commit 就绑到它（顺手做的一次绑定），
+  // 没有就用 GitHub Release 自带的值（通常是分支名）。
+  const FALLBACK_BRANCH = 'master';
+  const targetCommitish = m.targetCommitish || FALLBACK_BRANCH;
   const form = new URLSearchParams();
   form.set('access_token', TOKEN);
   form.set('tag_name', m.tag);
   form.set('name', m.releaseName);
   form.set('body', m.bodyHtml);
-  form.set('target_commitish', m.targetCommitish || 'master');
+  form.set('target_commitish', targetCommitish);
   form.set('prerelease', m.prerelease ? 'true' : 'false');
-  const created = await gt('POST', '/releases', { body: form });
+  if (m.commit) {
+    console.log('本次发布的 commit: ' + m.commit +
+      (m.commitMatched === true ? '（产物 GIT_COMMIT 校验一致）' :
+        m.commitMatched === false ? '（产物 GIT_COMMIT 校验不一致）' : '（无产物可比对）'));
+  }
+  let created = await gt('POST', '/releases', { body: form });
+  // 绑定失败（多半是镜像仓库还没同步到这个提交）→ 回退到默认分支重试一次，
+  // 不让整条发布变红：附件与正文才是这次发布的价值所在。
+  if (created.status !== 200 && created.status !== 201 && targetCommitish !== FALLBACK_BRANCH) {
+    console.log('⚠ 用 commit ' + targetCommitish + ' 创建 Release 失败（HTTP ' + created.status +
+      '），回退到 ' + FALLBACK_BRANCH + ' 重试');
+    form.set('target_commitish', FALLBACK_BRANCH);
+    created = await gt('POST', '/releases', { body: form });
+  }
   if (created.status !== 200 && created.status !== 201) {
     fail('创建 Release 失败（HTTP ' + created.status + '）：' + created.text.slice(0, 300));
   }

@@ -71,15 +71,16 @@ job 顺序：
 1. `prepare`：解析版本号（归一化 / 校验 / 预发布判定），生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 `GIT_COMMIT`，输出 `tag` / `prerelease` / `release_title` / `version`。
 2. `build`：矩阵构建 4 个组合。
 3. `release`：汇总产物 → 校验版本号与 tag（tag 不存在、tag 数非零、正式版不比已有正式版旧）→ 生成 `SHA256SUMS` → 校验可发布产物数非零 → 生成发布说明 → 发布 GitHub Release。
-4. `sync-cnb` / `sync-gitee` / `sync-gitlab` / `sync-gitcode`：并行触发各平台同步。
-5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。
+4. `sync-cnb` / `sync-gitee` / `sync-gitlab` / `sync-gitcode`：并行触发各平台同步。调各平台的 API 时**版本号与 commit 一起传**（CNB 的 `env` / Gitee 的 webhook `params` / GitLab 的 `variables` / GitCode 的 `inputs`）；commit 是这次打包的构建元数据，各端只做记录与追溯，不参与发布指向。四个 job 各自输出一个 `status`（`triggered` / `skipped` / `failed`），供 `notify` 展示。
+5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。正文含 GitHub / CNB / Gitee / GitLab / GitCode 五个平台的 Release 链接、**可点击的提交链接**（短 sha → GitHub commit 页），以及一行「镜像同步」状态（每个平台标 ✅ 已触发 / ⏭ 未配置 / ❌ 触发失败）。各平台仓库路径不同：CNB / GitCode 是 `dtapp`，Gitee / GitLab 是 `dtapps`；GitLab 的 Release 路径是 `/-/releases/<tag>`（没有 `/tag` 段），其余是 `/releases/tag/<tag>`。
 
-发布说明由 `scripts/ci/render-release-body.sh` 生成，结构固定为 「预发布警示（仅预发布）→ 发布信息 → 下载 → 校验 → 更新内容」； 「更新内容」由 `scripts/ci/release-changelog.sh` 计算：rc 对 rc、beta 对 beta、alpha 对 alpha、nightly 对 nightly、正式版对正式版， 首次发某渠道时回退到上一个正式版，挑不出基准会直接让 job 失败而不是谎报「首次发布」。
+发布说明由 `scripts/ci/render-release-body.sh` 生成，结构固定为 「预发布警示（仅预发布）→ 发布信息 → 下载 → 校验 → 更新内容」； 下载表格里的附件平台 / 架构解析与说明文案由 `scripts/ci/describe-artifact.sh` 提供（被前者 source，表格行由它渲染）； 「更新内容」由 `scripts/ci/release-changelog.sh` 计算：rc 对 rc、beta 对 beta、alpha 对 alpha、nightly 对 nightly、正式版对正式版， 首次发某渠道时回退到上一个正式版，挑不出基准会直接让 job 失败而不是谎报「首次发布」。
 
-CNB / Gitee / GitLab / GitCode 全部镜像 GitHub 的正文，所以正文格式只改这两个脚本。 改了先本地自检：
+CNB / Gitee / GitLab / GitCode 全部镜像 GitHub 的正文，所以正文格式只改这三个脚本。 改了先本地自检：
 
 ```bash
 bash scripts/ci/resolve-prerelease.sh --self-test
+sh scripts/ci/describe-artifact.sh --self-test
 sh scripts/ci/render-release-body.sh --self-test
 ```
 
@@ -122,7 +123,7 @@ SQLite 驱动：Windows 用 `modernc.org/sqlite`（纯 Go，`CGO_ENABLED=0`）�
 
 macOS 产物是 `.app` 的 zip，不是 dmg。自更新包必须是 `.app` 归档，才能保留签名。
 
-产物名里的版本段不参与平台解析：`scripts/ci/render-release-body.sh` 按「最后一个 `-darwin-` / `-windows-` / `-linux-` 段」定位平台和架构，所以版本号怎么变都不会把 `Kai-0.2.8-darwin-arm64.zip` 解析错。新增产物格式时同时更新那里的 `parse_artifact_name` / `describe_artifact`，否则会落进「附件（…），解压即用」的兜底行。
+产物名里的版本段不参与平台解析：`scripts/ci/describe-artifact.sh` 从文件名末尾取 os / arch，所以版本号怎么变都不会把 `Kai-0.2.8-darwin-arm64.zip` 解析错。新增产物格式时更新那里的 `parse_artifact_name` / `describe_artifact`，否则会落进「压缩包（…），解压即用」的兜底行。
 
 ### 4.2 Windows Authenticode
 
@@ -158,7 +159,8 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 
 - CNB 侧 `.cnb.yml` 的 `api_trigger_release` 会下载 GitHub 产物、删除同名 Release/Tag、重建 Release 并上传附件；是否预发布同样由版本号后缀推导（`pre_release` 传了也不采信）。
 - GitLab 侧 `.gitlab/workflows/release.yml` 的 `release` job 把附件传到 Generic Package Registry，再建 Release 与直链。
-- Gitee 侧 `.workflow/release.yml` 由 Webhook 拉起，跑 `scripts/ci/` 下的两个脚本： `gitee-release-download.js`（按跳过规则下载并写清单 `gitee-release.json`）+ `gitee-release-publish.js`（调 Gitee OpenAPI 建 Release、逐个上传附件）。 需要在 Gitee 流水线加全局参数 **`KAI_GITEE_TOKEN`**（个人令牌，repo 读写）——名字不能以 `GITEE_` 开头，那是平台保留前缀。
+- Gitee 侧 `.workflow/release.yml` 由 Webhook 拉起，跑 `scripts/ci/` 下的两个脚本： `gitee-release-download.js`（下载并写清单 `gitee-release.json`）+ `gitee-release-publish.js`（调 Gitee OpenAPI 建 Release、逐个上传附件）。 需要在 Gitee 流水线加全局参数 **`KAI_GITEE_TOKEN`**（个人令牌，repo 读写）——名字不能以 `GITEE_` 开头，那是平台保留前缀。
+- **Gitee 下载源**：全局参数 `DOWNLOAD_SOURCE` 取 `cnb`（默认）或 `github`，空值按 `cnb`，其它值直接报错。 **同一次发布的全部附件只来自这一个平台，绝不混用**：包里注入了 `RepoSource`，客户端据此选升级通道，两边各自编译、同版本字节数也不同，混源等于随机分配通道。 `cnb` 源附件名按版本在本地拼出、大小用 `Range: bytes=1-` 从 `Content-Range` 探测、正文本地生成、全程不碰 GitHub API（CNB API 匿名 401）；`github` 源清单/大小/正文取 GitHub Release，附件依次走 daocloud → ghfast.top → gh-proxy.com → 直连四级回退。 两源共用：Range 断点续传（重定向保留 Range）、每 5 秒采样速度、连续 15 秒低于 30KB/s 判慢源换源、普通失败每两次换源、累计最多 8 次、间隔 1.5 秒、3 路并发；落盘后验文件头（`.deb` 为 `!<arch>\n`、`.fpk` 为 `1f 8b`），防反代 200 回 HTML 错误页。 `VERSION` 为空时 shell 先调 `node scripts/ci/gitee-release-download.js --resolve-tag` 取最新 tag（cnb 源解析 CNB 公开 Release 列表页，github 源取 GitHub Release），再 source `resolve-prerelease.sh` 按版本号后缀判预发布。 清单里另有 `bodyHtmlPlugin`：正文压单行、裸 `=` 转 `&#61;`、每 200 字节插 `<br/>`，供用 Gitee release 插件（正文走参数通道、整值当路径 open）时取用。
 - 所有同步 job 都“尽力而为”：失败只打 `::warning::`，不回滚 GitHub Release。
 
 > **GitCode 当前不发布**：仓库里仍保留 `sync-gitcode` job 与 `.gitcode/workflows/release.yml`，但它们不在当前发布链路中；文档与发布 checklist 均按 GitHub / CNB / GitLab / Gitee 四个平台执行。
@@ -170,6 +172,9 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 - **附件名**：与 GitHub 逐字一致（`Kai-0.2.8-darwin-arm64.zip`，版本段不带 `v`）。
 - **正文**：全部镜像 GitHub 正文，只替换各自平台的链接；Gitee 侧正文里的链接会退化成文字，「更新内容」保留标题、明细换成一句「请前往 GitHub Release 查看」（完整清单在 GitHub 上更有价值）。
 - **附件清单**：CNB / GitLab / GitCode 全量搬运；Gitee 的下载脚本只有一条过滤规则——**单文件 >100MB 就跳过**（`AppImage` 112~117MB 因此不在 Gitee），其余（`updater-*`、`BUILD_TIME`/`GIT_COMMIT`、`SHA256SUMS`）都照常上传。
+- **构建元数据**：同步版本号时把本次发布的 commit 一起传过去（CNB 的 `env` / Gitee 的 webhook `params` / GitLab 的 `variables` / GitCode 的 `inputs`）。commit 的本职是**打包信息**：产物里带着它（预发布版的 `GIT_COMMIT` 附件、二进制里的 `buildinfo.GitCommit`），所以各端下载产物后会**核对**二者是否一致（对不上就警告，不阻断发布）。正式版不带该附件，跳过校验。
+- **顺手的绑定**：让 Release 指向这个 commit 只是顺手能做的事 —— GitLab 的 `ref`、Gitee / GitCode 的 `target_commitish` 都接受 commit SHA，改一个字段即可，绑不上会自动回退到默认分支重试。绑定与否都不影响发布价值（附件与正文才是）。
+- **CNB 靠「检出」而不是「绑定」**：CNB 的 `git:release` 没有 commit / targetCommitish 参数，但它每次发布都会**删掉同名 tag 再重建**，而重建用的就是**当前检出的提交**。所以 CNB 流水线的第一步是 `git checkout --detach <commit>` —— 检出到本次发布的那个提交，重建出的 tag 自然就指对了。CNB 没有原生的 `clone.ref` 配置，检出只能在脚本里做；检出失败（镜像还没同步到该提交）只告警，保持默认检出继续发布。GitLab / Gitee / GitCode 不删 tag（tag 由镜像同步过来，指向天然正确），无需检出。
 - **Gitee 容量**：单附件 100MB（GVP 项目 200MB），**仓库附件总量 1GB**（含仓库附件与发行版附件）。 脚本另有 `MAX_TOTAL_BYTES=800MB` 的单次安全阈值；发布侧遇到「附件配额不足」会跳过后续更大的文件、只打警告不判失败，并提示去 GitHub 下载。 想让 Gitee 长期保留多个版本，需要定期删旧 Release（删 Release 会连附件一起释放）——可以在 `gitee-release-publish.js` 里加一步按 `DELETE /api/v5/repos/{owner}/{repo}/releases/{id}` 清理，`KAI_GITEE_TOKEN` 已具备该权限。
 
 ## 6. 更新源与产物对应

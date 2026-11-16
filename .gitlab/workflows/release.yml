@@ -1,5 +1,21 @@
 # 发布同步：从 GitHub Release 下载产物，发布到 GitLab Release。
 #
+# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+#   1.2.3                    -> 正式版，Release 不勾选 prerelease
+#   v1.2.3                   -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
+#   1.2.3-rc.1               -> 预发布（rc 渠道）
+#   1.2.3-beta.1             -> 预发布（beta 渠道）
+#   1.2.3-alpha.1            -> 预发布（alpha 渠道）
+#   1.2.3-nightly.20260101   -> 预发布（nightly 渠道）
+#   nightly                  -> 定时任务的默认值（手动填也可）：不是版本号，自动推导成
+#                               <最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>，
+#                               例如最近正式版 v0.2.7 → tag v0.2.8-nightly.20261114。
+#                               每天一个 tag，GitHub 上只保留最近 3 个 nightly Release。
+#                               （各镜像平台同口径，同样只保留最近 3 个。）
+#
+# 本流水线不解析版本号：只镜像 GitHub 已发布的 tag（VERSION 变量），预发布由后缀判定；
+# 上游（GitHub Actions 的 prepare job）负责归一化与推导，nightly 的日期段也由它生成。
+#
 # 本文件由根目录的 .gitlab-ci.yml 通过 include: local 引入（`stages` / `default` 留在根文件，
 # 这里只放 job）。新增流水线时按同样的约定加一个文件 + 根文件加一行 include 即可。
 #
@@ -35,6 +51,16 @@ release:
 
       TAG="${VERSION:?未传入 VERSION —— 网页手动执行时请在 Run pipeline 的变量区填写（如 VERSION=v0.2.19）}"
       case "$TAG" in v* | V*) ;; *) TAG="v${TAG}" ;; esac
+      # commit 可选：上游 GitHub Actions 随 VERSION 一起传（variables[COMMIT]）。
+      # 用途是**核对打包产物**：产物里（预发布版的 GIT_COMMIT 附件、二进制里的 buildinfo.GitCommit）
+      # 带着打包时的 commit，同步时一并传过来，下载产物后就能比对二者是否一致。
+      # 它**不参与** tag / Release 的指向决策（那由镜像同步的 tag 决定）。
+      # 网页手动执行时没有这个变量。只接受 40 位十六进制，其余按未传处理。
+      COMMIT="${COMMIT:-}"
+      if ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-f]{40}$'; then
+        COMMIT=""
+      fi
+      echo "本次发布的 commit（用于核对打包产物）: ${COMMIT:-（未传入）}"
       # 是否预发布只看版本号后缀（与 GitHub / CNB / GitCode 同口径），
       # 不采信人工传入的 PRERELEASE：布尔输入会和版本号打架。
       TAG_LC="$(printf '%s' "$TAG" | tr '[:upper:]' '[:lower:]')"
@@ -90,6 +116,23 @@ release:
       done
       ls -lh dist
 
+      # 校验打包产物：预发布版本的产物里带 GIT_COMMIT 文件（打包时写进去的短 sha），
+      # 它必须与本次传入的 commit 对得上，否则搬过去的就不是这次提交构建的产物。
+      # 正式版不带这个附件（GIT_COMMIT 仅预发布附带），跳过校验。
+      if [ -f "dist/GIT_COMMIT" ]; then
+        SHORT="$(tr -d '[:space:]' < dist/GIT_COMMIT)"
+        case "$COMMIT" in
+          "${SHORT}"*)
+            echo "✓ 产物 GIT_COMMIT（${SHORT}）与本次 commit 一致" ;;
+          "")
+            echo "⚠ 产物带 GIT_COMMIT（${SHORT}），但本次未传入 commit，无法比对" ;;
+          *)
+            echo "⚠ 产物 GIT_COMMIT（${SHORT}）与本次 commit（${COMMIT}）不一致：搬过去的产物不是这次提交构建的" ;;
+        esac
+      else
+        echo "产物不带 GIT_COMMIT 附件（仅预发布附带），跳过 commit 校验"
+      fi
+
       # 复用 GitHub 正文，把仓库链接替换为 GitLab。
       #
       # 顺序不能颠倒：GitHub 的下载地址是 /releases/download/<tag>/<file>，
@@ -138,17 +181,35 @@ release:
         *) echo "⚠ 删除旧 release 返回 HTTP=${HTTP}（继续）" ;;
       esac
 
-      # tag 不存在时由 ref 自动创建，指向默认分支最新提交
+      # tag 不存在时由 ref 自动创建。
+      # ref 优先用上游传来的 COMMIT（GitLab 官方支持 ref = commit SHA）：这是**顺手**能做的一次绑定，
+      # 让 Release 尽量指向发布那次提交。绑不上也无妨：创建失败会自动回退到默认分支重试，
+      # 不影响附件与正文（发布价值在这两样）。
+      REF="${COMMIT:-$CI_DEFAULT_BRANCH}"
       PAYLOAD=$(jq -n \
         --arg name "$RELEASE_NAME" \
         --arg tag "$TAG" \
         --arg desc "$(cat body.md)" \
-        --arg ref "$CI_DEFAULT_BRANCH" \
+        --arg ref "$REF" \
         --argjson links "$LINKS" \
         '{name: $name, tag_name: $tag, description: $desc, ref: $ref, assets: {links: $links}}')
 
       HTTP=$(curl -s -o /tmp/rel.json -w "%{http_code}" -X POST "${AUTH[@]}" \
         -H "Content-Type: application/json" -d "$PAYLOAD" "${API}/releases")
+      # 绑定失败（多半是镜像仓库还没同步到这个提交）→ 回退到默认分支重试一次，不让整条同步变红。
+      if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ] && [ -n "$COMMIT" ]; then
+        echo "⚠ 用 commit ${COMMIT} 创建 release 失败 HTTP=${HTTP}，回退到默认分支 ${CI_DEFAULT_BRANCH} 重试"
+        cat /tmp/rel.json
+        PAYLOAD=$(jq -n \
+          --arg name "$RELEASE_NAME" \
+          --arg tag "$TAG" \
+          --arg desc "$(cat body.md)" \
+          --arg ref "$CI_DEFAULT_BRANCH" \
+          --argjson links "$LINKS" \
+          '{name: $name, tag_name: $tag, description: $desc, ref: $ref, assets: {links: $links}}')
+        HTTP=$(curl -s -o /tmp/rel.json -w "%{http_code}" -X POST "${AUTH[@]}" \
+          -H "Content-Type: application/json" -d "$PAYLOAD" "${API}/releases")
+      fi
       if [ "$HTTP" != "200" ] && [ "$HTTP" != "201" ]; then
         echo "创建 release 失败 HTTP=${HTTP}"
         cat /tmp/rel.json

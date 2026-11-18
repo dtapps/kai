@@ -13,6 +13,12 @@
 //   KAI_GITEE_TOKEN  必填，个人令牌（repo 读写）
 //   MANIFEST         默认 gitee-release.json
 //   KAI_GITEE_API    默认 https://gitee.com/api/v5/repos/dtapps/kai
+//
+// 命令行：
+//   无参数              正常发布：读清单 → 建 Release → 上传附件 → 清理 nightly
+//   --check-exists [tag] 只查该 tag 是否已在 Gitee 发布，stdout 输出 exists / absent，
+//                       日志走 stderr；tag 省略时取 RELEASE_VERSION。
+//                       workflow 在下载前调用它，让 GitHub / CNB 两条触发链路先到先得。
 
 const fs = require('fs');
 
@@ -26,15 +32,51 @@ function fail(msg) {
 }
 function mb(n) { return (n / 1048576).toFixed(1) + ' MB'; }
 
-// 只打印路径，不打印带 access_token 的完整 URL
-async function gt(method, path, options) {
+// 只打印路径，不打印带 access_token 的完整 URL。
+// quiet=true 时日志走 stderr：--check-exists 用 $(...) 捕获 stdout 判断 exists/absent，
+// stdout 必须只有那一个词，诊断信息不能混进去。
+async function gt(method, path, options, quiet) {
   const url = API + path + (path.indexOf('?') === -1 ? '?' : '&') +
     'access_token=' + encodeURIComponent(TOKEN);
   const res = await fetch(url, Object.assign({ method }, options || {}));
   const text = await res.text();
-  console.log('  ' + method + ' ' + path + ' → HTTP ' + res.status +
-    (text ? ' ' + text.slice(0, 300) : ''));
+  const line = '  ' + method + ' ' + path + ' → HTTP ' + res.status +
+    (text ? ' ' + text.slice(0, 300) : '');
+  if (quiet) console.error(line); else console.log(line);
   return { status: res.status, text };
+}
+
+// 查询 tag 对应的 Release。Gitee 的 GET /releases/tags/{tag} 在「没有这个 Release」时返回
+// **200 + body `null`**（不是 404），所以只看状态码会误判成已存在；必须解析 body 取 id。
+// 返回 null 表示不存在；查询失败直接 fail（调用方无法可靠的判断存在性时不能假装不存在）。
+async function findExisting(tag, quiet) {
+  const res = await gt('GET', '/releases/tags/' + encodeURIComponent(tag), undefined, quiet);
+  if (res.status !== 200 && res.status !== 404) {
+    fail('查询 Release 失败（HTTP ' + res.status + '）：' + res.text.slice(0, 300));
+  }
+  if (res.status === 200) {
+    try {
+      const obj = JSON.parse(res.text);
+      return obj && obj.id ? obj : null;
+    } catch (e) {
+      return null;
+    }
+  }
+  return null;
+}
+
+// --check-exists：workflow 下载前调用，判断本版本是否已在 Gitee 发布（另一条触发链路先到先得）。
+// stdout 只输出一个词 exists / absent，日志全部走 stderr，供 shell 用 $(...) 捕获。
+async function checkExists(tag) {
+  if (!tag) {
+    console.error('错误：--check-exists 需要版本号（RELEASE_VERSION）');
+    process.exit(2);
+  }
+  const old = await findExisting(tag, true);
+  console.error(old
+    ? '已存在 Release：' + old.id + '（' + (old.name || tag) + '）'
+    : '尚无 Release：' + tag);
+  process.stdout.write(old ? 'exists' : 'absent');
 }
 
 // ── 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）──
@@ -109,17 +151,10 @@ async function main() {
   console.log('待上传 ' + m.files.length + ' 个（' + mb(m.totalBytes || 0) + '）');
 
   // ── 同名先删，保证幂等重跑 ──
-  // 注意：Gitee 的 GET /releases/tags/{tag} 在「没有这个 Release」时返回 **200 + body `null`**，
-  // 不是 404。所以这里不能只看状态码，还要判断解析结果。
-  const existing = await gt('GET', '/releases/tags/' + encodeURIComponent(m.tag));
-  let old = null;
-  if (existing.status === 200) {
-    try { old = JSON.parse(existing.text); } catch (e) { old = null; }
-  } else if (existing.status !== 404) {
-    fail('查询旧 Release 失败（HTTP ' + existing.status + '）：' + existing.text.slice(0, 300));
-  }
-
-  if (old && old.id) {
+  // 正常流程在 workflow 的 --check-exists 已经跳过「已发布」的情况；这里再删一次是兜底
+  // （手动补发、或检查之后又有同名 Release），保证创建不会被 400 卡住。
+  const old = await findExisting(m.tag);
+  if (old) {
     console.log('删除同名旧 Release：' + old.id + '（' + (old.name || m.tag) + '）');
     const del = await gt('DELETE', '/releases/' + old.id);
     // 删不掉就别往下走：同名 Release 还在，创建会报 400，错误现场会被挪远
@@ -224,6 +259,15 @@ async function main() {
   if (failed.length) {
     console.log('失败 ' + failed.length + ' 个：');
     failed.forEach((x) => console.log('  - ' + x));
+    // 回滚删除刚建的 Release：GitHub 与 CNB 两条链路先到先得，若这边建了 Release
+    // 却没传齐附件就退出，另一条链路会在下载前 --check-exists 看到「已存在」而跳过，
+    // 最终给用户留下一个附件不全的 Release。删掉它，让另一条链路有机会完整重跑。
+    // 注意配额不足（quotaSkipped）不算失败、不回滚——那种情况 Release 本身是有效的。
+    console.log('上传失败，回滚删除刚建的 Release ' + release.id + '，让另一条触发链路能重跑');
+    const rollback = await gt('DELETE', '/releases/' + release.id);
+    if (rollback.status !== 200 && rollback.status !== 204) {
+      console.log('⚠ 回滚删除失败（HTTP ' + rollback.status + '）：请手动删除 Release ' + release.id);
+    }
     fail('有 ' + failed.length + ' 个附件上传失败，见上面的 HTTP 状态与响应体');
   }
   console.log('发布完成：' + (release.html_url || m.tag));
@@ -236,4 +280,12 @@ async function main() {
   }
 }
 
-main().catch((err) => fail(err && err.message ? err.message : String(err)));
+if (process.argv[2] === '--check-exists') {
+  // 版本号从参数或 RELEASE_VERSION 取。token 缺失时 checkExists 里的查询会拿到
+  // 401/403 → fail（非 0），workflow 侧的 $(... || true) 会得到空串并按「不存在」继续，
+  // 随后 main 里的 token 校验会给出明确错误——不会静默跳过发布。
+  checkExists(process.argv[3] || process.env.RELEASE_VERSION || '')
+    .catch((err) => fail(err && err.message ? err.message : String(err)));
+} else {
+  main().catch((err) => fail(err && err.message ? err.message : String(err)));
+}

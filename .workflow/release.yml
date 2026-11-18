@@ -136,6 +136,18 @@ stages:
               exit 1
             fi
 
+            # ===== 先到先得：另一条触发链路已经把本版本发到 Gitee 就整条跳过 =====
+            # GitHub 的 sync-gitee（源 github）与 CNB 的「触发 Gitee 同步发布」（源 cnb）
+            # 都会以 event=kai-release 拉起本流水线。Gitee 单仓库附件配额只有 1GB，
+            # 同一个版本由两条链路各下载 + 上传一遍纯属浪费；strategy.blocking=true
+            # 保证两次触发串行，所以这里查到「已发布」就一定是另一条链路完整跑完的结果。
+            # --check-exists 只查 Gitee 上该 tag 的 Release 是否存在，存在输出 exists。
+            if [ "$(node scripts/ci/gitee-release-publish.js --check-exists "${RELEASE_VERSION}" 2>/dev/null || true)" = 'exists' ]; then
+              echo "Gitee 上已存在 ${RELEASE_VERSION} 的 Release（另一条触发链路已发布），跳过本次下载与发布"
+              exit 0
+            fi
+            echo "Gitee 上尚无 ${RELEASE_VERSION} 的 Release，继续下载与发布"
+
             # github 源的正文 markdown → HTML 才需要 marked（Gitee 前端 markdown-it({html:true})，
             # HTML 结构最稳）；cnb 源正文由脚本本地生成，不装这个依赖。
             if [ "$DOWNLOAD_SOURCE" = 'github' ]; then

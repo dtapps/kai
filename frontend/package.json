@@ -23,7 +23,7 @@
   },
   "license": "MIT",
   "name": "kai-frontend",
-  "packageManager": "pnpm@12.18.0",
+  "packageManager": "pnpm@12.21.0",
   "private": true,
   "scripts": {
     "build": "vite build --mode production",

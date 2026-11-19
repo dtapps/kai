@@ -207,7 +207,7 @@ deps: deps-go deps-node ## 安装全部依赖
 	@echo "[Deps] 完成。"
 
 .PHONY: deps-go
-deps-go: ## 安装全部Go依赖
+deps-go: ## 安装全部 Go 依赖
 	@echo "[Deps] 安装 Go 模块依赖..."
 	go mod tidy
 	go mod download
@@ -225,7 +225,7 @@ update-deps: update-deps-go update-deps-node ## 更新全部依赖
 	@echo "[Deps] 完成。"
 
 .PHONY: update-deps-go
-update-deps-go: ## 更新全部Go依赖
+update-deps-go: ## 更新全部 Go 依赖
 	@echo "[Deps] 更新 Go 模块依赖..."
 	go get -u ./...
 	go mod tidy
@@ -340,12 +340,14 @@ LINT_TAGS = goolm,stdjson,purego
 LINT_PLATFORMS ?= $(shell go env GOOS)/$(shell go env GOARCH)
 
 # -printf=false 关闭 printf 分析，避免 i18n.T() 作日志 format 时触发错误
-.PHONY: check-go
-check-go: ## 检查后端代码
-	@echo "[Check] 运行 go vet 静态检查..."
-	go vet -printf=false ./...
+.PHONY: check-go-vet
+check-go-vet: ## 运行 Go 静态检查
+	@echo "[Check] -> 运行 Go vet 静态检查 (Tags: $(LINT_TAGS))..."
+	$(LINT_ENV) go vet -tags=$(LINT_TAGS) -printf=false ./...
 
-	@echo "[Check] 运行 golangci-lint 扫描 (平台: $(LINT_PLATFORMS), Tags: $(LINT_TAGS))..."
+.PHONY: check-go-lint
+check-go-lint: ## 运行 Go lint 扫描
+	@echo "[Check] -> 运行 Go lint 扫描 (平台: $(LINT_PLATFORMS), Tags: $(LINT_TAGS))..."
 	@for os_arch in $(LINT_PLATFORMS); do \
 		os=$$(echo $$os_arch | cut -d'/' -f1); \
 		arch=$$(echo $$os_arch | cut -d'/' -f2); \
@@ -354,16 +356,23 @@ check-go: ## 检查后端代码
 		$(LINT_ENV) GOOS=$$os GOARCH=$$arch golangci-lint run --build-tags $(LINT_TAGS); \
 	done
 
-	@echo "[Check] 自动修复代码风格问题..."
+.PHONY: check-go-fix
+check-go-fix: ## 运行 Go fix 问题
+	@echo "[Check] -> 运行 Go fix 问题 (Tags: $(LINT_TAGS))..."
 	$(LINT_ENV) golangci-lint run --fix --build-tags $(LINT_TAGS)
 
-	@echo "[Check] 运行 Go 单元测试..."
-	go test $(GO_COVER_TEST_FLAGS) $(GO_COVER_SCAN)
+.PHONY: check-go-test
+check-go-test: ## 运行 Go 单元测试
+	@echo "[Check] -> 运行 Go 单元测试 (Tags: $(LINT_TAGS))..."
+	$(LINT_ENV) go test -tags=$(LINT_TAGS) $(GO_COVER_TEST_FLAGS) $(GO_COVER_SCAN)
 
-	@echo "[Check] 运行 Go 赖漏洞检查..."
+.PHONY: check-go-vuln
+check-go-vuln: ## 运行 Go 赖漏洞检查
+	@echo "[Check] -> 运行 Go 赖漏洞检查..."
 	govulncheck -show verbose ./...
 
-	@echo "[Check] 完成。"
+.PHONY: check-go
+check-go: check-go-vet check-go-lint check-go-fix check-go-test check-go-vuln ## 检查后端项目
 
 # 「过时依赖」是否严格把关：
 #   1 = 严格（本地默认）：pnpm outdated 发现过时依赖就让 make 失败
@@ -372,34 +381,39 @@ check-go: ## 检查后端代码
 # 需要在流水线里也严格时显式传参：make check STRICT_CHECKS=1
 STRICT_CHECKS ?= $(if $(filter true,$(CI)),0,1)
 
-.PHONY: check-node
-check-node: ## 检查前端代码
-	@echo "[Check] 检查前端依赖与质量..."
-	@echo "  -> 同步依赖 (确保环境一致)..."
+.PHONY: check-node-install
+check-node-install: ## 同步前端依赖 (确保环境一致)
+	@echo "[Check] -> 同步前端依赖 (确保环境一致)..."
 	pnpm --dir $(FRONTEND_DIR) install --frozen-lockfile --prefer-offline
 
-	@echo "  -> 检查安全漏洞 (仅高危阻断)..."
+.PHONY: check-node-audit
+check-node-audit: ## 检查前端安全漏洞 (仅高危阻断)
+	@echo "[Check] -> 检查前端安全漏洞 (仅高危阻断)..."
 	pnpm --dir $(FRONTEND_DIR) audit --production --audit-level high --registry=https://registry.npmjs.org
 
+.PHONY: check-node-outdated
+check-node-outdated: ## 检查前端过时依赖
 	# pnpm outdated 只要存在过时依赖就返回 1（连 pnpm 自己这个 devDependency 也算），
 	# 「有新版可用」不该卡住流水线：流水线里降级为提示，本地仍按 STRICT_CHECKS 失败。
-	@echo "  -> 检查过时依赖..."
+	@echo "[Check] -> 检查前端过时依赖..."
 	@if [ "$(STRICT_CHECKS)" = "1" ]; then \
 		pnpm --dir $(FRONTEND_DIR) outdated; \
 	else \
 		pnpm --dir $(FRONTEND_DIR) outdated || echo "  -> (宽松模式) 存在过时依赖，不阻塞流水线"; \
 	fi
 
-	@echo "  -> 检查代码风格 (Lint)..."
-	pnpm --dir $(FRONTEND_DIR) run lint
-
-	@echo "  -> 检测未使用的依赖 (knip)..."
+.PHONY: check-node-knip
+check-node-knip: ## 检测前端未使用的依赖 (knip)
+	@echo "[Check] -> 检测前端未使用的依赖 (knip)..."
 	pnpm --dir $(FRONTEND_DIR) run lint:unused
 
-	@echo "  -> 运行前端单元测试..."
+.PHONY: check-node-vitest
+check-node-vitest: ## 运行前端单元测试
+	@echo "[Check] -> 运行前端单元测试..."
 	pnpm --dir $(FRONTEND_DIR) exec vitest run
 
-	@echo "[Check] 前端检查完成。"
+.PHONY: check-node
+check-node: check-node-install check-node-audit check-node-outdated check-node-lint check-node-knip check-node-vitest ## 检查前端项目
 
 .PHONY: check
 check: check-node check-go ## 检查/测试项目

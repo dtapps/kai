@@ -2,27 +2,25 @@
 
 > status: 有效 · last_verified: 2026-11-05 · 基线 `5e2b532`（master）
 
-先看这张地图，再进专题。CI 镜像与并发策略见本文 §2，Codecov / Coveralls / GitLab 见各自专题；本文只做总览、触发条件、secret 清单与「新增流水线要改哪里」。旧的 `ci-image.md`（自建两份 Dockerfile 方案）已归档，仅作历史追溯。
+先看这张地图，再进专题。CI 镜像与并发策略见本文 §2，Codecov / Coveralls 见各自专题；本文只做总览、触发条件、secret 清单与「新增流水线要改哪里」。旧的 `ci-image.md`（自建两份 Dockerfile 方案）已归档，仅作历史追溯。
 
 ## 1. 平台分工
 
-| 平台    | 角色                                                    | 入口                                    |
-|---------|---------------------------------------------------------|-----------------------------------------|
-| GitHub  | 主开发 CI（push/PR 检查、覆盖率上报、发布）             | `.github/workflows/`                    |
-| CNB     | 硬门禁与安全扫描（格式/检查/覆盖率/SCA/AI 评审/知识库） | `.cnb.yml` + `.cnb/workflows/`          |
-| GitLab  | 只做发布同步（含 nightly 清理），不跑测试               | `.gitlab-ci.yml` + `.gitlab/workflows/` |
-| Gitee   | 只做发布同步（Gitee Go）                                | `.workflow/release.yml`                 |
-| GitCode | 工作流保留，当前不发布                                  | `.gitcode/workflows/release.yml`        |
-| Gitea   | 仅代码镜像，无 CI/Release                               | —                                       |
+| 平台                     | 角色                                                    | 入口                           |
+|--------------------------|---------------------------------------------------------|--------------------------------|
+| GitHub                   | 主开发 CI（push/PR 检查、覆盖率上报、发布）             | `.github/workflows/`           |
+| CNB                      | 硬门禁与安全扫描（格式/检查/覆盖率/SCA/AI 评审/知识库） | `.cnb.yml` + `.cnb/workflows/` |
+| Gitee                    | 只做发布同步（Gitee Go）                                | `.workflow/release.yml`        |
+| GitLab / GitCode / Gitea | 仅代码镜像，无 CI/Release                               | —                              |
 
 ## 2. GitHub Actions（4 个）
 
-| Workflow    | 文件            | 触发                   | 关键内容                                                                                                |
-|-------------|-----------------|------------------------|---------------------------------------------------------------------------------------------------------|
-| PushRequest | `push.yml`      | push / PR 所有分支     | 统一镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make check`                          |
-| Codecov     | `codecov.yml`   | push / PR              | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                                                  |
-| Coveralls   | `coveralls.yml` | push / PR              | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                                                     |
-| Release     | `release.yml`   | 仅 `workflow_dispatch` | 4 个构建组合 → GitHub Release → CNB/Gitee/GitLab/GitCode 同步 → 通知（含各平台 Release 链接与同步状态） |
+| Workflow    | 文件            | 触发                   | 关键内容                                                                                 |
+|-------------|-----------------|------------------------|------------------------------------------------------------------------------------------|
+| PushRequest | `push.yml`      | push / PR 所有分支     | 统一镜像内：`make deps` → bindings/icons/build-assets/sqlc/i18n → `make check`           |
+| Codecov     | `codecov.yml`   | push / PR              | Go + 前端覆盖率、前端 bundle、JUnit 测试结果 → Codecov                                   |
+| Coveralls   | `coveralls.yml` | push / PR              | 单 job 跑 Go + 前端覆盖率，两个 flag 上传 Coveralls                                      |
+| Release     | `release.yml`   | 仅 `workflow_dispatch` | 4 个构建组合 → GitHub Release → CNB/Gitee 同步 → 通知（含各平台 Release 链接与同步状态） |
 
 共同点：
 
@@ -49,18 +47,16 @@
 
 CNB 的检查与覆盖率流水线统一用 `docker.image: docker.cnb.cool/dtapp/golang/wails3`（不再现场 build Dockerfile），并用 copy-on-write 卷缓存 `/root/.cache/go-build`、pnpm store、`/go/pkg/mod`。
 
-## 4. GitLab / Gitee（GitCode 保留）
+## 4. Gitee
 
-| 平台    | 触发                                                                                  | 产物                                                                                       |
-|---------|---------------------------------------------------------------------------------------|--------------------------------------------------------------------------------------------|
-| GitLab  | GitHub `sync-gitlab` 调 `POST /projects/:id/trigger/pipeline`；或网页手动填 `VERSION` | GitLab Release，附件在 Generic Package Registry，直链 `/-/releases/<tag>/downloads/<file>` |
-| Gitee   | GitHub `sync-gitee` 调 Gitee Go Webhook（eventType `kai-release`）                    | Gitee Release，正文渲染为 HTML                                                             |
-| GitCode | 工作流保留（`sync-gitcode` / `.gitcode/workflows/release.yml`），**当前不发布**       | —                                                                                          |
+| 平台  | 触发                                                               | 产物                           |
+|-------|--------------------------------------------------------------------|--------------------------------|
+| Gitee | GitHub `sync-gitee` 调 Gitee Go Webhook（eventType `kai-release`） | Gitee Release，正文渲染为 HTML |
 
 共同约束：
 
-- 都从 GitHub Release 下载产物，不重新编译。
-- 都会把正文里的 GitHub 链接替换成自己的域名；GitLab 侧如果仍有残留 GitHub 链接会直接失败（避免发出 404 页面）。
+- 从 GitHub Release 下载产物，不重新编译。
+- 会把正文里的 GitHub 链接替换成自己的域名。
 - token 未配置时对应 job 跳过，不影响 GitHub Release。
 
 ## 5. 覆盖率三处口径
@@ -99,34 +95,30 @@ cd frontend && pnpm test:coverage
 | `APPLE_*`（3 个）                             | macOS 签名与公证                             | 跳过签名/公证        |
 | `SYNC_CNB_TOKEN`                              | 触发 CNB 同步构建（仅 trigger 权限）         | 跳过 CNB 同步        |
 | `SYNC_GITEE_WEBHOOK_URL` / `SYNC_GITEE_TOKEN` | 触发 Gitee Go 流水线                         | 跳过 Gitee 同步      |
-| `SYNC_GITLAB_TRIGGER_TOKEN`                   | 触发 GitLab 流水线                           | 跳过 GitLab 同步     |
-| `SYNC_GITCODE_TOKEN`                          | 触发 GitCode 流水线                          | 跳过 GitCode 同步    |
 | `SERVERCHAN_SENDKEY`                          | 发布完成通知                                 | 跳过通知             |
 | `CODECOV_TOKEN`                               | 上传 Codecov                                 | 上传失败/跳过        |
 | `COVERALLS_REPO_TOKEN`                        | 上传 Coveralls                               | 上传跳过             |
 
 ### 6.2 其它平台变量
 
-| 平台    | 变量                                                                                              | 说明                                           |
-|---------|---------------------------------------------------------------------------------------------------|------------------------------------------------|
-| CNB     | `KAI_GITHUB_TOKEN`（来自 `cnb.cool/dtapp/envs` 的 `github.yml`）、`CNB_TOKEN`、`CNB_API_ENDPOINT` | 前两个用于绕开 GitHub API 限流/调 CNB Open API |
-| GitLab  | `KAI_GITHUB_TOKEN`、`GL_RELEASE_TOKEN`（可选，PAT）、`CI_JOB_TOKEN`                               | 无 `GL_RELEASE_TOKEN` 时用 job token           |
-| Gitee   | `VERSION`、`PRERELEASE`、`KAI_GITHUB_TOKEN`                                                       | 由 webhook `params` 传入或全局参数配置         |
-| GitCode | `GITCODE_TOKEN`、`KAI_GITHUB_TOKEN`                                                               | 保留，当前不发布                               |
+| 平台  | 变量                                                                                              | 说明                                           |
+|-------|---------------------------------------------------------------------------------------------------|------------------------------------------------|
+| CNB   | `KAI_GITHUB_TOKEN`（来自 `cnb.cool/dtapp/envs` 的 `github.yml`）、`CNB_TOKEN`、`CNB_API_ENDPOINT` | 前两个用于绕开 GitHub API 限流/调 CNB Open API |
+| Gitee | `VERSION`、`PRERELEASE`、`KAI_GITHUB_TOKEN`                                                       | 由 webhook `params` 传入或全局参数配置         |
 
 详细权限与轮换见 `security-privacy.md`。
 
 ## 7. 新增 / 修改流水线时要改哪些文件
 
-| 改动                 | 必须同步                                                                                                                                                                 |
-|----------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                                                    |
-| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                                                           |
-| 新增 CI 工具         | 到外部统一镜像仓库改（GitHub `ghcr.io/dtapps/golang/wails3`、CNB `docker.cnb.cool/dtapp/golang/wails3`），本仓库不维护 Dockerfile；改完同步本文 §2                       |
-| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                                                   |
-| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.gitlab-ci.yml` + `.gitlab/workflows/release.yml`、`.workflow/release.yml`、`.gitcode/workflows/release.yml`、`release.md` |
-| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                                                        |
-| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                                                                |
+| 改动                 | 必须同步                                                                                                                                           |
+|----------------------|----------------------------------------------------------------------------------------------------------------------------------------------------|
+| 新增 CNB workflow    | `.cnb/workflows/<name>.yml` + `.cnb.yml` 的 `include`                                                                                              |
+| 新增 GitHub workflow | `.github/workflows/<name>.yml`                                                                                                                     |
+| 新增 CI 工具         | 到外部统一镜像仓库改（GitHub `ghcr.io/dtapps/golang/wails3`、CNB `docker.cnb.cool/dtapp/golang/wails3`），本仓库不维护 Dockerfile；改完同步本文 §2 |
+| 新增覆盖率任务       | `.cnb/workflows/{push,pull}-coverage.yml`、`.github/codecov.yml`、`codecov.yml` / `coveralls.yml`、`docs/ci/README.md`                             |
+| 发布相关             | `.github/workflows/release.yml`、`.cnb.yml`、`.workflow/release.yml`、`release.md`                                                                 |
+| 文档目录变化         | `.cnb/workflows/knowledge-base.yml` 的 `include`（`docs/**/*.md` 递归覆盖子目录）                                                                  |
+| 新增必过检查         | 分支保护 / 合并规则里把新 job 加为 required status checks                                                                                          |
 
 ## 8. 专题文档
 
@@ -135,7 +127,6 @@ cd frontend && pnpm test:coverage
 | [ci-image.md](../ci-image.md)（已归档） | 旧自建镜像方案，仅作历史追溯；现状见本文 §2 |
 | [codecov.md](../codecov.md)             | Codecov 三支柱、flag、组件、上传与排错      |
 | [coveralls.md](../coveralls.md)         | Coveralls 单 job 双 flag、token、排错       |
-| [gitlab-ci.md](../gitlab-ci.md)         | GitLab 发布同步、历史覆盖率方案             |
 | [coverage-go.md](../coverage-go.md)     | Go 覆盖率模板（可复制到其他项目）           |
 | [coverage-node.md](../coverage-node.md) | 前端覆盖率模板                              |
 | [testing.md](../testing.md)             | 测试分层与本地命令                          |

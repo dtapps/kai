@@ -2,7 +2,7 @@ branch:
   - reg: ^master
     buttons:
       - name: 发布 Release
-        # 没有「是否预发布」开关：判定只看版本号后缀（与 GitHub / GitLab / Gitee / GitCode 同口径），
+        # 没有「是否预发布」开关：判定只看版本号后缀（与 GitHub / Gitee 同口径），
         # 布尔开关会和版本号打架（勾了正式版后缀、或 rc 版本忘了勾）。
         # 完整版本号规则见 .cnb.yml 顶部（1.2.3 / 1.2.3-rc.1 / 1.2.3-nightly.20260101 / nightly）。
         description: 从 GitHub 下载 release 构建产物并发布到 CNB（预发布看版本号后缀，如 1.0.0-rc.1 / 1.0.0-nightly.20260101）

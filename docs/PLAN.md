@@ -184,17 +184,17 @@ kai/
 
 ## 5. 里程碑与现状
 
-| 阶段             | 状态 | 说明                                                                                   |
-|------------------|------|----------------------------------------------------------------------------------------|
-| M1 脚手架 & 基建 | ✅   | 多窗口 + 托盘 + 菜单；buildinfo/model/engine/service 骨架；i18n/主题/语言 auto         |
-| M2 翻译主流程    | ✅   | Google/DeepL/OpenAI 等引擎；多引擎并排；历史库（sqlc）                                 |
-| M3 取词          | ✅   | 原划词浮窗已下线，改为复制键 + 自动剪贴板方案                                          |
-| M4 截图 OCR      | ✅   | macOS 区域截图 + Vision/tesseract；截图窗口左图右译                                    |
-| M5 快捷键 & 设置 | ✅   | 注册键/执行键拆分；设置页四个 Tab；引擎 schema 化                                      |
-| M6 跨平台 & 打包 | ✅   | macOS / Windows 双平台打包（dmg / nsis / msix）；GitHub Release                        |
-| 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB / GitLab / Gitee 镜像同步、CI 体系 |
+| 阶段             | 状态 | 说明                                                                           |
+|------------------|------|--------------------------------------------------------------------------------|
+| M1 脚手架 & 基建 | ✅   | 多窗口 + 托盘 + 菜单；buildinfo/model/engine/service 骨架；i18n/主题/语言 auto |
+| M2 翻译主流程    | ✅   | Google/DeepL/OpenAI 等引擎；多引擎并排；历史库（sqlc）                         |
+| M3 取词          | ✅   | 原划词浮窗已下线，改为复制键 + 自动剪贴板方案                                  |
+| M4 截图 OCR      | ✅   | macOS 区域截图 + Vision/tesseract；截图窗口左图右译                            |
+| M5 快捷键 & 设置 | ✅   | 注册键/执行键拆分；设置页四个 Tab；引擎 schema 化                              |
+| M6 跨平台 & 打包 | ✅   | macOS / Windows 双平台打包（dmg / nsis / msix）；GitHub Release                |
+| 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB / Gitee 镜像同步、CI 体系  |
 
-当前发版：GitHub Release 触发后同步到 CNB / GitLab / Gitee / GitCode。每日 Nightly 已恢复（定时任务按版本号后缀判定预发布，不再勾选开关；`nightly` 由工作流推导成 `<最近正式版+1>-nightly.<UTC 日期>`，各平台只保留最近 3 个 nightly Release）。
+当前发版：GitHub Release 触发后同步到 CNB / Gitee。每日 Nightly 已恢复（定时任务按版本号后缀判定预发布，不再勾选开关；`nightly` 由工作流推导成 `<最近正式版+1>-nightly.<UTC 日期>`，各平台只保留最近 3 个 nightly Release）。
 
 ---
 
@@ -271,7 +271,6 @@ make windows-package
 | `docs/ci-image.md`（已归档）                    | 旧自建 CI 镜像方案（现状见 `docs/ci/README.md`） |
 | `docs/codecov.md`                               | Codecov 覆盖率 / bundle / 测试结果               |
 | `docs/coveralls.md`                             | Coveralls 双 flag 上传                           |
-| `docs/gitlab-ci.md`                             | GitLab 发布同步（原覆盖率方案已下线）            |
 | `docs/coverage-go.md` / `docs/coverage-node.md` | 覆盖率实现模板与当前状态                         |
 | `docs/docs-plan.md`                             | 文档缺口分析与后续补写计划                       |
 | `docs/2026-*.md`                                | 2026-08 ~ 09 开发日志（历史快照，不再更新）      |

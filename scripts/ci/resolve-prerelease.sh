@@ -4,7 +4,7 @@
 #
 # 事实来源：GitHub Actions 的 .github/workflows/release.yml 与 CNB 的 .cnb.yml
 # 都 source 这一份实现，避免各处各写一套 grep 正则、判断口径慢慢跑偏
-# （此前 GitHub / CNB / GitCode / Gitee 各写了一遍「补 v」和「猜预发布」）：
+# （此前 GitHub / CNB / Gitee 各写了一遍「补 v」和「猜预发布」）：
 #
 #   v1.2.3 / 1.2.3              -> TAG=v1.2.3                  PRERELEASE=false  正式版
 #   v1.2.3-rc.1                 -> TAG=v1.2.3-rc.1            PRERELEASE=true   预发布（rc 渠道）

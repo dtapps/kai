@@ -132,7 +132,7 @@ Codecov 侧 `.github/codecov.yml` 的所有 status 都是 `informational: true`�
 | `frontend/test-results.json`  | Vitest `json` reporter  | 经 `frontend/scripts/vitest-json-to-junit.mjs` 转 JUnit  |
 | `frontend/test-report.xml`    | 上述转换脚本            | Codecov Test Analytics                                   |
 
-当前仓库**没有 Cobertura** 产物；GitLab 覆盖率方案已删除（见 `gitlab-ci.md`）。不要照搬 `coverage-go.md` / `coverage-node.md` 里带 Cobertura 的历史方案。
+当前仓库**没有 Cobertura** 产物；GitLab 覆盖率方案已删除。不要照搬 `coverage-go.md` / `coverage-node.md` 里带 Cobertura 的历史方案。
 
 ## 8. 加测试的约定
 

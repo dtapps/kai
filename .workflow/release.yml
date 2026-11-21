@@ -20,13 +20,14 @@
 # DOWNLOAD_SOURCE 决定**同一次发布的附件只从一个平台搬**（cnb 默认 / github）：
 # 产物里注入了 RepoSource，客户端据此选升级通道，混源等于给用户随机分配通道。
 #
-# 实现拆成两个脚本（都在 scripts/ci/，可本地单独跑）：
+# 实现拆成三个脚本（都在 scripts/ci/，可本地单独跑）：
 #   1) gitee-release-download.js —— 按跳过规则下载产物到 assets/，写出清单 gitee-release.json
 #      （清单里含 tag / 预发布 / 下载源 / 正文 HTML / 待上传文件列表）
 #      cnb 源：附件名按版本本地拼，大小用 Range 探测，正文本地生成，不碰 GitHub API；
 #      github 源：元数据取 GitHub Release，下载走 daocloud / ghfast / gh-proxy / 直连 四级回退。
-#   2) gitee-release-publish.js  —— 读清单，建 Release 并逐个上传附件；
-#      发布成功后清理过期 nightly（保留最近 3 个，与 GitHub 同口径）
+#   2) delete-release.sh —— 发布前删同名旧 Release（--keep-tag 保留 tag）；
+#      发布后清理过期 nightly（--keep 3，连 tag 一起删，与 GitHub 同口径）
+#   3) gitee-release-publish.js  —— 读清单，建 Release 并逐个上传附件
 #
 # 为什么不用 release@gitee 插件：
 #   - assertFiles 是静态清单，做不到「某个文件超 100MB 就跳过它」；
@@ -156,8 +157,26 @@ stages:
                 --registry=https://registry.npmmirror.com --no-audit --no-fund --loglevel=error
             fi
 
-            echo "======== 1/2 下载（来源 ${DOWNLOAD_SOURCE}，只跳过单文件 >100MB 的附件）========"
+            echo "======== 1/4 下载（来源 ${DOWNLOAD_SOURCE}，只跳过单文件 >100MB 的附件）========"
             node scripts/ci/gitee-release-download.js
 
-            echo "======== 2/2 发布（建 Release + 逐个上传）========"
+            # 删除逻辑统一走 scripts/ci/delete-release.sh：Gitee 重建 Release 时复用原 tag，
+            # 所以用 --keep-tag 只删 Release；Release 没删掉会 exit 1，避免创建被 400 卡住。
+            # 脚本依赖 curl + jq；缺 jq 时会静默跳过（同名删除仍有下面的 JS 兜底），这里先提示。
+            command -v jq >/dev/null 2>&1 || echo "⚠ 未安装 jq：delete-release.sh 的 Gitee 删除/清理会跳过"
+            echo "======== 2/4 删除同名旧 Release（保留 tag）========"
+            RELEASE_GITEE_TOKEN="${KAI_GITEE_TOKEN}" RELEASE_GITEE_REPO="dtapps/kai" \
+              sh scripts/ci/delete-release.sh --platform gitee --tag "${RELEASE_VERSION}" --keep-tag
+
+            echo "======== 3/4 发布（建 Release + 逐个上传）========"
             node scripts/ci/gitee-release-publish.js
+
+            # 清理是旁路：脚本内置「失败只告警、始终 exit 0」，不会把一次成功的发布拖成失败。
+            echo "======== 4/4 清理过期 nightly（保留最近 3 个）========"
+            case "${RELEASE_VERSION}" in
+              *-nightly.*)
+                RELEASE_GITEE_TOKEN="${KAI_GITEE_TOKEN}" RELEASE_GITEE_REPO="dtapps/kai" \
+                  sh scripts/ci/delete-release.sh --platform gitee --keep 3
+                ;;
+              *) echo "非 nightly 发布，跳过清理" ;;
+            esac

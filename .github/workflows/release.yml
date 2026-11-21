@@ -886,9 +886,11 @@ jobs:
           # 夜间构建（*-nightly.*）同一天重跑/补发必须删掉同名 Release + tag 再重建：
           # 一是旧平台的附件会一直堆在 Release 上，二是重建会刷新 published_at，
           # 客户端 mirror_updater.go 按「预发布 Release 中 published_at 最新」挑选。
+          # 删除逻辑统一走 scripts/ci/delete-release.sh（各平台同一份实现）：
+          # --tag 模式删 Release + tag，Release 没删掉会 exit 1，避免在残留对象上重建。
           # 正式版 / rc / beta / alpha 的 tag 不存在同名 Release（tag 已存在校验挡住），
           # 这一步是空操作。
-          gh release delete "${VERSION}" --yes --cleanup-tag 2>/dev/null || true
+          sh scripts/ci/delete-release.sh --platform github --tag "${VERSION}"
 
       - name: 发布 Release
         uses: softprops/action-gh-release@v3
@@ -914,33 +916,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         shell: bash
         run: |
-          # 故意不用 set -e：清理里任何一步失败都只告警
-          set -uo pipefail
-          keep=3
-
-          # gh release list 默认按创建时间倒序；先单独取列表，失败时能拿到 stderr 并中止清理
-          if ! list=$(gh release list --limit 100 --json tagName,isPrerelease \
-                --jq '.[] | select(.isPrerelease) | .tagName | select(test("-nightly\\."))' 2>&1); then
-            echo "⚠ 获取 Release 列表失败，跳过清理（不影响发布）："
-            echo "$list"
-            exit 0
-          fi
-          if [ -z "$list" ]; then
-            echo "没有需要清理的旧 nightly Release"
-            exit 0
-          fi
-
-          # 跳过最新 keep 个，其余逐个删除（连 tag 一起）；单个失败不影响其余
-          printf '%s\n' "$list" | tail -n "+$((keep + 1))" | while IFS= read -r tag; do
-            [ -n "$tag" ] || continue
-            echo "删除旧 nightly Release: ${tag}"
-            if gh release delete "${tag}" --yes --cleanup-tag; then
-              echo "  ✓ 已删除 ${tag}"
-            else
-              echo "  ⚠ 删除失败（忽略）: ${tag}"
-            fi
-          done
-          exit 0
+          # 清理逻辑统一走 scripts/ci/delete-release.sh --keep：只挑「预发布 + -nightly.YYYYMMDD」，
+          # 清理失败只告警、始终 exit 0（脚本内置），不会把一次成功的发布拖成失败。
+          sh scripts/ci/delete-release.sh --platform github --keep 3
 
   # GitHub 侧的发版公告：Release 发布成功后，在仓库 Discussions 里开一条讨论。
   #

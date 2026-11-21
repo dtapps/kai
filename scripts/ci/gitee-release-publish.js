@@ -15,7 +15,8 @@
 //   KAI_GITEE_API    默认 https://gitee.com/api/v5/repos/dtapps/kai
 //
 // 命令行：
-//   无参数              正常发布：读清单 → 建 Release → 上传附件 → 清理 nightly
+//   无参数              正常发布：读清单 → 建 Release → 上传附件
+//                       （nightly 清理由 .workflow/release.yml 调 delete-release.sh --keep 完成）
 //   --check-exists [tag] 只查该 tag 是否已在 Gitee 发布，stdout 输出 exists / absent，
 //                       日志走 stderr；tag 省略时取 RELEASE_VERSION。
 //                       workflow 在下载前调用它，让 GitHub / CNB 两条触发链路先到先得。
@@ -77,64 +78,6 @@ async function checkExists(tag) {
     ? '已存在 Release：' + old.id + '（' + (old.name || tag) + '）'
     : '尚无 Release：' + tag);
   process.stdout.write(old ? 'exists' : 'absent');
-}
-
-// ── 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）──
-// 只在本次发布的是 nightly 时执行：正式版 / rc / beta / alpha 不动夜间构建历史。
-// Gitee 仓库附件总量只有 1GB，nightly 会持续堆积，所以清理是必需项而不是洁癖；
-// 删 Release 会连同其附件一起删掉（附件挂在 Release 下，不是独立对象）。
-// 列表接口返回仓库全部 Release，服务端排序参数不可靠，这里统一按 created_at 本地倒序。
-async function pruneNightly(tag) {
-  if (!/-nightly\./.test(tag)) {
-    console.log('非 nightly 发布，跳过 nightly 清理');
-    return;
-  }
-  const KEEP = 3;
-  let all = [];
-  for (let page = 1; page <= 20; page++) {
-    const res = await gt('GET', '/releases?page=' + page + '&per_page=100&direction=desc');
-    if (res.status !== 200) {
-      console.log('⚠ 查询 Release 列表失败（HTTP ' + res.status + '），跳过清理');
-      return;
-    }
-    let arr = [];
-    try { arr = JSON.parse(res.text) || []; } catch (e) { arr = []; }
-    if (!Array.isArray(arr)) {
-      console.log('⚠ Release 列表不是数组，跳过清理');
-      return;
-    }
-    all = all.concat(arr);
-    if (arr.length < 100) break;
-  }
-
-  // 按 tag 去重：分页参数若被忽略会重复返回同一页，重复项会把保留边界算错
-  const byTag = new Map();
-  for (const r of all) {
-    if (r && r.tag_name && !byTag.has(r.tag_name)) byTag.set(r.tag_name, r);
-  }
-  const nightly = Array.from(byTag.values()).filter((r) => /-nightly\./.test(r.tag_name));
-  nightly.sort((a, b) => String(b.created_at || b.tag_name || '')
-    .localeCompare(String(a.created_at || a.tag_name || '')));
-  const stale = nightly.slice(KEEP);
-  if (!stale.length) {
-    console.log('nightly 不足 ' + KEEP + ' 个，无需清理');
-    return;
-  }
-  for (const r of stale) {
-    if (!r.id) continue;
-    console.log('删除旧 nightly Release：' + r.tag_name + '（id=' + r.id + '）');
-    // 单个删除失败（网络 / 权限）只告警，继续删后面的，也不影响本次发布结论
-    try {
-      const del = await gt('DELETE', '/releases/' + r.id);
-      if (del.status === 200 || del.status === 204) {
-        console.log('  ✓ 已删除');
-      } else {
-        console.log('  ⚠ 删除失败 HTTP ' + del.status + '（忽略）');
-      }
-    } catch (err) {
-      console.log('  ⚠ 删除异常（忽略）：' + (err && err.message ? err.message : String(err)));
-    }
-  }
 }
 
 async function main() {
@@ -271,13 +214,6 @@ async function main() {
     fail('有 ' + failed.length + ' 个附件上传失败，见上面的 HTTP 状态与响应体');
   }
   console.log('发布完成：' + (release.html_url || m.tag));
-
-  // 清理放在发布成功之后，且异常不改变发布结论（清不掉只影响存储，不影响本次 Release 可用性）
-  try {
-    await pruneNightly(m.tag);
-  } catch (err) {
-    console.log('⚠ nightly 清理异常（忽略）：' + (err && err.message ? err.message : String(err)));
-  }
 }
 
 if (process.argv[2] === '--check-exists') {

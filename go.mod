@@ -21,7 +21,7 @@ require (
 	go.dtapp.net/library/contrib/http_log v1.0.13
 	golang.org/x/sys v0.50.0
 	golang.org/x/text v0.44.0
-	google.golang.org/genai v1.79.0
+	google.golang.org/genai v1.79.1
 	modernc.org/sqlite v1.62.0
 )
 

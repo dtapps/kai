@@ -38,23 +38,23 @@
     - https://cnb.cool/dtapp/envs/-/blob/main/github.yml
     - https://cnb.cool/dtapp/envs/-/blob/main/kai.yml
     - https://cnb.cool/dtapp/envs/-/blob/main/npc.yml
-  # 公告评论内容（job 级 env，所有 stage 都能读到）：
-  # - ANNOUNCEMENT_COMMENT_TEXT：评论内容，默认让仓库里的 NPC（CodeBuddy）按「对比哪两个
-  #   tag」整理一份用户友好的更新日志，并以评论形式发回。是否触发 NPC 由 imports 的
-  #   envs/npc.yml 中 NPC_ENABLED 统一控制。
+  # 公告评论的开关/内容：
+  # - NPC_ENABLED：从 envs/npc.yml 导入的全局总开关，false 时所有 NPC 触发点都不工作；
+  # - ANNOUNCEMENT_COMMENT_TEXT：评论正文，@ 本仓库自定义 NPC「发版日志助手」
+  #   （在 .cnb/settings.yml 的 npc.roles 里定义，要求写在它的 prompt 里），
+  #   只给出要对比的两个 tag；这里不再重复写要求，避免两处维护。
+  #   @ 后的仓库路径用 {{REPOSLUG}}，发评论前替换成流水线注入的 CNB_REPO_SLUG，
+  #   不写死 dtapp/certflow——仓库改名 / fork 后仍能 @ 到本仓库的角色。
   #
-  # ⚠️ {{PREVIOUSTAG}} / {{CURRENTTAG}} 不是 CNB 的模板语法：env 里的值就是字面量，
-  #   流水线不会替我们替换，直接发出去就是两个花括号。真实 tag 在「发布公告评论」stage
+  # ⚠️ {{PREVIOUSTAG}} / {{CURRENTTAG}} / {{REPOSLUG}} 不是 CNB 的模板语法：env 里的值就是字面量，
+  #   流水线不会替我们替换，直接发出去就是两个花括号。真实值在「发布公告评论」stage
   #   发评论前用 sed 换掉（基准 tag 由「准备发版公告」stage 调
   #   scripts/ci/resolve-prev-tag.sh 算出并落盘）。所以模板里**不要出现 | 和 &**：
   #   sed 用 | 当分隔符，& 在替换串里是特殊字符。
   env:
+    CI: 'true'
     ANNOUNCEMENT_COMMENT_TEXT: |-
-      @CodeBuddy 请对比标签 {{PREVIOUSTAG}} 和 {{CURRENTTAG}} 的差异（git log / git diff {{PREVIOUSTAG}}...{{CURRENTTAG}}），整理一份用户友好的更新日志，并作为评论发布在这里。
-      要求：
-      1. 忽略所有测试文件和文档文件的改动，只写用户能感知到的变更；
-      2. 按「新增 / 变更 / 修复 / 破坏性变更」分组，每条一句话说清对用户的影响，不要罗列提交哈希和纯内部重构；
-      3. 与上方公告里的「更新内容」保持一致，不要出现两套说法；取不到 git 历史时，就直接按上方公告的内容改写。
+      @{{REPOSLUG}}(发版日志助手) 请对比标签 {{PREVIOUSTAG}} 和 {{CURRENTTAG}} 的差异。
   stages:
     # 先把工作区检出到**本次发布的那个提交**，而不是默认分支的最新代码。
     #
@@ -540,9 +540,10 @@
     # 评论内容 ANNOUNCEMENT_COMMENT_TEXT 在 job 级 env，只放提示语本身，不夹带更新内容——
     # NPC 自己会读上面那条公告。
     #
-    # 提示语里的 {{PREVIOUSTAG}} / {{CURRENTTAG}} 由本 stage 替换成真实 tag：
-    #   - CURRENTTAG 就是本次发布的 tag（INTERIOR_VERSION）；
-    #   - PREVIOUSTAG 来自「准备发版公告」落盘的 announcement-prev-tag.txt，
+    # 提示语里的三个占位符由本 stage 在发评论前用 sed 替换：
+    #   - REPOSLUG：本仓库 slug（CNB_REPO_SLUG），@ 到本仓库的自定义 NPC；
+    #   - CURRENTTAG：本次发布的 tag（INTERIOR_VERSION）；
+    #   - PREVIOUSTAG：来自「准备发版公告」落盘的 announcement-prev-tag.txt，
     #     取不到（首次发这个渠道 / 补发历史版本）就换成一句文字说明，
     #     NPC 那边会退回「按公告正文改写」，不会拿着假 tag 去 diff。
     - name: 发布公告评论
@@ -569,7 +570,7 @@
 
         # 评论内容只放提示语本身，不夹带更新内容：NPC 自己会读上面那条公告。
         printf '%s' "${ANNOUNCEMENT_COMMENT_TEXT:-}" \
-          | sed "s|{{PREVIOUSTAG}}|${PREV_TAG}|g; s|{{CURRENTTAG}}|${CUR_TAG}|g" \
+          | sed "s|{{REPOSLUG}}|${REPO}|g; s|{{PREVIOUSTAG}}|${PREV_TAG}|g; s|{{CURRENTTAG}}|${CUR_TAG}|g" \
             > announcement-comment.md
         if [ ! -s announcement-comment.md ]; then
           echo "⚠️ 评论内容为空（ANNOUNCEMENT_COMMENT_TEXT），不追加评论"

@@ -11,7 +11,7 @@ require (
 	github.com/ebitengine/purego v0.11.3
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/go-ole/go-ole v1.3.0
-	github.com/go-vgo/robotgo v1.3.7
+	github.com/go-vgo/robotgo v1.3.8
 	github.com/mattn/go-sqlite3 v1.14.53
 	github.com/nicksnyder/go-i18n/v2 v2.7.0
 	github.com/openai/openai-go/v3 v3.105.0

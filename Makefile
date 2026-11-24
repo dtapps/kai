@@ -368,8 +368,8 @@ check-go-test: ## 运行 Go 单元测试
 
 .PHONY: check-go-vuln
 check-go-vuln: ## 运行 Go 赖漏洞检查
-	@echo "[Check] -> 运行 Go 赖漏洞检查..."
-	govulncheck -show verbose ./...
+	@echo "[Check] -> 运行 Go 依赖漏洞检查 (Tags: $(LINT_TAGS))..."
+	$(LINT_ENV) govulncheck -tags=$(LINT_TAGS) -scan=package -show verbose ./...
 
 .PHONY: check-go
 check-go: check-go-vet check-go-lint check-go-fix check-go-test check-go-vuln ## 检查后端项目

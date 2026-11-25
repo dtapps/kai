@@ -1,0 +1,136 @@
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+
+  // 定位：Dependabot 为主，Renovate 为备用；由 .github/workflows/renovate.yml
+  //       每天定时运行，也可在 Actions 页面手动触发。
+  // 备用策略：dependencyDashboardApproval=true，定时运行只刷新 Dependency Dashboard，
+  //           不自动开 PR；Dependabot 失效时人工在 Dashboard 勾选需要的更新再创建 PR，
+  //           因此两套机器人不会重复提 PR，也无需停用 dependabot.yml。
+  // 范围：Go 后端（Wails v3 桌面应用）+ frontend 下的 pnpm/Svelte 前端 +
+  //       build/docker 镜像 + GitHub Actions；标签由 sync-labels.yml 从本文件自动同步。
+  extends: ["config:recommended"],
+
+  // 频率由 workflow 的 cron 控制（每天 00:00 UTC）；这里不额外限制时段。
+  // 备用模式下实际创建 PR 需人工在 Dashboard 批准。
+  timezone: "Asia/Shanghai",
+  schedule: ["at any time"],
+
+  // Go SDK 与前端工具链更新较频繁，限速避免一次性刷屏（漏洞修复 PR 不受此限制）。
+  prConcurrentLimit: 5,
+  prHourlyLimit: 2,
+
+  // 与仓库现有提交风格保持一致：build(deps): bump xxx
+  // config:recommended 默认开启语义化提交（fix/chore），这里显式关闭并覆盖前缀。
+  semanticCommits: "disabled",
+  commitMessagePrefix: "build(deps):",
+  commitMessageAction: "bump",
+
+  // major 单独 PR 便于人工评估破坏性变更；minor/patch 按包合并（默认行为，显式声明）。
+  separateMajorMinor: true,
+  separateMinorPatch: false,
+
+  // 新版本发布 3 天后再跟进，降低供应链投毒风险。
+  minimumReleaseAge: "3 days",
+
+  // 集中查看待处理更新；只扫描项目实际使用的四类依赖。
+  dependencyDashboard: true,
+  // 备用模式关键开关：只在 Dashboard 列出更新，人工勾选后才创建 PR，避免与 Dependabot 重复。
+  dependencyDashboardApproval: true,
+  // Dashboard 的标题与头尾说明可自定义为中文；正文勾选项列表由 Renovate 生成，保持默认英文。
+  dependencyDashboardTitle: "依赖更新面板（Renovate 备用）",
+  dependencyDashboardHeader: "Dependabot 是主依赖更新方案；本面板仅作备用。普通更新请勾选后再让 Renovate 创建 PR；漏洞修复更新无需勾选会直接建 PR，且不受并发/时段限制。",
+  dependencyDashboardFooter: "勾选后 Renovate 会在下一次运行时创建 PR；发布未满 3 天的新版本不会显示。",
+  enabledManagers: ["gomod", "npm", "github-actions", "dockerfile"],
+  labels: ["dependencies"],
+
+  // 依赖更新 PR 一律人工确认后合并（CI 配置与检查项见 docs/ci/README.md）。
+  automerge: false,
+
+  packageRules: [
+    // ---------- Go ----------
+    {
+      matchManagers: ["gomod"],
+      postUpdateOptions: ["gomodTidy"],
+      addLabels: ["go"],
+    },
+    {
+      matchManagers: ["gomod"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "Go 依赖（非 major）",
+    },
+    // AI 引擎 SDK 发版频繁（OpenAI / Anthropic / Gemini），非 major 更新合并为一个 PR，
+    // 避免一次升级三个引擎产生多份重复 PR。
+    {
+      matchManagers: ["gomod"],
+      matchPackageNames: [
+        "github.com/openai/openai-go/**",
+        "github.com/anthropics/anthropic-sdk-go",
+        "google.golang.org/genai",
+      ],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "Go AI 引擎 SDK（非 major）",
+    },
+    // Wails Go SDK 与前端 runtime 当前同为 3.1.0，必须同版本升级，合并到同一个 PR。
+    {
+      matchManagers: ["gomod", "npm"],
+      matchPackageNames: ["github.com/wailsapp/wails/v3", "@wailsio/runtime"],
+      groupName: "Wails 运行时与 SDK（同步升级）",
+    },
+    // Wails 的 major 升级涉及桌面运行时 / WebView 破坏性变更，暂不自动跟进。
+    {
+      matchPackageNames: ["github.com/wailsapp/wails/v3", "@wailsio/runtime"],
+      matchUpdateTypes: ["major"],
+      enabled: false,
+    },
+    // Go 版本需与 CI 镜像 ghcr.io/dtapps/golang/wails3:latest 及
+    // build/docker/Dockerfile.cross 的 golang:1.27.4-trixie 同步，不接受单独改 go.mod。
+    {
+      matchManagers: ["gomod"],
+      matchDepTypes: ["golang", "toolchain"],
+      enabled: false,
+    },
+
+    // ---------- 前端（pnpm） ----------
+    {
+      matchManagers: ["npm"],
+      postUpdateOptions: ["pnpmDedupe"],
+      addLabels: ["frontend"],
+    },
+    {
+      matchManagers: ["npm"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      groupName: "前端依赖（非 major）",
+    },
+    // @typescript/native 是 npm alias（npm:typescript@^7.0.2），与 typescript 必须同版本；
+    // 两者合并到一个 PR，避免只升其中一个导致类型检查失败。
+    {
+      matchManagers: ["npm"],
+      matchPackageNames: ["typescript", "@typescript/native"],
+      groupName: "TypeScript 与 @typescript/native（同步升级）",
+    },
+
+    // ---------- GitHub Actions ----------
+    {
+      matchManagers: ["github-actions"],
+      addLabels: ["github-actions"],
+    },
+    {
+      matchManagers: ["github-actions"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      groupName: "GitHub Actions（非 major）",
+    },
+
+    // ---------- Docker ----------
+    // 镜像集中在 build/docker：Dockerfile.server 的 ARG 默认镜像与
+    // Dockerfile.cross 的 golang:1.27.4-trixie。
+    {
+      matchManagers: ["dockerfile"],
+      addLabels: ["docker"],
+    },
+    {
+      matchManagers: ["dockerfile"],
+      matchUpdateTypes: ["minor", "patch", "digest"],
+      groupName: "Docker 基础镜像（非 major）",
+    },
+  ],
+}

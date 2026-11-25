@@ -39,3 +39,8 @@ frontend/test-report.xml
 frontend/test-results.json
 
 AGENTS.md
+
+# 同步
+/scripts/ci/delete-release.sh
+/scripts/ci/describe-artifact.sh
+/scripts/ci/render-ci-notice.sh

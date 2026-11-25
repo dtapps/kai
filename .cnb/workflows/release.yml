@@ -20,6 +20,7 @@
 # 正文格式见 scripts/ci/render-release-body.sh，与 GitHub 侧共用一份实现。
 # KAI_GITHUB_TOKEN 去 envs 里配置环境变量
 .trigger_release: &trigger_release
+  name: 发布
   runner:
     tags: cnb:arch:amd64 # 指定 Runner 必须有这个标签
   services:
@@ -30,6 +31,7 @@
       - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
       - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
       - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具
+      - ./scripts/ci:copy-on-write # 模板脚本缓存；卷会整体挂载该目录，同步前需先还原跟踪文件
   # 导入外部环境变量/配置。多文件必须用 YAML 数组（逗号分隔字符串不生效）；
   # 同名变量后面的覆盖前面的，故项目专属的 kai.yml 放在通用 github.yml 之后。
   # npc.yml 提供 NPC_ENABLED（NPC 功能总开关）：关闭后本工作流不会发 @CodeBuddy
@@ -52,10 +54,15 @@
   #   scripts/ci/resolve-prev-tag.sh 算出并落盘）。所以模板里**不要出现 | 和 &**：
   #   sed 用 | 当分隔符，& 在替换串里是特殊字符。
   env:
-    CI: 'true'
     ANNOUNCEMENT_COMMENT_TEXT: |-
       @{{REPOSLUG}}(发版日志助手) 请对比标签 {{PREVIOUSTAG}} 和 {{CURRENTTAG}} 的差异。
   stages:
+    - name: 同步脚本
+      script: |
+        # 卷会整体挂载 scripts/ci，先把本次提交里跟踪的脚本还原（未跟踪的模板脚本由缓存/下载提供）
+        git checkout -- scripts/ci
+        make fetch-scripts
+
     # 先把工作区检出到**本次发布的那个提交**，而不是默认分支的最新代码。
     #
     # 为什么这一步必须有：后面的「删除同名 tag 再重建」里，git:release 是拿**当前检出的提交**

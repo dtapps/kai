@@ -479,8 +479,10 @@
       <button
         class="u-btn u-btn--ghost px-2 py-0.5 text-xs"
         onclick={openAdd}
-        aria-label={t('settings.engineAdd')}>＋</button
+        aria-label={t('settings.engineAdd')}
       >
+        ＋
+      </button>
     </div>
     <ul class="flex-1 space-y-3 overflow-y-auto">
       {#each engineGroups as group (group.kind)}
@@ -495,9 +497,9 @@
                 {engineName(e.value)}
               </button>
               {#if !e.supported}
-                <span class="u-muted text-[10px] leading-tight text-right max-w-[3.5rem]"
-                  >{t('settings.engineUnsupported')}</span
-                >
+                <span class="u-muted text-[10px] leading-tight text-right max-w-[3.5rem]">
+                  {t('settings.engineUnsupported')}
+                </span>
               {:else}
                 <label class="u-switch" aria-label={t('settings.engineEnabled')}>
                   <input
@@ -807,15 +809,15 @@
     >
       <div class="mb-4 flex items-center justify-between">
         <h2 class="text-base font-semibold">{t('settings.engineAddTitle')}</h2>
-        <button class="text-sm" onclick={() => (showAdd = false)} aria-label={t('common.close')}
-          >✕</button
-        >
+        <button class="text-sm" onclick={() => (showAdd = false)} aria-label={t('common.close')}>
+          ✕
+        </button>
       </div>
       <div class="space-y-4">
         <div>
-          <label class="mb-1.5 block text-sm font-medium" for="add-engine-type"
-            >{t('settings.engineAddType')}</label
-          >
+          <label class="mb-1.5 block text-sm font-medium" for="add-engine-type">
+            {t('settings.engineAddType')}
+          </label>
           <select
             id="add-engine-type"
             class="u-field u-select w-full px-3 py-2 text-sm"
@@ -1011,12 +1013,12 @@
           {/if}
         {/each}
         <div class="flex justify-end gap-2 pt-1">
-          <button class="u-btn u-btn--ghost px-4 py-1.5 text-sm" onclick={() => (showAdd = false)}
-            >{t('common.cancel')}</button
-          >
-          <button class="u-btn u-btn--primary px-4 py-1.5 text-sm" onclick={submitAdd}
-            >{t('settings.engineAddConfirm')}</button
-          >
+          <button class="u-btn u-btn--ghost px-4 py-1.5 text-sm" onclick={() => (showAdd = false)}>
+            {t('common.cancel')}
+          </button>
+          <button class="u-btn u-btn--primary px-4 py-1.5 text-sm" onclick={submitAdd}>
+            {t('settings.engineAddConfirm')}
+          </button>
         </div>
       </div>
     </div>

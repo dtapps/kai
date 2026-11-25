@@ -351,9 +351,9 @@
       <label class="text-sm font-medium" for={'hk-' + row.key}>{row.label}</label>
       <div class="flex items-center gap-2">
         {#if recordingKey === row.key}
-          <span class="u-field w-56 px-3 py-1.5 text-sm u-text-warn"
-            >{t('settings.hkRecording')}</span
-          >
+          <span class="u-field w-56 px-3 py-1.5 text-sm u-text-warn">
+            {t('settings.hkRecording')}
+          </span>
         {:else}
           <input
             id={'hk-' + row.key}
@@ -366,8 +366,10 @@
           type="button"
           class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
           class:is-active={recordingKey === row.key}
-          onclick={() => startRecord(row.key)}>{t('settings.hkRecord')}</button
+          onclick={() => startRecord(row.key)}
         >
+          {t('settings.hkRecord')}
+        </button>
         <label class="u-switch" aria-label={t('settings.enabled')}>
           <input type="checkbox" bind:checked={hotkeyForm[row.key].enabled} />
           <span class="u-switch__track"><span class="u-switch__thumb"></span></span>
@@ -379,8 +381,9 @@
     <label class="text-sm font-medium" for="hk-copy">{t('settings.hkCopy')}</label>
     <div class="flex flex-wrap items-center gap-2">
       {#if recordingKey === 'copy'}
-        <span class="u-field w-56 px-3 py-1.5 text-sm u-text-warn">{t('settings.hkRecording')}</span
-        >
+        <span class="u-field w-56 px-3 py-1.5 text-sm u-text-warn">
+          {t('settings.hkRecording')}
+        </span>
       {:else}
         <input
           id="hk-copy"
@@ -395,8 +398,10 @@
         class="u-btn u-btn--ghost px-3 py-1.5 text-sm"
         class:is-active={recordingKey === 'copy'}
         disabled={copyDisabled}
-        onclick={() => startRecord('copy')}>{t('settings.hkRecord')}</button
+        onclick={() => startRecord('copy')}
       >
+        {t('settings.hkRecord')}
+      </button>
       <label
         class="u-switch"
         class:is-disabled={copyDisabled}

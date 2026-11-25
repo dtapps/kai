@@ -53,9 +53,9 @@
     <div class="u-no-drag flex gap-0.5">
       <button class="u-winbtn" aria-label={t('titlebar.minimize')} onclick={minimize}>—</button>
       <button class="u-winbtn" aria-label={t('titlebar.maximize')} onclick={toggleMax}>▢</button>
-      <button class="u-winbtn u-winbtn--close" aria-label={t('titlebar.close')} onclick={close}
-        >✕</button
-      >
+      <button class="u-winbtn u-winbtn--close" aria-label={t('titlebar.close')} onclick={close}>
+        ✕
+      </button>
     </div>
   {/if}
 </div>

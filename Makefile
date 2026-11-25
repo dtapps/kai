@@ -292,26 +292,30 @@ format-go:
 	go fmt ./...
 	go fix ./...
 
-.PHONY: format-node ## 格式前端文件
-format-node:
+.PHONY: format-node
+format-node: ## 格式前端文件
 	@echo "[Format] 格式化前端文件 (PNPM)..."
 	pnpm --dir $(FRONTEND_DIR) format
 
 .PHONY: format-yaml
-format-yaml:
-	@bash scripts/format.sh yaml ## 格式化 YAML 文件
+format-yaml: ## 格式化 YAML 文件
+	@bash scripts/format.sh yaml
 
 .PHONY: format-json
-format-json:
-	@bash scripts/format.sh json ## 格式化 JSON 文件
+format-json: ## 格式化严格 JSON 文件（gojq）
+	@bash scripts/format.sh json
+
+.PHONY: format-json5
+format-json5: ## 格式化 JSON5 文件（jsonfmt，保留注释 / 无引号 key / 尾逗号）
+	@bash scripts/format.sh json5
 
 .PHONY: format-sql
-format-sql:
-	@bash scripts/format.sh sql ## 格式化 SQL 文件
+format-sql: ## 格式化 SQL 文件
+	@bash scripts/format.sh sql
 
 .PHONY: format-markdown
-format-markdown:
-	@bash scripts/format.sh markdown ## 格式化 Markdown 文件
+format-markdown: ## 格式化 Markdown 文件
+	@bash scripts/format.sh markdown
 
 .PHONY: format-docker
 format-docker: ## 格式化 Dockerfile 文件
@@ -322,7 +326,7 @@ format-shell: ## 格式化 Shell 脚本
 	@bash scripts/format.sh shell
 
 .PHONY: format
-format: format-node format-go format-swift format-yaml format-json format-sql format-markdown format-docker format-shell ## 格式化/修复项目
+format: format-node format-go format-swift format-yaml format-json format-json5 format-sql format-markdown format-docker format-shell ## 格式化/修复项目
 
 #####################
 ## 检查 / 测试 相关

@@ -49,17 +49,17 @@
       }
     }}
   >
-    <span class="text-xs font-semibold text-[var(--app-accent)]"
-      >{engineName(tr?.engine ?? '')}</span
-    >
+    <span class="text-xs font-semibold text-[var(--app-accent)]">
+      {engineName(tr?.engine ?? '')}
+    </span>
     <div class="flex items-center gap-2">
       <span class="text-[11px] text-[var(--app-muted)]">
         {t('screenshot.source')}: {langName(tr?.from ?? '')} → {langName(tr?.to ?? '')}
       </span>
       {#if !tr?.result}
-        <span class="text-[11px] font-medium text-[var(--app-danger)]"
-          >{t('screenshot.translateFailed')}</span
-        >
+        <span class="text-[11px] font-medium text-[var(--app-danger)]">
+          {t('screenshot.translateFailed')}
+        </span>
       {:else}
         <svg
           class="h-3.5 w-3.5 text-[var(--app-muted)] transition-transform"

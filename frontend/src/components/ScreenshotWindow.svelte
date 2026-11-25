@@ -304,12 +304,12 @@
           <div
             class="flex flex-1 flex-col items-center justify-center gap-3 text-[var(--app-muted)]"
           >
-            <span class="text-lg font-medium text-[var(--app-fg-strong)]"
-              >{t('screenshot.ocrError')}</span
-            >
-            <span class="max-w-[90%] break-words text-center text-xs opacity-80"
-              >{result.error}</span
-            >
+            <span class="text-lg font-medium text-[var(--app-fg-strong)]">
+              {t('screenshot.ocrError')}
+            </span>
+            <span class="max-w-[90%] break-words text-center text-xs opacity-80">
+              {result.error}
+            </span>
             <span class="text-xs">{t('screenshot.retryHint')}</span>
           </div>
         {:else if !result.text}

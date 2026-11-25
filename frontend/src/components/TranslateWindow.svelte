@@ -474,9 +474,9 @@
             {#if activeEngines.length === 0}
               <span class="u-muted text-xs">{t('translate.noActiveEngine')}</span>
             {:else}
-              <span class="u-muted text-xs"
-                >{activeEngines.length} · {t('translate.multiEngineHint')}</span
-              >
+              <span class="u-muted text-xs">
+                {activeEngines.length} · {t('translate.multiEngineHint')}
+              </span>
             {/if}
             <button
               class="u-icon-btn u-icon-btn--sm u-no-drag"

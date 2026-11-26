@@ -99,20 +99,6 @@ jobs:
         shell: bash
         run: make fetch-scripts
 
-      # 容器工作区是 runner 挂进来的 bind mount（属主是 runner 用户），容器内进程却是 root，
-      - name: 让容器内的 git 可用
-        shell: bash
-        run: |
-          git config --system --add safe.directory '*' 2>/dev/null || true
-          git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
-
-          # 结果打进日志：以后一眼能看出这条登记有没有生效
-          if git status --porcelain > /dev/null 2>&1; then
-            echo "✓ 容器内 git 可用，COMMIT=$(git rev-parse --short HEAD)"
-          else
-            echo "⚠️ 容器内 git 仍不可用。"
-          fi
-
       - name: 解析版本号（归一化 + 预发布判定）
         id: gen
         shell: bash
@@ -644,8 +630,9 @@ jobs:
 
     runs-on: ${{ matrix.os }}
     container:
-      # 预装了 Go / Node / pnpm / wails3 / GTK4 / WebKitGTK 6.0 / gcc
       image: ghcr.io/dtapps/golang/wails3:latest
+      env:
+        GIT_SHIM_SAFE_DIRECTORY: 'true'
 
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -673,20 +660,6 @@ jobs:
       - name: 同步脚本
         shell: bash
         run: make fetch-scripts
-
-      # 容器工作区是 runner 挂进来的 bind mount（属主是 runner 用户），容器内进程却是 root，
-      - name: 让容器内的 git 可用
-        shell: bash
-        run: |
-          git config --system --add safe.directory '*' 2>/dev/null || true
-          git config --global --add safe.directory "$GITHUB_WORKSPACE" 2>/dev/null || true
-
-          # 结果打进日志：以后一眼能看出这条登记有没有生效
-          if git status --porcelain > /dev/null 2>&1; then
-            echo "✓ 容器内 git 可用，COMMIT=$(git rev-parse --short HEAD)"
-          else
-            echo "⚠️ 容器内 git 仍不可用。"
-          fi
 
       - name: 打印构建参数
         shell: bash

@@ -54,6 +54,7 @@
   #   scripts/ci/resolve-prev-tag.sh 算出并落盘）。所以模板里**不要出现 | 和 &**：
   #   sed 用 | 当分隔符，& 在替换串里是特殊字符。
   env:
+    GIT_SHIM_SAFE_DIRECTORY: 'true'
     ANNOUNCEMENT_COMMENT_TEXT: |-
       @{{REPOSLUG}}(发版日志助手) 请对比标签 {{PREVIOUSTAG}} 和 {{CURRENTTAG}} 的差异。
   stages:

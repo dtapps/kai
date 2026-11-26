@@ -34,8 +34,8 @@
 |--------------------------------------|------------------------------------------------------------------------|------------|
 | [PLAN.md](PLAN.md)                   | 项目规划与架构主干（技术栈、目录、模块、里程碑、约束）                 | 2026-10-27 |
 | [configuration.md](configuration.md) | `settings.json` 全字段、`config.db` 引擎配置、代理/DNS/日志/更新优先级 | 2026-10-27 |
-| [release.md](release.md)             | 版本规则、Release 工作流、产物矩阵、签名、CNB/Gitee 同步、回滚         | 2026-11-20 |
-| [ci/README.md](ci/README.md)         | GitHub / CNB / Gitee 流水线总览与 secret 清单                          | 2026-11-20 |
+| [release.md](release.md)             | 版本规则、Release 工作流、产物矩阵、签名、CNB 同步、回滚               | 2026-11-26 |
+| [ci/README.md](ci/README.md)         | GitHub / CNB 流水线总览与 secret 清单                                  | 2026-11-26 |
 | [ci-image.md](ci-image.md)（已归档） | 旧自建 CI 镜像方案：两份 Dockerfile 的差异与排错，仅作历史追溯         | 2026-11-05 |
 | [codecov.md](codecov.md)             | Codecov 覆盖率 / bundle / 测试分析                                     | 2026-10-26 |
 | [coveralls.md](coveralls.md)         | Coveralls 单 job 双 flag                                               | 2026-10-26 |
@@ -80,16 +80,16 @@
 
 改动以下内容时，同一个 PR 必须同步对应文档，否则视为文档债务：
 
-| 代码 / 配置                                 | 必须更新                                                     |
-|---------------------------------------------|--------------------------------------------------------------|
-| `internal/settings/`、`settings.json` 字段  | `configuration.md`；字段增减同时改本文 §1 摘要               |
-| `internal/configstore/` schema、加密逻辑    | `configuration.md`、`data-storage.md`、`security-privacy.md` |
-| `internal/events/`、`*_wrapper.go` 方法     | `ipc-api.md`                                                 |
-| `internal/engine/`、引擎注册与 schema       | `engines.md`、`configuration.md`                             |
-| `internal/i18n/`、`scripts/merge-*-i18n.*`  | `i18n.md`                                                    |
-| `.github/workflows/`、`.cnb/`、`.workflow/` | `ci/README.md` + 对应专题                                    |
-| `Makefile` 目标、`build/`、版本注入         | `development.md`、`release.md`                               |
-| 平台能力（darwin/windows/linux）            | `platforms.md`、`user-guide.md`                              |
+| 代码 / 配置                                | 必须更新                                                     |
+|--------------------------------------------|--------------------------------------------------------------|
+| `internal/settings/`、`settings.json` 字段 | `configuration.md`；字段增减同时改本文 §1 摘要               |
+| `internal/configstore/` schema、加密逻辑   | `configuration.md`、`data-storage.md`、`security-privacy.md` |
+| `internal/events/`、`*_wrapper.go` 方法    | `ipc-api.md`                                                 |
+| `internal/engine/`、引擎注册与 schema      | `engines.md`、`configuration.md`                             |
+| `internal/i18n/`、`scripts/merge-*-i18n.*` | `i18n.md`                                                    |
+| `.github/workflows/`、`.cnb/`              | `ci/README.md` + 对应专题                                    |
+| `Makefile` 目标、`build/`、版本注入        | `development.md`、`release.md`                               |
+| 平台能力（darwin/windows/linux）           | `platforms.md`、`user-guide.md`                              |
 
 ## 5. 维护节奏
 

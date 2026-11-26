@@ -7,11 +7,11 @@
 #   1.2.3-beta.1             -> 预发布（beta 渠道）
 #   1.2.3-alpha.1            -> 预发布（alpha 渠道）
 #   1.2.3-nightly.20260101   -> 预发布（nightly 渠道）
-#   nightly                  -> 定时任务的默认值（手动填也可）：不是版本号，自动推导成
+#   nightly                  -> 手动或 API 触发时可填 nightly，自动推导成
 #                               <最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>，
 #                               例如最近正式版 v0.2.7 → tag v0.2.8-nightly.20261114。
 #                               每天一个 tag，GitHub 上只保留最近 3 个 nightly Release。
-#                               （各镜像平台同口径，同样只保留最近 3 个。）
+#                               （CNB 镜像同口径，同样只保留最近 3 个。）
 #
 # 本流水线是 GitHub Release 的镜像：产物和正文都来自 GitHub，这里只做搬运。
 # 版本号由上游传入（api_trigger_release 的 env 字段 / web_trigger 的表单），
@@ -278,56 +278,17 @@
     - name: 输出 Release 附件
       script: echo $FILES
 
-    # 发布到 CNB 后触发 Gitee 发布流水线，让 Gitee 从 CNB Release 搬附件。
-    # 与 GitHub release.yml 的 sync-gitee 同口径（eventType=kai-release），
-    # 唯一区别：DOWNLOAD_SOURCE=cnb —— Gitee 端按 cnb 源下载（附件名固定、全程不碰
-    # GitHub API），且 cnb 源匿名 401 查不到 tag，所以 VERSION 必须显式传。
-    # WEBHOOK_URL / TOKEN 从 imports 的 envs 注入（与 GitHub 侧 secret 同名）。
-    # allowFailure: true —— 此时 CNB Release 与附件已发完，同步失败或没配令牌都不能
-    # 把这条流水线标红，否则上游 GitHub 的 sync-cnb 会误报「同步失败」。
-    - name: 触发 Gitee 同步发布
+    # protect 保住正式版、latest/stable 与 rc/beta/alpha，避免 by_count 误删非 nightly 版本；
+    # dry_run 必须显式为 false，否则插件默认只列出待删除版本。
+    - name: 清理旧 nightly（只保留最近 3 个）
+      image: docker.cnb.cool/dtapp/plugins/release-cleaner:latest
       allowFailure: true
-      script: |
-        set -eu
-        WEBHOOK_URL="${SYNC_GITEE_WEBHOOK_URL:-}"
-        GITEE_TOKEN="${SYNC_GITEE_TOKEN:-}"
-        if [ -z "$WEBHOOK_URL" ] || [ -z "$GITEE_TOKEN" ]; then
-          echo "未配置 SYNC_GITEE_WEBHOOK_URL / SYNC_GITEE_TOKEN，跳过 Gitee 同步"
-          exit 0
-        fi
-
-        VERSION="${INTERIOR_VERSION}"
-        # commit 是构建元数据（搭车带给 Gitee，让它跑发布那一版的脚本），不参与判定；
-        # 与第一步检出用的是同一个值（上游 API / web 触发时传下来的小写 commit）。
-        COMMIT="${commit:-}"
-
-        echo "触发 Gitee 发布流水线: ${VERSION} (commit=${COMMIT:-（无）}, source=cnb)"
-        HTTP=$(curl -s -o /tmp/gitee-sync.json -w "%{http_code}" -X POST \
-          -H "Authorization: Bearer ${GITEE_TOKEN}" \
-          -H "Content-Type: application/json" \
-          -d "{\"eventType\":\"kai-release\",\"payload\":{\"params\":{\"VERSION\":\"${VERSION}\",\"COMMIT\":\"${COMMIT}\",\"DOWNLOAD_SOURCE\":\"cnb\"}}}" \
-          "${WEBHOOK_URL}")
-        echo "Gitee webhook 响应 HTTP=${HTTP}"
-        cat /tmp/gitee-sync.json 2>/dev/null || true
-        if [ "$HTTP" -lt 200 ] || [ "$HTTP" -ge 300 ]; then
-          echo "⚠ 触发 Gitee 流水线失败（HTTP=${HTTP}），不影响 CNB Release"
-        else
-          echo "✓ 已请求 Gitee 执行发布流水线（异步执行，进度看 Gitee 流水线页面）"
-        fi
-
-    # 清理过期 nightly（保留最近 3 个，与 GitHub 侧同口径）。
-    # 只在本次是 nightly 时执行：正式版 / rc / beta / alpha 发布不动夜间构建历史。
-    # 清理逻辑统一走 scripts/ci/delete-release.sh --keep：只挑「预发布 + -nightly.YYYYMMDD」，
-    # 清理失败只告警、始终 exit 0 —— 不能让清理把一次成功的发布拖成失败。
-    - name: 清理过期 nightly Release（保留最近 3 个）
-      shell: true
-      script: |
-        TAG="${INTERIOR_VERSION}"
-        case "$TAG" in
-          *-nightly.*) ;;
-          *) echo "非 nightly 发布，跳过清理"; exit 0 ;;
-        esac
-        sh scripts/ci/delete-release.sh --platform cnb --keep 3
+      settings:
+        mode: by_count
+        keep: 3
+        protect: '^(v[0-9]+\.[0-9]+\.[0-9]+(-(rc|beta|alpha)[.-]?[0-9A-Za-z.-]*)?|latest|stable)$'
+        delete_git_tag: true
+        dry_run: false
 
     # 发布成功后同步开一条「发版公告」Issue。
     #

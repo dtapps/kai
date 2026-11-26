@@ -76,13 +76,13 @@
 | Gitee   | https://gitee.com/dtapps/kai  |
 | GitCode | https://gitcode.com/dtapp/kai |
 
-> Gitea / GitLab / GitCode 仅作代码镜像，不发布 Release。
+> Gitea / GitLab / Gitee / GitCode 仅作代码镜像，不发布 Release。
 
 ### 发布
 
 - **正式发布**：手动触发 Release 工作流并输入版本号，构建 macOS / Windows 双平台（arm64 + amd64）并发布 GitHub Release
-- **预发布**：版本号后缀带 `-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `0.2.8-nightly.20260101`）即为预发布，不用勾选开关；不再有每日 Nightly 定时构建
-- 构建产物从 GitHub Release 同步到 CNB / Gitee
+- **预发布**：版本号后缀带 `-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `0.2.8-nightly.20260101`）即为预发布，不用勾选开关；每日 UTC 00:00 自动生成 nightly 版本
+- 构建产物从 GitHub Release 同步到 CNB
 
 ## 5. 文档
 

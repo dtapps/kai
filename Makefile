@@ -516,3 +516,7 @@ junit-node: ## 前端 JUnit（Codecov Test Analytics 用）；outputFile 用绝�
 fetch-scripts: ## 同步 CI 模板脚本（缺失下载，sha256 不同则更新）
 	@echo "[Scripts] 同步 CI 模板脚本..."
 	sh scripts/ci/fetch-scripts.sh
+
+.PHONY: update-fetch-scripts
+update-fetch-scripts: ## 更新 fetch-scripts.sh 自身（npm 包 @latest）
+	curl -fsSL https://cdn.jsdelivr.net/npm/@dtapp/ci-templates@latest/scripts/ci/fetch-scripts.sh -o scripts/ci/fetch-scripts.sh

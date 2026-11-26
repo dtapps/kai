@@ -92,9 +92,9 @@ https://github.com/dtapps/kai/security/advisories/new
 完整清单见 `ci/README.md` §6。权限原则：
 
 - **编进客户端的 token 视为公开**：`buildinfo.GithubToken`（来自 `UPDATER_TOKEN`）与 `buildinfo.CnbToken`（来自 `CNB_TOKEN`）会写进二进制。只能使用只读、最小范围、可随时吊销的 token，绝不能放 Actions 写权限 token。
-- **发布 token 与客户端 token 分开**：`SYNC_CNB_TOKEN` 只用于触发 CNB 构建；`SYNC_GITEE_*` 只用于触发 Gitee Go 流水线。不要复用。
+- **发布 token 与客户端 token 分开**：`SYNC_CNB_TOKEN` 只用于触发 CNB 构建，不要复用客户端更新 token。
 - **签名证书**：`WINDOWS_SIGN_CERTIFICATE` 是 .pfx 的 base64（含私钥），只能放 secret；`APPLE_*` 同理。
-- **GitHub API 限流 token**：`KAI_GITHUB_TOKEN` 在 CNB / Gitee 各配一份，源头是 `cnb.cool/dtapp/envs` 的 `github.yml`；只读即可。
+- **GitHub API 限流 token**：`KAI_GITHUB_TOKEN` 在 CNB 配置，源头是 `cnb.cool/dtapp/envs` 的 `github.yml`；只读即可。
 - **平台 token 来源不同名同权**：GitHub secret `CNB_TOKEN` 与 CNB 平台自带的 `CNB_TOKEN` 不是同一份配置；确认各自的权限边界，客户端侧不要使用 `repo-release:rw` 这类写权限。
 - 本地 `.env` 被 `.gitignore` 忽略；不要把 `.env`、`*.pfx`、`*.p12`、dylib 提交进仓库。
 

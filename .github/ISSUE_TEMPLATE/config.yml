@@ -1,0 +1,12 @@
+blank_issues_enabled: false
+
+contact_links:
+  - name: 使用帮助与文档
+    url: https://github.com/dtapps/kai/blob/master/docs/README.md
+    about: 安装、快捷键、翻译引擎、OCR 配置、更新与排障文档
+  - name: 安全漏洞报告（不要开公开 Issue）
+    url: https://github.com/dtapps/kai/security/advisories/new
+    about: 通过私密漏洞报告提交安全问题，不要在公开 Issue 中贴利用细节或敏感信息
+  - name: 历史发布记录
+    url: https://github.com/dtapps/kai/releases
+    about: 查看版本说明、下载附件与 SHA256SUMS

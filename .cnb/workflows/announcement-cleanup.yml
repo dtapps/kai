@@ -1,4 +1,4 @@
-# 公告清理：每天 0 点（CNB crontab 的时区就是 Asia/Shanghai，直接写 0 0 即中国 0 点）
+# 公告清理：每天 1 点（CNB crontab 的时区就是 Asia/Shanghai，直接写 0 1 即中国 1 点）
 # 检查带「发版公告」标签的 Issue，更新时间早于 7 天前的自动关闭。
 #
 # 定时任务的写法（本仓库 nightly 定时任务的历史实现同此）：
@@ -18,7 +18,7 @@
 # 公告 Issue 建出来就不再动（updated ≈ created），只有重发版本会刷新 updated——
 # 刚刷新过的公告本来就该继续挂着，这个口径反而更合理。
 master:
-  'crontab: 0 0 * * *':
+  'crontab: 0 1 * * *':
     - name: 公告清理
       runner:
         tags: cnb:arch:amd64

@@ -109,4 +109,4 @@ require (
 	modernc.org/memory v1.13.0 // indirect
 )
 
-replace github.com/gorilla/websocket => github.com/gorilla/websocket v1.5.4-0.20240701034025-d67f41855da4
+replace github.com/gorilla/websocket => github.com/gorilla/websocket v1.5.4-0.20250319132907-e064f32e3674

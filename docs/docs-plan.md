@@ -1,6 +1,6 @@
 # docs 文档规划与缺口分析
 
-> 分析时间：2026-10-26 · 范围：`docs/`（24 个文件 / 9,634 行）、根目录 `README*.md`、GitHub / CNB / GitLab 三套流水线 + Gitee 发布同步
+> 分析时间：2026-10-26 · 范围：`docs/`（24 个文件 / 9,634 行）、根目录 `README*.md`、GitHub / CNB 两套流水线
 >
 > 目的：回答「docs 还缺哪些文档」，给出优先级、内容大纲与维护机制。
 >
@@ -127,7 +127,7 @@
 #### P0-5 `docs/release.md` — 发布手册
 - 版本规则（当前 `v0.2.x`）、tag 与 `VERSION` 的关系；
 - GitHub Release 工作流：手动输入 version / commit / nsis_version（是否预发布由版本号后缀 `-rc` / `-beta` / `-alpha` / `-nightly` 判定）；产物矩阵（darwin/win × amd64/arm64，dmg / nsis / msix）、Windows Authenticode 签名 secret、macOS 公证（如有）；
-- 发布后同步链：CNB（`.cnb.yml`）、GitLab（trigger API）、Gitee；各平台 secret 缺失时的降级行为；Gitea / GitCode 不发布 Release；
+- 发布后同步链：CNB（`.cnb/workflows/release.yml`）；同步 secret 缺失时的降级行为；GitLab / GitCode / Gitea / Gitee 不发布 Release；
 - 更新源（GitHub / CNB）与界面语言的对应关系、预发布通道判断逻辑；
 - 失败排查与回滚（删 tag / 重跑 job / 手动触发同步）；
 - 每季度校验一次发布 checklist。
@@ -142,7 +142,7 @@
 - FAQ（已知问题从 README §6 迁移并扩写）、日志获取方式。
 
 #### P0-7 `docs/ci/README.md` — CI 总览（入口文档）
-- GitHub Actions（现为 4 个 workflow，规划时为 5 个）为主，CNB（10 个）做门禁/覆盖率/安全扫描，GitLab 只做发布同步，Gitee 由 GitHub 工作流推送；GitCode workflow 保留但当前不发布，Gitea 仅代码镜像；
+- GitHub Actions（现为 4 个 workflow，规划时为 5 个）为主，CNB 做门禁/覆盖率/安全扫描与 Release 镜像；GitLab / GitCode / Gitea / Gitee 仅作代码镜像；
 - 每个 workflow 的触发条件、关键 job、所需 secret、产物；
 - 覆盖率三处口径：CNB 内置 `testing:coverage`、Codecov、Coveralls（各自「看什么、红线在哪」）；
 - 指向现有专题：`ci-image.md`（现已归档，镜像现状并入本文 §2）、`codecov.md`、`coveralls.md`、`gitlab-ci.md`（修好后）；

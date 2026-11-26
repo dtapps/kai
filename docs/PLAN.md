@@ -192,9 +192,9 @@ kai/
 | M4 截图 OCR      | ✅   | macOS 区域截图 + Vision/tesseract；截图窗口左图右译                            |
 | M5 快捷键 & 设置 | ✅   | 注册键/执行键拆分；设置页四个 Tab；引擎 schema 化                              |
 | M6 跨平台 & 打包 | ✅   | macOS / Windows 双平台打包（dmg / nsis / msix）；GitHub Release                |
-| 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB / Gitee 镜像同步、CI 体系  |
+| 发布后迭代       | ✅   | 双源自动更新、单实例、日志/HTTP 日志、匿名统计、CNB 镜像同步、CI 体系          |
 
-当前发版：GitHub Release 触发后同步到 CNB / Gitee。每日 Nightly 已恢复（定时任务按版本号后缀判定预发布，不再勾选开关；`nightly` 由工作流推导成 `<最近正式版+1>-nightly.<UTC 日期>`，各平台只保留最近 3 个 nightly Release）。
+当前发版：GitHub Release 触发后同步到 CNB。每日 Nightly 已恢复（定时任务按版本号后缀判定预发布，不再勾选开关；`nightly` 由工作流推导成 `<最近正式版+1>-nightly.<UTC 日期>`，GitHub / CNB 各保留最近 3 个 nightly Release）。
 
 ---
 

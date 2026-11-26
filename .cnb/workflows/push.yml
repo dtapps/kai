@@ -1,84 +1,88 @@
+# 自检流水线：job 主体只定义一份，事件入口通过锚点引用，方便以后扩展触发方式。
+# 注意：CNB 的 include 不支持跨文件使用 YAML 锚点，锚点与引用必须在同一个文件里。
+.trigger_push: &trigger_push
+  name: 自检
+  runner:
+    tags: cnb:arch:amd64 # 指定 Runner 必须有这个标签
+  services:
+    - docker # 启用 Docker 服务（用于 docker build/push）
+  docker:
+    image: docker.cnb.cool/dtapp/golang/wails3:latest # 统一使用预构建的 CI 环境镜像
+    volumes:
+      - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
+      - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
+      - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具
+      - ./scripts/ci:copy-on-write # 模板脚本缓存；卷会整体挂载该目录，同步前需先还原跟踪文件
+  env:
+    GIT_SHIM_SAFE_DIRECTORY: 'true'
+  stages:
+    - name: 同步脚本
+      script: |
+        # 卷会整体挂载 scripts/ci，先把本次提交里跟踪的脚本还原（未跟踪的模板脚本由缓存/下载提供）
+        git checkout -- scripts/ci
+        make fetch-scripts
+
+    - name: 安装全部 Go 依赖
+      script: make deps-go
+
+    - name: 安装全部前端依赖
+      script: make deps-node
+
+    - name: 生成 Wails TypeScript 绑定
+      script: make bindings
+
+    - name: 生成图标资源
+      script: make icons
+
+    - name: 同步版本号/应用名到构建资源
+      script: make build-assets
+
+    - name: 生成 sqlc 代码
+      script: make sqlc
+
+    - name: 合并所有 i18n 拆分文件到主文件
+      script: make i18n
+
+    # main.go 用 `//go:embed all:frontend/dist` 嵌入前端构建产物；该目录被 .gitignore 忽略、
+    # 不进仓库，且检查类 CI 不执行 pnpm build，全新检出时不存在，会导致 go fix / go build /
+    # golangci-lint / go test 编译 main 包时因找不到嵌入目录而报错。这里创建占位目录（含一个
+    # 文件让 embed 的 all: 模式能匹配），仅用于让编译通过，不构建真实前端。
+    - name: 创建 frontend/dist 占位（供 //go:embed 解析）
+      script: mkdir -p frontend/dist && touch frontend/dist/index.html
+
+    # - name: 格式化/修复项目
+    #   script: make format
+
+    - name: 运行 Go 静态检查
+      script: make check-go-vet
+
+    - name: 运行 Go lint 扫描
+      script: make check-go-lint
+
+    - name: 运行 Go fix 问题
+      script: make check-go-fix
+
+    - name: 运行 Go 单元测试
+      script: make check-go-test
+
+    - name: 运行 Go 依赖漏洞检查
+      script: make check-go-vuln
+
+    - name: 同步前端依赖 (确保环境一致)
+      script: make check-node-install
+
+    - name: 检查前端安全漏洞 (仅高危阻断)
+      script: make check-node-audit
+
+    - name: 检查前端过时依赖
+      script: make check-node-outdated
+
+    - name: 检测前端未使用的依赖 (knip)
+      script: make check-node-knip
+
+    - name: 运行前端单元测试
+      script: make check-node-vitest
+
 '**':
   push:
-    - name: 自检
-      runner:
-        tags: cnb:arch:amd64 # 指定 Runner 必须有这个标签
-      services:
-        - docker # 启用 Docker 服务（用于 docker build/push）
-      docker:
-        image: docker.cnb.cool/dtapp/golang/wails3:latest # 统一使用预构建的 CI 环境镜像
-        volumes:
-          - /root/.cache/go-build:copy-on-write # Go 构建缓存 - 加速编译
-          - /root/.local/share/pnpm/store:copy-on-write # pnpm 全局存储 - 加速前端依赖安装
-          - /go/pkg/mod:copy-on-write # 仅缓存 Go 模块下载，避免覆盖镜像内预装的 /go/bin 工具
-          - ./scripts/ci:copy-on-write # 模板脚本缓存；卷会整体挂载该目录，同步前需先还原跟踪文件
-      env:
-        GIT_SHIM_SAFE_DIRECTORY: 'true'
-      stages:
-        - name: 同步脚本
-          script: |
-            # 卷会整体挂载 scripts/ci，先把本次提交里跟踪的脚本还原（未跟踪的模板脚本由缓存/下载提供）
-            git checkout -- scripts/ci
-            make fetch-scripts
-
-        - name: 安装全部 Go 依赖
-          script: make deps-go
-
-        - name: 安装全部前端依赖
-          script: make deps-node
-
-        - name: 生成 Wails TypeScript 绑定
-          script: make bindings
-
-        - name: 生成图标资源
-          script: make icons
-
-        - name: 同步版本号/应用名到构建资源
-          script: make build-assets
-
-        - name: 生成 sqlc 代码
-          script: make sqlc
-
-        - name: 合并所有 i18n 拆分文件到主文件
-          script: make i18n
-
-        # main.go 用 `//go:embed all:frontend/dist` 嵌入前端构建产物；该目录被 .gitignore 忽略、
-        # 不进仓库，且检查类 CI 不执行 pnpm build，全新检出时不存在，会导致 go fix / go build /
-        # golangci-lint / go test 编译 main 包时因找不到嵌入目录而报错。这里创建占位目录（含一个
-        # 文件让 embed 的 all: 模式能匹配），仅用于让编译通过，不构建真实前端。
-        - name: 创建 frontend/dist 占位（供 //go:embed 解析）
-          script: mkdir -p frontend/dist && touch frontend/dist/index.html
-
-        # - name: 格式化/修复项目
-        #   script: make format
-
-        - name: 运行 Go 静态检查
-          script: make check-go-vet
-
-        - name: 运行 Go lint 扫描
-          script: make check-go-lint
-
-        - name: 运行 Go fix 问题
-          script: make check-go-fix
-
-        - name: 运行 Go 单元测试
-          script: make check-go-test
-
-        - name: 运行 Go 依赖漏洞检查
-          script: make check-go-vuln
-
-        - name: 同步前端依赖 (确保环境一致)
-          script: make check-node-install
-
-        - name: 检查前端安全漏洞 (仅高危阻断)
-          script: make check-node-audit
-
-        - name: 检查前端过时依赖
-          script: make check-node-outdated
-
-        - name: 检测前端未使用的依赖 (knip)
-          script: make check-node-knip
-
-        - name: 运行前端单元测试
-          script: make check-node-vitest
-
+    - *trigger_push

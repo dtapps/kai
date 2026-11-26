@@ -1,18 +1,18 @@
 # 发布手册
 
-> status: 有效 · last_verified: 2026-10-27 · 基线 `de28c9e`（master）
+> status: 有效 · last_verified: 2026-11-26 · 基线 `c33e035`（master）
 
 只讲发版。CI 总览见 `ci/README.md`；secret 的权限与轮换见 `security-privacy.md`；更新器匹配规则见 `configuration.md` §4.4。
 
 ## 1. 版本规则
 
 - 版本形如 `vMAJOR.MINOR.PATCH`，当前是 `v0.2.x`（最新 tag `v0.2.7`）。
-- 版本号在 Release 工作流里输入：手动触发（`workflow_dispatch`）人工填写；定时触发（每天 UTC 00:00）自动生成 nightly 版本（见下）。
+- 版本号在 Release 工作流里输入：手动触发（`workflow_dispatch`）人工填写；GitHub 定时触发（每天 UTC 00:00，即北京时间 08:00）自动生成 nightly 版本（见下）。CNB Release 没有定时任务，只由 GitHub API 或页面按钮触发，用于镜像 GitHub 已发布产物。
 - 输入 `0.2.8` 与 `v0.2.8` 等价，统一归一成 tag `v0.2.8`（归一化与格式校验见 `scripts/ci/resolve-prerelease.sh`）。
 - 只允许字母、数字和 `. _ + -`；引号、分号、`@`、`/` 会被拒绝，避免拼出非法 tag 或破坏 Release 配置。
 - `buildinfo.Version` 由同一版本号经 `-ldflags` 注入，**不带** `v`；`v` 只属于 tag，不属于二进制版本串。
 - 预发布**不接受勾选**，只看版本号后缀，四个渠道：`-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `v0.2.8-nightly.20260101`）；其余是正式版。
-- **每日 Nightly（按日期版本化的预发布）**：schedule 触发等价于手动填 `nightly`；`prepare` 先把 `nightly` 推导成版本号再走普通发布流程：`<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（最近正式版 `v0.2.7` → tag `v0.2.8-nightly.20261114`）。每天一个 tag，**各平台都只保留最近 3 个 nightly Release**（更早的连 tag 一起删）：GitHub / CNB / Gitee 的发布流水线在发布成功后各自调用 `scripts/ci/delete-release.sh --platform <平台> --keep 3` 收敛本平台的过期 nightly（Gitee 附件总量 1GB）。
+- **每日 Nightly（按日期版本化的预发布）**：schedule 触发等价于手动填 `nightly`；`prepare` 先把 `nightly` 推导成版本号再走普通发布流程：`<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（最近正式版 `v0.2.7` → tag `v0.2.8-nightly.20261114`）。每天一个 tag，**GitHub / CNB 都只保留最近 3 个 nightly Release**（更早的连 tag 一起删）：GitHub 调用 `scripts/ci/delete-release.sh --platform github --keep 3`；CNB 使用 [`release-cleaner`](https://cnb.cool/dtapp/plugins/release-cleaner) 插件（`by_count` / `keep: 3`），显式保护正式版与 rc / beta / alpha，关闭 `dry_run` 并开启 `delete_git_tag`，清理失败通过 `allowFailure` 保持不阻断发布。
   - 版本基准 = **最近一个正式版 tag + 1 个补丁**（`0.2.7` → `0.2.8`），三个字段共用它：`VERSION_BASE`=`0.2.8`（NSIS/plist）、`VERSION_PKG`=`0.2.8~nightly.20261114`（deb/rpm/arch）、`buildinfo.Version`=`0.2.8-nightly.20261114`。不能沿用正式版号（`0.2.7-nightly.*` 在 semver 里低于 `0.2.7`，客户端会反复提示降级），也不能用裸 `nightly`（非法 semver，脚本会直接拒绝）。客户端仍按 SHA256SUMS 里的 `# build_time=` / `# git_commit=` 注释行判断 nightly 是否真的更新。
   - 同一天重跑/补发会先 `gh release delete v<版本> --cleanup-tag` 删同名 Release 再重建（夜间构建 tag 允许覆盖）：避免旧附件堆积，并刷新 `published_at`（客户端 mirror_updater.go 按「预发布 Release 中 published_at 最新」挑选）。
   - 更新内容：与上一个 nightly tag 对比（`release-changelog.sh` 的 nightly 渠道），首次发该渠道时回退到上一个正式版。
@@ -40,7 +40,7 @@
 2. `go.mod`、`frontend/package.json`、两份 CI Dockerfile 的 Wails 版本一致或已确认差异。
 3. `build/config.yml` 的 `info.version` 与本次版本一致。
 4. 需要签名时，确认对应 secret 已配置（见 §4）。
-5. 需要同步镜像时，确认 `SYNC_*` secret 已配置；未配置的同步 job 会跳过，不影响 GitHub Release。
+5. 需要同步镜像时，确认 `SYNC_CNB_TOKEN` 已配置；未配置时同步 job 会跳过，不影响 GitHub Release。
 6. 本地至少跑过：
 
 ```bash
@@ -71,12 +71,12 @@ job 顺序：
 1. `prepare`：解析版本号（归一化 / 校验 / 预发布判定），生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 `GIT_COMMIT`，输出 `tag` / `prerelease` / `release_title` / `version`。
 2. `build`：矩阵构建 4 个组合。
 3. `release`：汇总产物 → 校验版本号与 tag（tag 不存在、tag 数非零、正式版不比已有正式版旧）→ 生成 `SHA256SUMS` → 校验可发布产物数非零 → 生成发布说明 → 发布 GitHub Release。
-4. `sync-cnb` / `sync-gitee`：并行触发各平台同步。调各平台的 API 时**版本号与 commit 一起传**（CNB 的 `env` / Gitee 的 webhook `params`）；commit 是这次打包的构建元数据，各端只做记录与追溯，不参与发布指向。两个 job 各自输出一个 `status`（`triggered` / `skipped` / `failed`），供 `notify` 展示。
-5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。正文含 GitHub / CNB / Gitee 三个平台的 Release 链接、**可点击的提交链接**（短 sha → GitHub commit 页），以及一行「镜像同步」状态（每个平台标 ✅ 已触发 / ⏭ 未配置 / ❌ 触发失败）。各平台仓库路径不同：CNB 是 `dtapp`，Gitee 是 `dtapps`。
+4. `sync-cnb`：触发 CNB 同步。调 CNB API 时**版本号与 commit 一起传**（`env` 字段）；commit 是这次打包的构建元数据，CNB 只做记录与追溯，不参与发布指向。job 输出 `status`（`triggered` / `skipped` / `failed`），供 `notify` 展示。
+5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。正文含 GitHub / CNB 两个平台的 Release 链接、**可点击的提交链接**（短 sha → GitHub commit 页），以及 CNB 镜像同步状态（✅ 已触发 / ⏭ 未配置 / ❌ 触发失败）。CNB 仓库路径是 `dtapp`。
 
 发布说明由 `scripts/ci/render-release-body.sh` 生成，结构固定为 「预发布警示（仅预发布）→ 发布信息 → 下载 → 校验 → 更新内容」； 下载表格里的附件平台 / 架构解析与说明文案由 `scripts/ci/describe-artifact.sh` 提供（被前者 source，表格行由它渲染）； 「更新内容」由 `scripts/ci/release-changelog.sh` 计算：rc 对 rc、beta 对 beta、alpha 对 alpha、nightly 对 nightly、正式版对正式版， 首次发某渠道时回退到上一个正式版，挑不出基准会直接让 job 失败而不是谎报「首次发布」。
 
-CNB / Gitee 全部镜像 GitHub 的正文，所以正文格式只改这三个脚本。 改了先本地自检：
+CNB 镜像 GitHub 的正文，所以正文格式只改这三个脚本。 改了先本地自检：
 
 ```bash
 bash scripts/ci/resolve-prerelease.sh --self-test
@@ -148,30 +148,25 @@ macOS 产物是 `.app` 的 zip，不是 dmg。自更新包必须是 `.app` 归�
 
 ## 5. 发布后同步
 
-GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
+GitHub Release 发布成功后，`release.yml` 的 `sync-cnb` job 触发 CNB 同步：
 
-| 平台  | job / 触发方式                                                   | 需要的 secret                                | 未配置时 |
-|-------|------------------------------------------------------------------|----------------------------------------------|----------|
-| CNB   | `sync-cnb` 调 `POST /-/build/start`，event `api_trigger_release` | `SYNC_CNB_TOKEN`、可选 `CNB_API_ENDPOINT`    | 跳过     |
-| Gitee | `sync-gitee` 调 Gitee Go Webhook（eventType `kai-release`）      | `SYNC_GITEE_WEBHOOK_URL`、`SYNC_GITEE_TOKEN` | 跳过     |
-| Gitea | 无 Release 同步，只作代码镜像                                    | —                                            | —        |
+| 平台 | job / 触发方式                                                   | 需要的 secret                             | 未配置时 |
+|------|------------------------------------------------------------------|-------------------------------------------|----------|
+| CNB  | `sync-cnb` 调 `POST /-/build/start`，event `api_trigger_release` | `SYNC_CNB_TOKEN`、可选 `CNB_API_ENDPOINT` | 跳过     |
 
-- CNB 侧 `.cnb.yml` 的 `api_trigger_release` 会下载 GitHub 产物、调用 `scripts/ci/delete-release.sh --platform cnb` 删除同名 Release/Tag、重建 Release 并上传附件；是否预发布同样由版本号后缀推导（`pre_release` 传了也不采信）。
-- Gitee 侧 `.workflow/release.yml` 由 Webhook 拉起，跑 `scripts/ci/` 下的脚本： `gitee-release-download.js`（下载并写清单 `gitee-release.json`）+ `delete-release.sh --platform gitee`（发布前删同名旧 Release 并保留 tag、发布后清理过期 nightly）+ `gitee-release-publish.js`（调 Gitee OpenAPI 建 Release、逐个上传附件）。 需要在 Gitee 流水线加全局参数 **`KAI_GITEE_TOKEN`**（个人令牌，repo 读写）——名字不能以 `GITEE_` 开头，那是平台保留前缀。
-- **Gitee 下载源**：全局参数 `DOWNLOAD_SOURCE` 取 `cnb`（默认）或 `github`，空值按 `cnb`，其它值直接报错。 **同一次发布的全部附件只来自这一个平台，绝不混用**：包里注入了 `RepoSource`，客户端据此选升级通道，两边各自编译、同版本字节数也不同，混源等于随机分配通道。 `cnb` 源附件名按版本在本地拼出、大小用 `Range: bytes=1-` 从 `Content-Range` 探测、正文本地生成、全程不碰 GitHub API（CNB API 匿名 401）；`github` 源清单/大小/正文取 GitHub Release，附件依次走 daocloud → ghfast.top → gh-proxy.com → 直连四级回退。 两源共用：Range 断点续传（重定向保留 Range）、每 5 秒采样速度、连续 15 秒低于 30KB/s 判慢源换源、普通失败每两次换源、累计最多 8 次、间隔 1.5 秒、3 路并发；落盘后验文件头（`.deb` 为 `!<arch>\n`、`.fpk` 为 `1f 8b`），防反代 200 回 HTML 错误页。 `VERSION` 为空时 shell 先调 `node scripts/ci/gitee-release-download.js --resolve-tag` 取最新 tag（cnb 源解析 CNB 公开 Release 列表页，github 源取 GitHub Release），再 source `resolve-prerelease.sh` 按版本号后缀判预发布。 清单里另有 `bodyHtmlPlugin`：正文压单行、裸 `=` 转 `&#61;`、每 200 字节插 `<br/>`，供用 Gitee release 插件（正文走参数通道、整值当路径 open）时取用。
-- 所有同步 job 都“尽力而为”：失败只打 `::warning::`，不回滚 GitHub Release。
+- CNB 侧 `.cnb/workflows/release.yml` 的 `api_trigger_release` 会下载 GitHub 产物、调用 `scripts/ci/delete-release.sh --platform cnb` 删除同名 Release/Tag、重建 Release 并上传附件；是否预发布同样由版本号后缀推导（`pre_release` 传了也不采信）。
+- CNB Release 没有定时任务。它依赖 GitHub 发布完成后通过 API 触发，或通过 `.cnb/web_trigger.yml` 的页面按钮手动执行。
+- 同步 job“尽力而为”：失败只打 `::warning::`，不回滚 GitHub Release。
 
-各端一致性约定（改任何一端都要对照这张表）：
+两端一致性约定：
 
 - **预发布**：只看版本号后缀，不接受人工勾选；各端都不再接收 `PRERELEASE` / `pre_release` 布尔值。
 - **标题**：统一 `Kai <tag>`，预发布追加 `(预发布)`。
 - **附件名**：与 GitHub 逐字一致（`Kai-0.2.8-darwin-arm64.zip`，版本段不带 `v`）。
-- **正文**：全部镜像 GitHub 正文，只替换各自平台的链接；Gitee 侧正文里的链接会退化成文字，「更新内容」保留标题、明细换成一句「请前往 GitHub Release 查看」（完整清单在 GitHub 上更有价值）。
-- **附件清单**：CNB 全量搬运；Gitee 的下载脚本只有一条过滤规则——**单文件 >100MB 就跳过**（`AppImage` 112~117MB 因此不在 Gitee），其余（`updater-*`、`BUILD_TIME`/`GIT_COMMIT`、`SHA256SUMS`）都照常上传。
-- **构建元数据**：同步版本号时把本次发布的 commit 一起传过去（CNB 的 `env` / Gitee 的 webhook `params`）。commit 的本职是**打包信息**：产物里带着它（预发布版的 `GIT_COMMIT` 附件、二进制里的 `buildinfo.GitCommit`），所以各端下载产物后会**核对**二者是否一致（对不上就警告，不阻断发布）。正式版不带该附件，跳过校验。
-- **顺手的绑定**：让 Release 指向这个 commit 只是顺手能做的事 —— Gitee 的 `target_commitish` 接受 commit SHA，改一个字段即可，绑不上会自动回退到默认分支重试。绑定与否都不影响发布价值（附件与正文才是）。
-- **CNB 靠「检出」而不是「绑定」**：CNB 的 `git:release` 没有 commit / targetCommitish 参数，但它每次发布都会**删掉同名 tag 再重建**，而重建用的就是**当前检出的提交**。所以 CNB 流水线的第一步是 `git checkout --detach <commit>` —— 检出到本次发布的那个提交，重建出的 tag 自然就指对了。CNB 没有原生的 `clone.ref` 配置，检出只能在脚本里做；检出失败（镜像还没同步到该提交）只告警，保持默认检出继续发布。Gitee 重建 Release 时不删 tag（tag 由镜像同步过来，指向天然正确），无需检出。
-- **Gitee 容量**：单附件 100MB（GVP 项目 200MB），**仓库附件总量 1GB**（含仓库附件与发行版附件）。 脚本另有 `MAX_TOTAL_BYTES=800MB` 的单次安全阈值；发布侧遇到「附件配额不足」会跳过后续更大的文件、只打警告不判失败，并提示去 GitHub 下载。 想让 Gitee 长期保留多个版本，需要定期删旧 Release（删 Release 会连附件一起释放）——nightly 由 `scripts/ci/delete-release.sh --platform gitee --keep 3` 自动清理，正式版需手动处理。
+- **正文**：CNB 镜像 GitHub 正文，并把链接替换为 CNB 链接。
+- **附件清单**：CNB 全量搬运 GitHub 附件，包括 `updater-*`、`BUILD_TIME` / `GIT_COMMIT`、`SHA256SUMS`。
+- **构建元数据**：同步版本号时把本次发布的 commit 一起传给 CNB（`env` 字段）。commit 的本职是**打包信息**：产物里带着它（预发布版的 `GIT_COMMIT` 附件、二进制里的 `buildinfo.GitCommit`），所以 CNB 下载产物后会**核对**二者是否一致（对不上就警告，不阻断发布）。正式版不带该附件，跳过校验。
+- **CNB 靠「检出」而不是「绑定」**：CNB 的 `git:release` 没有 commit / targetCommitish 参数，但它每次发布都会**删掉同名 tag 再重建**，而重建用的就是**当前检出的提交**。所以 CNB 流水线的第一步是 `git checkout --detach <commit>` —— 检出到本次发布的那个提交，重建出的 tag 自然就指对了。CNB 没有原生的 `clone.ref` 配置，检出只能在脚本里做；检出失败（镜像还没同步到该提交）只告警，保持默认检出继续发布。
 
 ## 6. 更新源与产物对应
 
@@ -185,7 +180,7 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 
 1. GitHub：`sh scripts/ci/delete-release.sh --platform github --tag v<version>`（等价于 `gh release delete v<version> --yes --cleanup-tag`），或页面上删除 Release 与 tag。
 2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`校验版本号与 tag` 步骤发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。夜间构建（`*-nightly.*`）例外：同名 tag 允许覆盖，工作流会自己删掉同名 Release + tag 再重建。
-3. 镜像平台：CNB 幂等重建（`delete-release.sh --platform cnb --tag` 删旧 Release/Tag 再上传，tag 唯一性由 GitHub 侧保证）；Gitee 重跑同步时用 `delete-release.sh --platform gitee --tag --keep-tag` 删旧 Release（保留 tag）再重建。
+3. 镜像平台：CNB 幂等重建（`delete-release.sh --platform cnb --tag` 删旧 Release/Tag 再上传，tag 唯一性由 GitHub 侧保证）。
 4. 只想补发某个镜像：单独重跑对应 job 或手动触发其工作流；不要重新构建 GitHub Release，除非产物本身要换。
 
 ## 8. 已知缺口（发布前务必核对）
@@ -206,6 +201,6 @@ GitHub Release 发布成功后，`release.yml` 的同步 job 会并行触发：
 - [ ] 下载 macOS arm64 包，`unzip` 后 `Kai.app` 能启动；`defaults read .../Info.plist CFBundleShortVersionString` 与版本一致。
 - [ ] 下载 Windows 安装包，安装后 `Kai.exe` 能启动，版本号正确。
 - [ ] 托盘「检查更新」能识别新版本；预发布版本能被预发布通道识别。
-- [ ] CNB / Gitee Release 页面能打开，附件直链可下载。
+- [ ] CNB Release 页面能打开，附件直链可下载。
 - [ ] `updater-` 包只出现在附件里，不出现在下载表格。
 - [ ] 通知（如启用）已发出。

@@ -2,7 +2,7 @@
 #
 # 生成 Release 正文（Markdown）。
 #
-# 事实来源：本项目的 CNB / Gitee 两个平台都镜像 GitHub Release 的正文，
+# 事实来源：本项目的 CNB 平台镜像 GitHub Release 的正文，
 # 所以正文格式只在 .github/workflows/release.yml 调用的这份脚本里维护一次。
 #
 # 只用环境变量传参（不解析位置参数），这样任何一条流水线都能直接

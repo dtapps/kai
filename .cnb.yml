@@ -1,4 +1,5 @@
 # CNB 流水线总入口：只负责聚合各工作流文件。
+# 修改 include 内工作流的结构或定时配置时，同步更新本文件以触发 CNB 重新加载。
 #
 # 发布（Release 同步）配置已拆到 .cnb/workflows/release.yml，便于复制到其它仓库复用。
 # 注意：CNB 的 include 不支持跨文件使用 YAML 锚点（& / *），所以发布块里的

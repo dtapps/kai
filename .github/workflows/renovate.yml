@@ -52,7 +52,7 @@ jobs:
         # 也可用 fine-grained PAT（仅授权本仓库，Contents / Pull requests / Issues 读写，
         #   Metadata 只读），但更新 workflow 文件可能受限，classic PAT 更稳妥。
         # ──────────────────────────────────────────────────────────────────
-        uses: renovatebot/github-action@v46.3.14
+        uses: renovatebot/github-action@v46.3.15
         with:
           token: ${{ secrets.RENOVATE_TOKEN || github.token }}
           configurationFile: .github/renovate.json5

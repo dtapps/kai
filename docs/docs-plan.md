@@ -126,7 +126,7 @@
 
 #### P0-5 `docs/release.md` — 发布手册
 - 版本规则（当前 `v0.2.x`）、tag 与 `VERSION` 的关系；
-- GitHub Release 工作流：手动输入 version / commit / nsis_version（是否预发布由版本号后缀 `-rc` / `-beta` / `-alpha` / `-nightly` 判定）；产物矩阵（darwin/win × amd64/arm64，dmg / nsis / msix）、Windows Authenticode 签名 secret、macOS 公证（如有）；
+- GitHub Release 工作流：手动输入 version / nsis_version（构建提交由本次触发确定，CNB 同步不接收 commit 参数；是否预发布由版本号后缀 `-rc` / `-beta` / `-alpha` / `-nightly` 判定）；产物矩阵（darwin/win × amd64/arm64，dmg / nsis / msix）、Windows Authenticode 签名 secret、macOS 公证（如有）；
 - 发布后同步链：CNB（`.cnb/workflows/release.yml`）；同步 secret 缺失时的降级行为；GitLab / GitCode / Gitea / Gitee 不发布 Release；
 - 更新源（GitHub / CNB）与界面语言的对应关系、预发布通道判断逻辑；
 - 失败排查与回滚（删 tag / 重跑 job / 手动触发同步）；

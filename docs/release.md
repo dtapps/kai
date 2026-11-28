@@ -8,19 +8,19 @@
 
 - 版本形如 `vMAJOR.MINOR.PATCH`，当前是 `v0.2.x`（最新 tag `v0.2.7`）。
 - 版本号在 Release 工作流里输入：手动触发（`workflow_dispatch`）人工填写；GitHub 定时触发（每天 UTC 00:00，即北京时间 08:00）自动生成 nightly 版本（见下）。CNB Release 没有定时任务，只由 GitHub API 或页面按钮触发，用于镜像 GitHub 已发布产物。
-- 输入 `0.2.8` 与 `v0.2.8` 等价，统一归一成 tag `v0.2.8`（归一化与格式校验见 `scripts/ci/resolve-prerelease.sh`）。
+- 输入 `0.2.8` 与 `v0.2.8` 等价，统一归一成 tag `v0.2.8`。GitHub 由 `dtapps/release-version-action@main`、CNB 由 `docker.cnb.cool/dtapp/plugins/release-version:latest` 在版本门禁中归一化与校验。
 - 只允许字母、数字和 `. _ + -`；引号、分号、`@`、`/` 会被拒绝，避免拼出非法 tag 或破坏 Release 配置。
 - `buildinfo.Version` 由同一版本号经 `-ldflags` 注入，**不带** `v`；`v` 只属于 tag，不属于二进制版本串。
 - 预发布**不接受勾选**，只看版本号后缀，四个渠道：`-rc.N` / `-beta.N` / `-alpha.N` / `-nightly.YYYYMMDD`（如 `v0.2.8-nightly.20260101`）；其余是正式版。
-- **每日 Nightly（按日期版本化的预发布）**：schedule 触发等价于手动填 `nightly`；`prepare` 先把 `nightly` 推导成版本号再走普通发布流程：`<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（最近正式版 `v0.2.7` → tag `v0.2.8-nightly.20261114`）。每天一个 tag，**GitHub / CNB 都只保留最近 3 个 nightly Release**（更早的连 tag 一起删）：GitHub 调用 `scripts/ci/delete-release.sh --platform github --keep 3`；CNB 使用 [`release-cleaner`](https://cnb.cool/dtapp/plugins/release-cleaner) 插件（`by_count` / `keep: 3`），显式保护正式版与 rc / beta / alpha，关闭 `dry_run` 并开启 `delete_git_tag`，清理失败通过 `allowFailure` 保持不阻断发布。
-  - 版本基准 = **最近一个正式版 tag + 1 个补丁**（`0.2.7` → `0.2.8`），三个字段共用它：`VERSION_BASE`=`0.2.8`（NSIS/plist）、`VERSION_PKG`=`0.2.8~nightly.20261114`（deb/rpm/arch）、`buildinfo.Version`=`0.2.8-nightly.20261114`。不能沿用正式版号（`0.2.7-nightly.*` 在 semver 里低于 `0.2.7`，客户端会反复提示降级），也不能用裸 `nightly`（非法 semver，脚本会直接拒绝）。客户端仍按 SHA256SUMS 里的 `# build_time=` / `# git_commit=` 注释行判断 nightly 是否真的更新。
+- **每日 Nightly（按日期版本化的预发布）**：schedule 触发等价于手动填 `nightly`；`version-gate` 先把 `nightly` 推导成版本号再走普通发布流程：`<最近正式版 + 1 个补丁>-nightly.<UTC 构建日期>`（最近正式版 `v0.2.7` → tag `v0.2.8-nightly.20261114`）。每天一个 tag，**GitHub / CNB 都只保留最近 3 个 nightly Release**（更早的连 tag 一起删）：GitHub 调用 `scripts/ci/delete-release.sh --platform github --keep 3`；CNB 使用 [`release-cleaner`](https://cnb.cool/dtapp/plugins/release-cleaner) 插件（`by_count` / `keep: 3`），显式保护正式版与 rc / beta / alpha，关闭 `dry_run` 并开启 `delete_git_tag`，清理失败通过 `allowFailure` 保持不阻断发布。
+  - 版本基准 = **最近一个正式版 tag + 1 个补丁**（`0.2.7` → `0.2.8`），三个字段共用它：`VERSION_BASE`=`0.2.8`（NSIS/plist）、`VERSION_PKG`=`0.2.8~nightly.20261114`（deb/rpm/arch）、`buildinfo.Version`=`0.2.8-nightly.20261114`。不能沿用正式版号（`0.2.7-nightly.*` 在 semver 里低于 `0.2.7`，客户端会反复提示降级），也不能把裸 `nightly` 当版本号。客户端仍按 SHA256SUMS 里的 `# build_time=` / `# git_commit=` 注释行判断 nightly 是否真的更新。
   - 同一天重跑/补发会先 `gh release delete v<版本> --cleanup-tag` 删同名 Release 再重建（夜间构建 tag 允许覆盖）：避免旧附件堆积，并刷新 `published_at`（客户端 mirror_updater.go 按「预发布 Release 中 published_at 最新」挑选）。
   - 更新内容：与上一个 nightly tag 对比（`release-changelog.sh` 的 nightly 渠道），首次发该渠道时回退到上一个正式版。
   - 仓库 60 天无活动时 GitHub 会自动禁用 scheduled workflow，需去 Actions 页手动恢复。
 
 ### 1.1 打包版本派生
 
-不同打包工具对版本串的格式要求不一样，派生只有一份实现（`scripts/ci/resolve-prerelease.sh` 的 `derive_packaging_versions`），工作流 `prepare` job 统一输出：
+不同打包工具对版本串的格式要求不一样。GitHub 由 `dtapps/release-version-action@main`、CNB 由 `docker.cnb.cool/dtapp/plugins/release-version:latest` 的 `version_base` / `version_pkg` 输出派生；工作流 `prepare` job 统一输出：
 
 | 用途                                                              | 值           | 约束                                                                                                               |
 |-------------------------------------------------------------------|--------------|--------------------------------------------------------------------------------------------------------------------|
@@ -30,7 +30,7 @@
 
 四个渠道统一处理：`0.2.8-nightly.20260101` 同样派生为 `0.2.8`（NSIS / plist）与 `0.2.8~nightly.20260101`（deb/rpm/arch）。 预发布版本在 Windows 文件属性、macOS App 元数据里显示的是去掉后缀的 `0.2.8`，这是 `X.Y.Z` 限制导致的取舍；预发布标识保留在 tag、Release 标题与 App 内版本串里。
 
-改了映射先跑 `bash scripts/ci/resolve-prerelease.sh --self-test`。
+版本派生逻辑统一在两版 release-version 插件中，不再由 CNB 脚本派生。
 
 版本号写入 `build/config.yml` 由 `scripts/ci/sync-build-version.sh` 负责：只改**缩进**的 `version` 行（`info.version` / `ios.version`），顶格的 `version: '3'` 是 wails3 配置的 schema 版本不能动；值用什么引号都认（仓库当前用单引号）；写完必须校验，写不进去就直接失败。改了先跑 `sh scripts/ci/sync-build-version.sh --self-test`。
 
@@ -61,27 +61,30 @@ Actions → Release → Run workflow
 | 输入           | 必填 | 说明                                                                       |
 |----------------|------|----------------------------------------------------------------------------|
 | `version`      | 是   | 版本号；预发布看后缀，例如 `0.2.8`、`0.2.8-rc.1`、`0.2.8-nightly.20260101` |
-| `commit`       | 否   | 要构建的提交；留空用默认分支最新提交                                       |
 | `nsis_version` | 否   | NSIS 版本，留空用 `3.13`                                                   |
+
+`commit` 输入已移除：GitHub 始终构建本次触发所选分支或 tag 对应的提交（`github.sha`）；CNB 同步不再接收 `commit` 参数。
 
 `prerelease` 输入已移除：是否预发布只由版本号后缀决定。布尔输入会和版本号打架 （曾出现 `v0.2.8-rc.1` 没勾 prerelease、正文按正式版渲染的情况）。
 
-job 顺序：
+job 顺序（`prepare` / `build` / `build-linux` / `release` / `announce` / `sync-cnb` / `notify` 均显式 `needs: version-gate`）：
 
-1. `prepare`：解析版本号（归一化 / 校验 / 预发布判定），生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 `GIT_COMMIT`，输出 `tag` / `prerelease` / `release_title` / `version`。
-2. `build`：矩阵构建 4 个组合。
-3. `release`：汇总产物 → 校验版本号与 tag（tag 不存在、tag 数非零、正式版不比已有正式版旧）→ 生成 `SHA256SUMS` → 校验可发布产物数非零 → 生成发布说明 → 发布 GitHub Release。
-4. `sync-cnb`：触发 CNB 同步。调 CNB API 时**版本号与 commit 一起传**（`env` 字段）；commit 是这次打包的构建元数据，CNB 只做记录与追溯，不参与发布指向。job 输出 `status`（`triggered` / `skipped` / `failed`），供 `notify` 展示。
-5. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。正文含 GitHub / CNB 两个平台的 Release 链接、**可点击的提交链接**（短 sha → GitHub commit 页），以及 CNB 镜像同步状态（✅ 已触发 / ⏭ 未配置 / ❌ 触发失败）。CNB 仓库路径是 `dtapp`。
+1. `version-gate`：独立 job，生成统一的 `BUILD_TIME`（`scripts/get-build-time.sh`）与 nightly 日期 → `dtapps/release-version-action@main` 解析版本并校验 Tag → 输出 `tag` / `prerelease` / `version` / `version_base` / `version_pkg`；失败则后续 job 全部不启动。
+2. `prepare`：复用门禁输出，补充 `git_commit` / `commit_sha` / `release_title` 等构建参数。
+3. `build` + `build-linux`：矩阵构建 6 个组合。
+4. `release`：汇总产物 → 生成 `SHA256SUMS` → 校验可发布产物数非零 → 生成发布说明 → 发布 GitHub Release。
+5. `announce`：非 nightly 发版公告（Discussions）。
+6. `sync-cnb`：触发 CNB 同步。调 CNB API 时只传**版本号**（`env.version`），不传 `commit`。job 输出 `status`（`triggered` / `skipped` / `failed`），供 `notify` 展示。
+7. `notify`：ServerChan3 通知（配置了 `SERVERCHAN_SENDKEY` 才发）。正文含 GitHub / CNB 两个平台的 Release 链接、**可点击的提交链接**（短 sha → GitHub commit 页），以及 CNB 镜像同步状态（✅ 已触发 / ⏭ 未配置 / ❌ 触发失败）。CNB 仓库路径是 `dtapp`。
 
 发布说明由 `scripts/ci/render-release-body.sh` 生成，结构固定为 「预发布警示（仅预发布）→ 发布信息 → 下载 → 校验 → 更新内容」； 下载表格里的附件平台 / 架构解析与说明文案由 `scripts/ci/describe-artifact.sh` 提供（被前者 source，表格行由它渲染）； 「更新内容」由 `scripts/ci/release-changelog.sh` 计算：rc 对 rc、beta 对 beta、alpha 对 alpha、nightly 对 nightly、正式版对正式版， 首次发某渠道时回退到上一个正式版，挑不出基准会直接让 job 失败而不是谎报「首次发布」。
 
-CNB 镜像 GitHub 的正文，所以正文格式只改这三个脚本。 改了先本地自检：
+CNB 镜像 GitHub 的正文，所以正文格式只改这三个脚本。改了先本地自检：
 
 ```bash
-bash scripts/ci/resolve-prerelease.sh --self-test
 sh scripts/ci/describe-artifact.sh --self-test
 sh scripts/ci/render-release-body.sh --self-test
+sh scripts/ci/release-changelog.sh >/dev/null
 ```
 
 构建矩阵：
@@ -165,8 +168,8 @@ GitHub Release 发布成功后，`release.yml` 的 `sync-cnb` job 触发 CNB 同
 - **附件名**：与 GitHub 逐字一致（`Kai-0.2.8-darwin-arm64.zip`，版本段不带 `v`）。
 - **正文**：CNB 镜像 GitHub 正文，并把链接替换为 CNB 链接。
 - **附件清单**：CNB 全量搬运 GitHub 附件，包括 `updater-*`、`BUILD_TIME` / `GIT_COMMIT`、`SHA256SUMS`。
-- **构建元数据**：同步版本号时把本次发布的 commit 一起传给 CNB（`env` 字段）。commit 的本职是**打包信息**：产物里带着它（预发布版的 `GIT_COMMIT` 附件、二进制里的 `buildinfo.GitCommit`），所以 CNB 下载产物后会**核对**二者是否一致（对不上就警告，不阻断发布）。正式版不带该附件，跳过校验。
-- **CNB 靠「检出」而不是「绑定」**：CNB 的 `git:release` 没有 commit / targetCommitish 参数，但它每次发布都会**删掉同名 tag 再重建**，而重建用的就是**当前检出的提交**。所以 CNB 流水线的第一步是 `git checkout --detach <commit>` —— 检出到本次发布的那个提交，重建出的 tag 自然就指对了。CNB 没有原生的 `clone.ref` 配置，检出只能在脚本里做；检出失败（镜像还没同步到该提交）只告警，保持默认检出继续发布。
+- **构建元数据**：commit 仍作为构建信息写入产物（预发布版的 `GIT_COMMIT` 附件、二进制里的 `buildinfo.GitCommit`）。CNB 下载产物后会与当前检出提交**核对**，对不上就警告，不阻断发布；正式版不带该附件，跳过校验。
+- **CNB 发布**：不接收外部 `commit` 参数，Release 重建使用流水线的当前检出提交。
 
 ## 6. 更新源与产物对应
 
@@ -179,7 +182,7 @@ GitHub Release 发布成功后，`release.yml` 的 `sync-cnb` job 触发 CNB 同
 ## 7. 回滚与补发
 
 1. GitHub：`sh scripts/ci/delete-release.sh --platform github --tag v<version>`（等价于 `gh release delete v<version> --yes --cleanup-tag`），或页面上删除 Release 与 tag。
-2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`校验版本号与 tag` 步骤发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。夜间构建（`*-nightly.*`）例外：同名 tag 允许覆盖，工作流会自己删掉同名 Release + tag 再重建。
+2. 用同一版本号重跑 Release 工作流。**工作流不会自动删旧 tag**：`version-gate` job 的校验发现 tag 已存在就失败， 避免把 tag 挪到新提交上、让历史 Release 的对比基准漂移。所以补发前必须先手工执行第 1 步。夜间构建（`*-nightly.*`）例外：同名 tag 允许覆盖，工作流会自己删掉同名 Release + tag 再重建。
 3. 镜像平台：CNB 幂等重建（`delete-release.sh --platform cnb --tag` 删旧 Release/Tag 再上传，tag 唯一性由 GitHub 侧保证）。
 4. 只想补发某个镜像：单独重跑对应 job 或手动触发其工作流；不要重新构建 GitHub Release，除非产物本身要换。
 
@@ -188,8 +191,8 @@ GitHub Release 发布成功后，`release.yml` 的 `sync-cnb` job 触发 CNB 同
 - `build/config.yml` 的初始 `info.version` 是 `0.0.1`；工作流用 `prepare` 输出的 `version_base`（X.Y.Z）覆盖它，脚本是 `scripts/ci/sync-build-version.sh`（见 §1.1），但 App 包内的 `Info.plist` 仍建议发布后抽查。
 - `scripts/get-build-time.sh` 生成的是 UTC RFC3339；预发布比较依赖这个格式，不要手改成其它格式。
 - 「更新内容」只认 `vX.Y.Z` / `vX.Y.Z-<rc|beta|alpha|nightly>.N` 形式的 tag（nightly 的 N 是日期，如 `.20260101`）；命名不合规的 tag 不会进入对比基准。同渠道对比：nightly 只和上一个 nightly 比，首次发该渠道回退到上一个正式版。
-- tag 必须拉全（`release` job 的 `fetch-depth: 0`）：一个 tag 都没有时工作流直接失败，而不是发出一份「首次发布」的错误正文。
-- 版本号比已有正式版旧、或 tag 已存在时，`release` job 会在发布前失败，需要先手工清理旧 tag 再重跑。
+- tag 必须拉全（`version-gate` job 的 `fetch-depth: 0`）：一个 tag 都没有时工作流直接失败，而不是发出一份「首次发布」的错误正文。
+- 版本号比已有正式版旧、或 tag 已存在时，`version-gate` job 会在构建前失败，需要先手工清理旧 tag 再重跑。
 - Linux 包元数据版本由 `build/linux/Taskfile.yml` 的 `generate:*` 任务注入到 `nfpm.yaml` 的 `${VERSION}`：优先用 `VERSION_PKG`（`~` 代替 `-`），退回 `VERSION`，都没有时是 `0.0.0`（见 §1.1）。
 - Linux 打包在 `ghcr.io/dtapps/golang/wails3:latest` 容器里跑，镜像自带 GTK4 + WebKitGTK 6.0 + gcc；appimagetool 靠 `APPIMAGE_EXTRACT_AND_RUN=1` 免 FUSE 运行。镜像若未包含 aarch64 版 appimagetool，`build-linux` 的 arm64 腿会在打包阶段失败。
 

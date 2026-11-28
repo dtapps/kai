@@ -73,13 +73,6 @@ body:
     validations:
       required: true
 
-  - type: input
-    id: commit
-    attributes:
-      label: 发布提交
-      description: '可选。本次发布对应的 commit（完整 SHA）；填 `nightly` 这类由 GitHub 定时任务展开的版本时，填实际构建的 commit。'
-      placeholder: 0123456789abcdef0123456789abcdef01234567
-
   # ---------- 变更内容 ----------
   - type: textarea
     id: changelog

@@ -1,6 +1,6 @@
 # 发布 Release（从 GitHub 下载 release 构建产物并发布到 CNB）
 #
-# 版本号规则（实现见 scripts/ci/resolve-prerelease.sh，CNB 的 .cnb.yml 同口径）：
+# 版本号规则（实现见 docker.cnb.cool/dtapp/plugins/release-version:latest，GitHub 同插件口径）：
 #   1.2.3                    -> 正式版，Release 不勾选 prerelease
 #   v1.2.3                   -> 同上（v 前缀可有可无，统一归一成 v1.2.3）
 #   1.2.3-rc.1               -> 预发布（rc 渠道）
@@ -15,10 +15,50 @@
 #
 # 本流水线是 GitHub Release 的镜像：产物和正文都来自 GitHub，这里只做搬运。
 # 版本号由上游传入（api_trigger_release 的 env 字段 / web_trigger 的表单），
-# 归一化与预发布判定仍走同一份 scripts/ci/resolve-prerelease.sh。
+# 先由「版本门禁」pipeline 用 release-version 插件解析并校验 Tag，通过后再通知本流水线发布。
 # 是否预发布由版本号后缀决定（v1.2.3-rc.1 / -beta.1 / -alpha.1 / -nightly.20260101 为预发布），不接受手工勾选；
 # 正文格式见 scripts/ci/render-release-body.sh，与 GitHub 侧共用一份实现。
 # KAI_GITHUB_TOKEN 去 envs 里配置环境变量
+#
+# 版本门禁单独成 pipeline：与发布 pipeline 并发启动，但发布 pipeline 的第一个 stage
+# 用 cnb:await 等待它。cnb:resolve / cnb:await 按 key 配对，只能放在 stages 中
+# （不能放 endStages / failStages）；门禁失败时不会 resolve，await 会被死锁检测终止。
+.version_gate: &version_gate
+  name: 版本门禁
+  runner:
+    tags: cnb:arch:amd64 # 指定 Runner 必须有这个标签
+  docker:
+    image: docker.cnb.cool/dtapp/plugins/release-version:latest
+  stages:
+    - name: 解析版本号
+      settings:
+        mode: parse
+        version: ${version}
+        fetch_tags: true
+        nightly_fallback: zero
+      exports:
+        tag: INTERIOR_VERSION
+        prerelease: PRE_RELEASE
+        version_base: INTERIOR_VERSION_BASE
+        version_pkg: INTERIOR_VERSION_PKG
+
+    - name: 校验版本号与 Tag
+      settings:
+        mode: validate
+        version: ${INTERIOR_VERSION}
+        fetch_tags: true
+        allow_existing_nightly: true
+
+    - name: 门禁通过，通知发布流水线
+      type: cnb:resolve
+      options:
+        key: kai-release-version-gate
+        data:
+          tag: ${INTERIOR_VERSION}
+          prerelease: ${PRE_RELEASE}
+          version_base: ${INTERIOR_VERSION_BASE}
+          version_pkg: ${INTERIOR_VERSION_PKG}
+
 .trigger_release: &trigger_release
   name: 发布
   runner:
@@ -58,75 +98,22 @@
     ANNOUNCEMENT_COMMENT_TEXT: |-
       @{{REPOSLUG}}(发版日志助手) 请对比标签 {{PREVIOUSTAG}} 和 {{CURRENTTAG}} 的差异。
   stages:
+    # 等版本门禁通过；resolve 的 data 映射成本流水线环境变量，供后续所有 stage 使用。
+    - name: 等待版本门禁
+      type: cnb:await
+      options:
+        key: kai-release-version-gate
+      exports:
+        tag: INTERIOR_VERSION
+        prerelease: PRE_RELEASE
+        version_base: INTERIOR_VERSION_BASE
+        version_pkg: INTERIOR_VERSION_PKG
+
     - name: 同步脚本
       script: |
         # 卷会整体挂载 scripts/ci，先把本次提交里跟踪的脚本还原（未跟踪的模板脚本由缓存/下载提供）
         git checkout -- scripts/ci
         make fetch-scripts
-
-    # 先把工作区检出到**本次发布的那个提交**，而不是默认分支的最新代码。
-    #
-    # 为什么这一步必须有：后面的「删除同名 tag 再重建」里，git:release 是拿**当前检出的提交**
-    # 建 tag 的。检出点停在 master 最新代码的话，CNB 上的 tag 就会指向别的提交
-    # （发版后 master 一动就漂移）。检出到目标提交后，重建的 tag 天然就指对了，
-    # 不需要在 git:release 上做任何额外参数。
-    #
-    # CNB 没有原生的 clone ref/commit 配置（只有 git.enable / submodules / lfs），
-    # 指定检出点只能在脚本里自己 git checkout。
-    # commit 由上游 GitHub Actions 的 sync-cnb 随 version 一起传（api_trigger_release 的 env 字段）；
-    # 页面手动触发时没有这个参数 → 保持默认检出。
-    # 检出失败（镜像仓库可能还没同步到这个提交）只告警：保持默认检出继续发布，不阻断。
-    - name: 检出本次发布的提交
-      shell: true
-      script: |
-        COMMIT="${commit:-}"
-        if ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-f]{40}$'; then
-          echo "未传入 commit（或格式不对），保持默认检出：$(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
-          exit 0
-        fi
-        echo "检出本次发布的提交: ${COMMIT}"
-        # 先按 sha 取；部分 Git 服务不允许 fetch 未被引用的对象，失败则拉默认分支再从历史里找。
-        if git fetch --depth=1 origin "$COMMIT" 2>/dev/null && git checkout --detach FETCH_HEAD 2>/dev/null; then
-          echo "✓ 已检出 ${COMMIT}"
-        elif git fetch origin master && git checkout --detach "$COMMIT"; then
-          echo "✓ 已检出 ${COMMIT}（经默认分支历史）"
-        else
-          echo "⚠ 检出 ${COMMIT} 失败（镜像仓库可能还没同步到这个提交），保持默认检出继续发布"
-        fi
-
-    - name: 处理版本号与选项
-      script: |
-        # 版本号由外部通过环境变量 version 传入（api_trigger_release 的 env 字段 / web_trigger 的表单）。
-        # 归一化（补 v 前缀）/ 格式校验 / 预发布判定与 GitHub 流水线同口径：
-        # 都 source scripts/ci/resolve-prerelease.sh，只看版本号后缀 -rc / -beta / -alpha / -nightly。
-        # 不接受 pre_release 人工勾选：布尔输入会和版本号打架（曾出现 rc 版本被标成正式版）。
-        . scripts/ci/resolve-prerelease.sh
-        resolve_version "$version" || exit 1
-        echo "$PRE_NOTE"
-
-        # 兼容旧调用方仍在传的 pre_release：只做提示，判定一律以版本号后缀为准
-        if [ -n "${pre_release:-}" ] && [ "${pre_release}" != "${PRERELEASE}" ]; then
-          echo "提示：传入的 pre_release=${pre_release} 与版本号推导结果 ${PRERELEASE} 不一致，以后者为准"
-        fi
-
-        # commit 可选：上游 GitHub Actions 的 sync-cnb 随 version 一起传（api_trigger_release 的 env 字段）。
-        # 它的用途是**核对打包产物**：产物里（预发布版的 GIT_COMMIT 附件、二进制里的 buildinfo.GitCommit）
-        # 带着打包时的 commit，同步时一并传过来，下载产物后就能比对二者是否一致。
-        # 它**不参与** tag / Release 的指向决策（那由镜像同步的 tag 决定）。
-        # 只接受 40 位十六进制 sha，其余按未传处理。
-        COMMIT="${commit:-}"
-        if ! printf '%s' "$COMMIT" | grep -qE '^[0-9a-f]{40}$'; then
-          COMMIT=""
-        fi
-        echo "本次发布的 commit（用于核对打包产物）: ${COMMIT:-（未传入）}"
-
-        echo "##[set-output interior_version=$TAG]"
-        echo "##[set-output pre_release=$PRERELEASE]"
-        echo "##[set-output interior_commit=$COMMIT]"
-      exports:
-        interior_version: INTERIOR_VERSION
-        pre_release: PRE_RELEASE
-        interior_commit: INTERIOR_COMMIT
 
     # 生成 Release 选项文件（preRelease 由版本号后缀推导），供下方 git:release 的 optionsFrom 引用
     - name: 生成 Release 选项文件
@@ -205,43 +192,36 @@
         echo "下载完成："
         ls -lh "${DOWNLOAD_DIR}/"
 
-        # ---- 校验打包产物：产物里的 commit 与本次传入的 commit 是否一致 ----
+        # ---- 校验打包产物：产物里的 commit 与当前检出提交是否一致 ----
         # 预发布版本的产物里带 GIT_COMMIT 文件（打包时写进去的短 sha），
-        # 它必须与本次发布的 commit 对得上，否则搬过去的就不是这次提交构建的产物。
+        # 它必须与当前检出提交对得上，否则搬过去的就不是这次提交构建的产物。
         # 正式版不带这个附件（GIT_COMMIT 仅预发布附带），跳过校验。
         if [ -f "${DOWNLOAD_DIR}/GIT_COMMIT" ]; then
           SHORT="$(tr -d '[:space:]' < "${DOWNLOAD_DIR}/GIT_COMMIT")"
-          case "${INTERIOR_COMMIT:-}" in
+          CURRENT_COMMIT="$(git rev-parse HEAD)"
+          case "${CURRENT_COMMIT}" in
             "${SHORT}"*)
-              echo "✓ 产物 GIT_COMMIT（${SHORT}）与本次 commit 一致" ;;
-            "")
-              echo "⚠ 产物带 GIT_COMMIT（${SHORT}），但本次未传入 commit，无法比对" ;;
+              echo "✓ 产物 GIT_COMMIT（${SHORT}）与当前检出提交一致" ;;
             *)
-              echo "⚠ 产物 GIT_COMMIT（${SHORT}）与本次 commit（${INTERIOR_COMMIT}）不一致：搬过去的产物不是这次提交构建的" ;;
+              echo "⚠ 产物 GIT_COMMIT（${SHORT}）与当前检出提交（${CURRENT_COMMIT}）不一致：搬过去的产物可能不是这次提交构建的" ;;
           esac
         else
           echo "产物不带 GIT_COMMIT 附件（仅预发布附带），跳过 commit 校验"
         fi
 
-    # 生成发布内容（直接复用 GitHub Release 正文，下载链接替换为 CNB）
-    - name: 生成发布内容
-      script: |
-        # 复用 GitHub Release 的完整正文（含其原有下载表格），
-        # 把所有指向该仓库的 GitHub 链接（下载/标签/仓库页）统一替换为 CNB，
-        # 避免单独生成表格导致与 GitHub 不同步。CNB 仓库路径为 dtapp/kai
-        # 且带 /-/ 前缀，故替换仓库根而非仅下载前缀，避免漏掉如
-        # 「如需稳定版本，请使用 正式发布」这类指向 releases 发布页的链接。
-        GH_BASE="https://github.com/dtapps/kai"
-        CNB_BASE="${CNB_REPO_URL_HTTPS%/}/-"
-        RELEASE_INFO=$(cat release_info.json)
-        printf '%s\n' "$RELEASE_INFO" | jq -r '.body // ""' \
-          | sed "s#${GH_BASE}#${CNB_BASE}#g" \
-          > release_body.md
-
-        cat release_body.md
+    - name: 生成 Release 正文
+      image: docker.cnb.cool/dtapp/plugins/release-changelog:latest
+      settings:
+        mode: release
+        version: ${INTERIOR_VERSION}
+        artifact_dir: dist
+        artifact_layout: single
+        out_file: release_body.md
+        fetch_tags: true
+        fetch_history: true
 
     # 删除已存在的 Release 与 Tag，再重建，避免旧附件堆积。
-    # 这是「镜像」而非「发布」：tag 的唯一性由 GitHub 侧（release.yml 的「校验版本号与 tag」）保证，
+    # 这是「镜像」而非「发布」：tag 的唯一性由 GitHub 侧 version-gate job 的校验保证，
     # 这里做幂等重建只是为了让 CNB 的附件与 GitHub 保持一致，重跑不会产生重复资产。
     # 删除逻辑统一走 scripts/ci/delete-release.sh（各平台同一份实现，已封装 CNB 的
     # /-/git/tags 路径、DeleteRelease/DeleteTag 不联动等差异）：--tag 模式删 Release + tag，
@@ -252,12 +232,6 @@
       script: |
         set -e
         sh scripts/ci/delete-release.sh --platform cnb --tag "${INTERIOR_VERSION}"
-
-        # 这里**不**给 git:release 传 commit / targetCommitish（官方 options 里没这两个字段）。
-        # 让 CNB 上的 tag 指向正确提交，靠的是**检出**：流水线开头已把工作区检出到本次发布的
-        # 那个提交，所以这里重建出来的 tag 自然就指对了 —— 不需要用 POST /-/tags 手工建 tag，
-        # 更不会覆盖镜像同步过来的 tag。
-        # commit 另外还用于核对打包产物（GIT_COMMIT 附件），见上面的下载 stage。
 
     # https://docs.cnb.cool/zh/build/internal-steps.html#git-release
     - name: 创建 Release
@@ -348,15 +322,14 @@
         export CNB_WEB_BASE="${WEB_BASE}"
         export GITHUB_WEB="https://github.com/dtapps/kai"
         export STABLE_URL="${WEB_BASE}/releases/latest"
-        # stage 1 已切到本次发布的提交，HEAD 即发布提交。
         export COMMIT_SHA="$(git rev-parse HEAD 2>/dev/null || true)"
 
         # 公告评论要指明「对比哪两个 tag」。基准必须和 Release 正文同口径（正式版对比
         # 上一个正式版，不掺 rc/beta），所以直接调 resolve-prev-tag.sh —— 它是正文
         # （release-changelog.sh）与这里共用的唯一一份判定，别另写一套 tag 排序。
         #
-        # 补一次 tag 拉取：stage 1 用 `git fetch --depth 1 <commit>` 只取单个提交，
-        # 不保证带 tag。加 --force 是为了覆盖被改动过的旧 tag；失败不阻断
+        # 补一次 tag 拉取：默认检出不保证带齐历史 tag。
+        # 加 --force 是为了覆盖被改动过的旧 tag；失败不阻断
         # （取不到就退回「按公告正文改写」）。
         # 故意不加 --depth：给一个完整克隆的仓库加 --depth 反而会把它变浅、截掉历史。
         git fetch --tags --quiet --force >/dev/null 2>&1 || true
@@ -532,7 +505,7 @@
 
         # 先替换占位符再落盘：env 里的 {{...}} 只是字面量，不替换就会原样发出去。
         # sed 用 | 作分隔符、& 在替换串里是特殊字符，所以模板里不允许出现这两个字符
-        # （tag 已被 resolve-prerelease.sh 的字符白名单约束：只有 [0-9A-Za-z._+-]）。
+        # （tag 已被 release-version 插件的字符白名单约束：只有 [0-9A-Za-z._+-]）。
         CUR_TAG="${INTERIOR_VERSION}"
         PREV_TAG="$(cat announcement-prev-tag.txt 2>/dev/null || true)"
         [ -n "${PREV_TAG}" ] || PREV_TAG='（首个版本，无对比基准）'
@@ -584,10 +557,12 @@ master:
   # 手动触发：通过页面自定义按钮执行（按钮定义见 .cnb/web_trigger.yml）
   # 只需填版本号；是否预发布由版本号后缀决定（v1.2.3-rc.1 / v1.2.3-nightly.20260101 → 预发布），没有开关
   web_trigger_release:
+    - *version_gate
     - *trigger_release
 
   # API 触发：由 GitHub Actions 发布 Release 后调用 CNB Open API 触发（event=api_trigger_release）
   # 只需通过 env 传入 version 变量（如 {"version":"v1.2.3"}），发布到 CNB
   # 不需要 pre_release：判定与 GitHub 同口径，只看版本号后缀（传了也只会打一行提示）
   api_trigger_release:
+    - *version_gate
     - *trigger_release
